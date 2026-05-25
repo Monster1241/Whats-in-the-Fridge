@@ -1914,7 +1914,15 @@ function ErrorScreen({ error, onRetry }) {
             <code className="text-xs">.env</code> file and run <code className="text-xs">npm run dev</code>.
           </li>
           <li>
-            Do not set <code className="text-xs">VITE_API_URL</code> to localhost on Vercel — leave it unset so the app uses <code className="text-xs">/api</code> on the same domain.
+            Name must be exactly <code className="text-xs">MONGODB_URI</code> (not <code className="text-xs">VITE_MONGODB_URI</code>).
+            Your local <code className="text-xs">.env</code> file is not uploaded to Vercel.
+          </li>
+          <li>
+            After saving the variable, click <strong>Redeploy</strong> — old deployments do not pick up new env vars.
+          </li>
+          <li>
+            Test: open <code className="text-xs">/api/health</code> on your site — should show{' '}
+            <code className="text-xs">connected: true</code>.
           </li>
         </ol>
         <button

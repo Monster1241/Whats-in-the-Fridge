@@ -1,11 +1,38 @@
 import { ensureDb } from './ensureDb.js';
+import { getEnvDiagnostics, getMongoUri } from './env.js';
 import { getHouseholdState, updateHouseholdState } from './db.js';
 
 export async function handleHealth(_req, res) {
-  res.status(200).json({
-    ok: true,
-    connected: Boolean(process.env.MONGODB_URI?.trim()),
-  });
+  const resolved = getMongoUri();
+  const diagnostics = getEnvDiagnostics();
+
+  if (resolved.error) {
+    res.status(200).json({
+      ok: false,
+      connected: false,
+      message: resolved.error,
+      diagnostics,
+    });
+    return;
+  }
+
+  try {
+    await ensureDb();
+    res.status(200).json({
+      ok: true,
+      connected: true,
+      source: resolved.source,
+      diagnostics,
+    });
+  } catch (err) {
+    res.status(200).json({
+      ok: false,
+      connected: false,
+      message: err.message || 'Could not connect to MongoDB Atlas.',
+      source: resolved.source,
+      diagnostics,
+    });
+  }
 }
 
 export async function handleGetState(_req, res) {
