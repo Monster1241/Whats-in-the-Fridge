@@ -1902,13 +1902,19 @@ function ErrorScreen({ error, onRetry }) {
         <h1 className="text-heading mb-2 text-lg font-bold">Cannot connect to database</h1>
         <p className="text-muted mb-4 text-sm leading-relaxed">{error}</p>
         <ol className="text-muted mb-5 list-decimal space-y-2 pl-5 text-sm">
-          <li>Create a <code className="text-xs">.env</code> file in the project root.</li>
           <li>
-            Add your connection string:{' '}
-            <code className="text-xs">MONGODB_URI=mongodb+srv://...</code>
+            <strong>Vercel:</strong> Project → Settings → Environment Variables → add{' '}
+            <code className="text-xs">MONGODB_URI</code> (your Atlas connection string), then redeploy.
           </li>
           <li>
-            Run <code className="text-xs">npm run dev</code> (starts the API and the app).
+            In MongoDB Atlas → Network Access, allow <code className="text-xs">0.0.0.0/0</code> so Vercel can connect.
+          </li>
+          <li>
+            <strong>Local:</strong> put <code className="text-xs">MONGODB_URI=...</code> in a{' '}
+            <code className="text-xs">.env</code> file and run <code className="text-xs">npm run dev</code>.
+          </li>
+          <li>
+            Do not set <code className="text-xs">VITE_API_URL</code> to localhost on Vercel — leave it unset so the app uses <code className="text-xs">/api</code> on the same domain.
           </li>
         </ol>
         <button

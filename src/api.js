@@ -1,4 +1,5 @@
-const API_BASE = '/api';
+// Same-origin /api on Vercel (serverless). Override only if API is on another host.
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 export async function fetchAppState() {
   const res = await fetch(`${API_BASE}/state`);

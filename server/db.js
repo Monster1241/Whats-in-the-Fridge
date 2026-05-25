@@ -4,8 +4,7 @@ const DB_NAME = 'whats-in-the-fridge';
 const COLLECTION = 'households';
 const HOUSEHOLD_ID = 'default';
 
-let client;
-let db;
+const globalForMongo = globalThis;
 
 export function generateHouseholdCode() {
   const suffix = Math.floor(1000 + Math.random() * 9000);
@@ -24,15 +23,27 @@ export const EMPTY_STATE = {
 };
 
 export async function connectDb(uri) {
-  if (db) return db;
-  client = new MongoClient(uri);
+  if (globalForMongo._mongo?.db) {
+    return globalForMongo._mongo.db;
+  }
+
+  const client = new MongoClient(uri);
   await client.connect();
-  db = client.db(DB_NAME);
+  const db = client.db(DB_NAME);
+  globalForMongo._mongo = { client, db };
+  return db;
+}
+
+function getDb() {
+  const db = globalForMongo._mongo?.db;
+  if (!db) {
+    throw new Error('Database not connected. Call connectDb() first.');
+  }
   return db;
 }
 
 export async function getHouseholdState() {
-  const collection = db.collection(COLLECTION);
+  const collection = getDb().collection(COLLECTION);
   let doc = await collection.findOne({ _id: HOUSEHOLD_ID });
 
   if (!doc) {
@@ -64,7 +75,7 @@ export async function getHouseholdState() {
 }
 
 export async function updateHouseholdState(partial) {
-  const collection = db.collection(COLLECTION);
+  const collection = getDb().collection(COLLECTION);
   const update = { updatedAt: new Date() };
 
   if (partial.items !== undefined) update.items = partial.items;
@@ -83,9 +94,8 @@ export async function updateHouseholdState(partial) {
 }
 
 export async function closeDb() {
-  if (client) {
-    await client.close();
-    client = null;
-    db = null;
+  if (globalForMongo._mongo?.client) {
+    await globalForMongo._mongo.client.close();
+    globalForMongo._mongo = null;
   }
 }

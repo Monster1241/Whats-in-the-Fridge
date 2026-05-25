@@ -54,6 +54,18 @@ Recipe definitions (titles, ingredients, instructions) remain in the app code as
 | `npm run build` | Production frontend build |
 | `npm start` | Run API server (needs `.env`) |
 
+## Deploy on Vercel
+
+1. Push this project to GitHub and import it in [Vercel](https://vercel.com).
+2. **Environment variables** (Settings → Environment Variables):
+   - **`MONGODB_URI`** — your MongoDB Atlas connection string (required)
+   - Do **not** set `VITE_API_URL` to `localhost` — leave it empty so the app calls `/api` on the same Vercel domain.
+   - `PORT` is **not** used on Vercel (only for local `npm run dev:server`).
+3. In **MongoDB Atlas** → **Network Access** → add `0.0.0.0/0` (allow from anywhere) so Vercel serverless functions can reach your cluster.
+4. Redeploy after adding env vars.
+
+The `api/` folder runs as Vercel serverless functions (`/api/health`, `/api/state`). The Vite app is served from `dist/`.
+
 ## Features
 
 - **Fridge** — Inventory by storage type, shopping list, expiry tracking
