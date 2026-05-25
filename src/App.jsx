@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAppData } from './hooks/useAppData.js';
 import {
   Bookmark,
   Calendar,
@@ -23,24 +24,9 @@ import {
   X,
 } from 'lucide-react';
 
-const STORAGE_KEY = 'fridge-inventory-v3';
-const SETTINGS_STORAGE_KEY = 'fridge-settings-v1';
-const SAVED_RECIPES_STORAGE_KEY = 'fridge-saved-recipes-v1';
-const CHANNEL_NAME = 'fridge-household-sync';
-const SETTINGS_CHANNEL_NAME = 'fridge-settings-sync';
-const SAVED_RECIPES_CHANNEL_NAME = 'fridge-saved-recipes-sync';
-
 const RECIPE_VIEW = {
   MATCHED: 'matched',
   SAVED: 'saved',
-};
-const HOUSEHOLD_CODE = 'FRIDGE-7492';
-
-const ONBOARDING_KEY = 'fridge-onboarding-v1';
-
-const DEFAULT_SETTINGS = {
-  theme: 'light',
-  user: { name: '', email: '' },
 };
 
 const COLOR_LEGEND = [
@@ -543,130 +529,8 @@ const RECIPES = [
   },
 ];
 
-function daysFromNow(offset) {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
-}
-
-const SEED_ITEMS = [
-  {
-    id: '1',
-    name: 'Chicken Thighs',
-    status: STATUS.FRESH,
-    expiryDate: daysFromNow(2),
-    category: CATEGORY.FRESH,
-  },
-  {
-    id: '2',
-    name: 'Basil',
-    status: STATUS.FRESH,
-    expiryDate: daysFromNow(1),
-    category: CATEGORY.FRESH,
-  },
-  {
-    id: '3',
-    name: 'Chorizo',
-    status: STATUS.FRESH,
-    expiryDate: daysFromNow(12),
-    category: CATEGORY.FRESH,
-  },
-  {
-    id: '4',
-    name: 'Garlic',
-    status: STATUS.FRESH,
-    expiryDate: null,
-    category: CATEGORY.AMBIENT,
-  },
-  {
-    id: '5',
-    name: 'Pasta',
-    status: STATUS.FRESH,
-    expiryDate: null,
-    category: CATEGORY.AMBIENT,
-  },
-  {
-    id: '6',
-    name: 'Eggs',
-    status: STATUS.FRESH,
-    expiryDate: daysFromNow(7),
-    category: CATEGORY.FRESH,
-  },
-  {
-    id: '7',
-    name: 'Parmesan',
-    status: STATUS.OUT,
-    expiryDate: null,
-    category: CATEGORY.AMBIENT,
-  },
-  {
-    id: '8',
-    name: 'Heavy Cream',
-    status: STATUS.OUT,
-    expiryDate: null,
-    category: CATEGORY.FRESH,
-  },
-  {
-    id: '9',
-    name: 'Salmon Fillet',
-    status: STATUS.FRESH,
-    expiryDate: daysFromNow(4),
-    category: CATEGORY.FREEZER,
-  },
-  {
-    id: '10',
-    name: 'Lemon',
-    status: STATUS.FRESH,
-    expiryDate: daysFromNow(14),
-    category: CATEGORY.FRESH,
-  },
-];
-
 function normalizeName(value) {
   return value.trim().toLowerCase();
-}
-
-function loadOnboarding() {
-  try {
-    const raw = localStorage.getItem(ONBOARDING_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return { dismissed: Array.isArray(parsed.dismissed) ? parsed.dismissed : [] };
-    }
-  } catch {
-    /* defaults */
-  }
-  return { dismissed: [] };
-}
-
-function saveOnboarding(state) {
-  localStorage.setItem(ONBOARDING_KEY, JSON.stringify(state));
-}
-
-function useOnboarding() {
-  const [onboarding, setOnboarding] = useState(loadOnboarding);
-
-  const isDismissed = useCallback(
-    (id) => onboarding.dismissed.includes(id),
-    [onboarding.dismissed],
-  );
-
-  const dismiss = useCallback((id) => {
-    setOnboarding((prev) => {
-      if (prev.dismissed.includes(id)) return prev;
-      const next = { dismissed: [...prev.dismissed, id] };
-      saveOnboarding(next);
-      return next;
-    });
-  }, []);
-
-  const resetOnboarding = useCallback(() => {
-    const next = { dismissed: [] };
-    saveOnboarding(next);
-    setOnboarding(next);
-  }, []);
-
-  return { isDismissed, dismiss, resetOnboarding };
 }
 
 function TipBanner({ title, children, onDismiss, accentClass = 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' }) {
@@ -794,31 +658,6 @@ function getDisplayStatus(item) {
   return STATUS.FRESH;
 }
 
-function loadItems() {
-  const legacyKeys = ['fridge-inventory-v2', 'fridge-inventory-v1'];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map(migrateItem);
-      }
-    }
-    for (const key of legacyKeys) {
-      const legacy = localStorage.getItem(key);
-      if (legacy) {
-        const parsed = JSON.parse(legacy);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map(migrateItem);
-        }
-      }
-    }
-  } catch {
-    /* use seed */
-  }
-  return SEED_ITEMS;
-}
-
 function groupByCategory(items, category) {
   const inCategory = items.filter(
     (item) => item.category === category && item.status !== STATUS.OUT,
@@ -866,10 +705,6 @@ function sortByUrgencyThenName(a, b) {
   return a.name.localeCompare(b.name);
 }
 
-function saveItems(items) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
-
 function findInventoryMatch(ingredientName, items) {
   const needle = normalizeName(ingredientName);
   return items.find((item) => normalizeName(item.name) === needle);
@@ -889,176 +724,6 @@ function analyzeRecipe(recipe, items) {
   }
 
   return { have, need, canCook: need.length === 0 };
-}
-
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        ...DEFAULT_SETTINGS,
-        ...parsed,
-        user: { ...DEFAULT_SETTINGS.user, ...parsed.user },
-      };
-    }
-  } catch {
-    /* defaults */
-  }
-  return DEFAULT_SETTINGS;
-}
-
-function saveSettings(settings) {
-  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-}
-
-function useAppSettings() {
-  const [settings, setSettings] = useState(loadSettings);
-  const channelRef = useRef(null);
-  const isRemoteUpdate = useRef(false);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', settings.theme === 'dark');
-    saveSettings(settings);
-  }, [settings]);
-
-  useEffect(() => {
-    if (typeof BroadcastChannel === 'undefined') return undefined;
-
-    const channel = new BroadcastChannel(SETTINGS_CHANNEL_NAME);
-    channelRef.current = channel;
-
-    channel.onmessage = (event) => {
-      if (event.data?.type === 'SYNC_SETTINGS' && event.data.settings) {
-        isRemoteUpdate.current = true;
-        setSettings(event.data.settings);
-      }
-    };
-
-    return () => channel.close();
-  }, []);
-
-  const updateSettings = useCallback((updater) => {
-    setSettings((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      if (!isRemoteUpdate.current) {
-        channelRef.current?.postMessage({ type: 'SYNC_SETTINGS', settings: next });
-      }
-      isRemoteUpdate.current = false;
-      return next;
-    });
-  }, []);
-
-  return { settings, updateSettings };
-}
-
-function useFridgeSync() {
-  const [items, setItems] = useState(loadItems);
-  const channelRef = useRef(null);
-  const isRemoteUpdate = useRef(false);
-
-  useEffect(() => {
-    saveItems(items);
-  }, [items]);
-
-  useEffect(() => {
-    if (typeof BroadcastChannel === 'undefined') return undefined;
-
-    const channel = new BroadcastChannel(CHANNEL_NAME);
-    channelRef.current = channel;
-
-    channel.onmessage = (event) => {
-      if (event.data?.type === 'SYNC_ITEMS' && Array.isArray(event.data.items)) {
-        isRemoteUpdate.current = true;
-        setItems(event.data.items);
-      }
-    };
-
-    return () => channel.close();
-  }, []);
-
-  const broadcast = useCallback((nextItems) => {
-    channelRef.current?.postMessage({ type: 'SYNC_ITEMS', items: nextItems });
-  }, []);
-
-  const updateItems = useCallback(
-    (updater) => {
-      setItems((prev) => {
-        const next = typeof updater === 'function' ? updater(prev) : updater;
-        if (!isRemoteUpdate.current) {
-          broadcast(next);
-        }
-        isRemoteUpdate.current = false;
-        return next;
-      });
-    },
-    [broadcast],
-  );
-
-  return [items, updateItems];
-}
-
-function loadSavedRecipeIds() {
-  try {
-    const raw = localStorage.getItem(SAVED_RECIPES_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.filter((id) => typeof id === 'string');
-    }
-  } catch {
-    /* defaults */
-  }
-  return [];
-}
-
-function useSavedRecipes() {
-  const [savedIds, setSavedIds] = useState(loadSavedRecipeIds);
-  const channelRef = useRef(null);
-  const isRemoteUpdate = useRef(false);
-
-  useEffect(() => {
-    localStorage.setItem(SAVED_RECIPES_STORAGE_KEY, JSON.stringify(savedIds));
-  }, [savedIds]);
-
-  useEffect(() => {
-    if (typeof BroadcastChannel === 'undefined') return undefined;
-
-    const channel = new BroadcastChannel(SAVED_RECIPES_CHANNEL_NAME);
-    channelRef.current = channel;
-
-    channel.onmessage = (event) => {
-      if (event.data?.type === 'SYNC_SAVED_RECIPES' && Array.isArray(event.data.savedIds)) {
-        isRemoteUpdate.current = true;
-        setSavedIds(event.data.savedIds);
-      }
-    };
-
-    return () => channel.close();
-  }, []);
-
-  const broadcast = useCallback((nextIds) => {
-    channelRef.current?.postMessage({ type: 'SYNC_SAVED_RECIPES', savedIds: nextIds });
-  }, []);
-
-  const isSaved = useCallback((recipeId) => savedIds.includes(recipeId), [savedIds]);
-
-  const toggleSave = useCallback(
-    (recipeId) => {
-      setSavedIds((prev) => {
-        const next = prev.includes(recipeId)
-          ? prev.filter((id) => id !== recipeId)
-          : [...prev, recipeId];
-        if (!isRemoteUpdate.current) {
-          broadcast(next);
-        }
-        isRemoteUpdate.current = false;
-        return next;
-      });
-    },
-    [broadcast],
-  );
-
-  return { savedIds, isSaved, toggleSave };
 }
 
 function StatusBadge({ status, onOpenPicker }) {
@@ -2003,7 +1668,7 @@ function RecipesView({ items, updateItems, savedRecipes }) {
   );
 }
 
-function SettingsView({ settings, updateSettings, updateItems, onboarding }) {
+function SettingsView({ settings, updateSettings, updateItems, onboarding, householdCode }) {
   const { resetOnboarding } = onboarding;
   const [name, setName] = useState(settings.user.name);
   const [email, setEmail] = useState(settings.user.email);
@@ -2028,11 +1693,14 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding }) {
     updateSettings((prev) => ({ ...prev, theme }));
   };
 
-  const inviteMessage = `Join our household on What's in the Fridge! Use join code: ${HOUSEHOLD_CODE}`;
+  const inviteMessage = householdCode
+    ? `Join our household on What's in the Fridge! Use join code: ${householdCode}`
+    : 'Loading household code…';
 
   const copyInviteCode = async () => {
+    if (!householdCode) return;
     try {
-      await navigator.clipboard.writeText(HOUSEHOLD_CODE);
+      await navigator.clipboard.writeText(householdCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -2041,6 +1709,7 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding }) {
   };
 
   const shareInvite = async () => {
+    if (!householdCode) return;
     if (navigator.share) {
       try {
         await navigator.share({
@@ -2055,7 +1724,6 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding }) {
     copyInviteCode();
   };
 
-  const resetDemo = () => updateItems(SEED_ITEMS);
   const clearAll = () => updateItems([]);
 
   return (
@@ -2106,7 +1774,7 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding }) {
           <User className="h-4 w-4 text-emerald-600" />
           Your account
         </h2>
-        <p className="text-muted mb-3 text-sm">Saved on this device for the prototype.</p>
+        <p className="text-muted mb-3 text-sm">Saved to your MongoDB database.</p>
         <div className="space-y-3">
           <div>
             <label htmlFor="settings-name" className="text-muted mb-1 block text-xs font-semibold uppercase">
@@ -2156,10 +1824,12 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding }) {
           Invite partner / housemate
         </h2>
         <p className="text-muted mb-3 text-sm">
-          Share this code so you both see the same live inventory (open two tabs to demo sync).
+          Share this code with your partner. Everyone using this app shares the same database.
         </p>
         <p className="text-muted mb-1 text-xs font-semibold uppercase">Household join code</p>
-        <p className="text-heading mb-4 font-mono text-3xl font-bold tracking-widest">{HOUSEHOLD_CODE}</p>
+        <p className="text-heading mb-4 font-mono text-3xl font-bold tracking-widest">
+          {householdCode || '—'}
+        </p>
         <div className="flex flex-col gap-2">
           <button
             type="button"
@@ -2186,9 +1856,9 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding }) {
       <section className="surface-inset p-4">
         <h2 className="text-heading mb-2 flex items-center gap-2 text-sm font-bold">
           <FlaskConical className="h-4 w-4 text-amber-600" />
-          Demo tools
+          Data tools
         </h2>
-        <p className="text-muted mb-3 text-xs">Reset sample data or replay onboarding tips.</p>
+        <p className="text-muted mb-3 text-xs">Manage your cloud-stored inventory and tips.</p>
         <div className="flex flex-col gap-2">
           <button
             type="button"
@@ -2196,13 +1866,6 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding }) {
             className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:text-slate-200"
           >
             Show tips again
-          </button>
-          <button
-            type="button"
-            onClick={resetDemo}
-            className="rounded-xl bg-slate-200 py-3 text-sm font-semibold text-slate-900 active:scale-[0.98] dark:bg-slate-700 dark:text-slate-100"
-          >
-            Reset demo inventory
           </button>
           <button
             type="button"
@@ -2223,12 +1886,65 @@ const TABS = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
+function LoadingScreen({ message }) {
+  return (
+    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col items-center justify-center px-6">
+      <Refrigerator className="mb-4 h-12 w-12 animate-pulse text-emerald-600" aria-hidden />
+      <p className="text-heading text-center text-sm font-semibold">{message}</p>
+    </div>
+  );
+}
+
+function ErrorScreen({ error, onRetry }) {
+  return (
+    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col px-6 py-10">
+      <div className="surface-card border-rose-200 p-5 dark:border-rose-800">
+        <h1 className="text-heading mb-2 text-lg font-bold">Cannot connect to database</h1>
+        <p className="text-muted mb-4 text-sm leading-relaxed">{error}</p>
+        <ol className="text-muted mb-5 list-decimal space-y-2 pl-5 text-sm">
+          <li>Create a <code className="text-xs">.env</code> file in the project root.</li>
+          <li>
+            Add your connection string:{' '}
+            <code className="text-xs">MONGODB_URI=mongodb+srv://...</code>
+          </li>
+          <li>
+            Run <code className="text-xs">npm run dev</code> (starts the API and the app).
+          </li>
+        </ol>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
+        >
+          Retry connection
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('inventory');
-  const [items, updateItems] = useFridgeSync();
-  const { settings, updateSettings } = useAppSettings();
-  const savedRecipes = useSavedRecipes();
-  const onboarding = useOnboarding();
+  const {
+    loading,
+    error,
+    reload,
+    items,
+    updateItems,
+    settings,
+    updateSettings,
+    householdCode,
+    savedRecipes,
+    onboarding,
+  } = useAppData();
+
+  if (loading) {
+    return <LoadingScreen message="Loading from MongoDB…" />;
+  }
+
+  if (error) {
+    return <ErrorScreen error={error} onRetry={() => reload()} />;
+  }
 
   return (
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
@@ -2245,6 +1961,7 @@ export default function App() {
             updateSettings={updateSettings}
             updateItems={updateItems}
             onboarding={onboarding}
+            householdCode={householdCode}
           />
         )}
       </main>
