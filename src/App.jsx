@@ -1,0 +1,2282 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Bookmark,
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  ChefHat,
+  CircleCheck,
+  Copy,
+  FlaskConical,
+  Info,
+  MapPin,
+  Moon,
+  Plus,
+  Refrigerator,
+  Settings,
+  Share2,
+  Sun,
+  Trash2,
+  User,
+  Users,
+  X,
+} from 'lucide-react';
+
+const STORAGE_KEY = 'fridge-inventory-v3';
+const SETTINGS_STORAGE_KEY = 'fridge-settings-v1';
+const SAVED_RECIPES_STORAGE_KEY = 'fridge-saved-recipes-v1';
+const CHANNEL_NAME = 'fridge-household-sync';
+const SETTINGS_CHANNEL_NAME = 'fridge-settings-sync';
+const SAVED_RECIPES_CHANNEL_NAME = 'fridge-saved-recipes-sync';
+
+const RECIPE_VIEW = {
+  MATCHED: 'matched',
+  SAVED: 'saved',
+};
+const HOUSEHOLD_CODE = 'FRIDGE-7492';
+
+const ONBOARDING_KEY = 'fridge-onboarding-v1';
+
+const DEFAULT_SETTINGS = {
+  theme: 'light',
+  user: { name: '', email: '' },
+};
+
+const COLOR_LEGEND = [
+  { swatch: 'bg-emerald-600', label: 'Emerald', desc: 'In stock · plentiful · primary actions' },
+  { swatch: 'bg-amber-500', label: 'Amber', desc: 'Expiring soon (auto from expiry date)' },
+  { swatch: 'bg-rose-600', label: 'Rose', desc: 'Out of stock — tap badge to mark need to buy' },
+  { swatch: 'bg-sky-600', label: 'Sky', desc: 'Shopping list tab, tips & add-to-buy flow' },
+  { swatch: 'bg-violet-600', label: 'Violet', desc: 'Saved recipes & invite partner' },
+];
+
+const CATEGORY = {
+  AMBIENT: 'Ambient',
+  FRESH: 'Fresh',
+  FREEZER: 'Freezer',
+};
+
+const CATEGORY_OPTIONS = [CATEGORY.AMBIENT, CATEGORY.FRESH, CATEGORY.FREEZER];
+
+const CATEGORY_META = {
+  [CATEGORY.AMBIENT]: {
+    emoji: '🧺',
+    label: 'Ambient',
+    subtitle: 'Pantry items',
+    tabActive: 'bg-amber-600 text-white',
+    tabIdle: 'text-amber-700 hover:bg-amber-50',
+  },
+  [CATEGORY.FRESH]: {
+    emoji: '🧊',
+    label: 'Fresh',
+    subtitle: 'Fridge items',
+    tabActive: 'bg-sky-600 text-white',
+    tabIdle: 'text-sky-700 hover:bg-sky-50',
+  },
+  [CATEGORY.FREEZER]: {
+    emoji: '❄️',
+    label: 'Freezer',
+    subtitle: 'Frozen items',
+    tabActive: 'bg-cyan-600 text-white',
+    tabIdle: 'text-cyan-700 hover:bg-cyan-50',
+  },
+};
+
+const INVENTORY_VIEW = {
+  ...CATEGORY,
+  SHOPPING: 'shopping',
+};
+
+const SHOPPING_ACCENT = {
+  border: 'border-sky-300 dark:border-sky-600',
+  borderSoft: 'border-sky-200 dark:border-sky-800',
+  bgActive: 'bg-sky-50 ring-2 ring-sky-500 dark:bg-sky-950/50 dark:ring-sky-500',
+  bgMuted: 'bg-sky-100 dark:bg-sky-950/40',
+  text: 'text-sky-700 dark:text-sky-300',
+  textLabel: 'text-sky-800 dark:text-sky-400',
+  btn: 'bg-sky-600 shadow-sky-900/40 hover:bg-sky-500',
+  badge: 'bg-sky-600',
+  focus: 'focus:border-sky-500 focus:ring-sky-500/30',
+  section: 'text-sky-600 dark:text-sky-400',
+  hover: 'hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-sky-950 dark:hover:text-sky-400',
+};
+
+const STATUS = {
+  FRESH: 'fresh',
+  EXPIRING: 'expiring',
+  OUT: 'out',
+};
+
+const EXPIRING_SOON_DAYS = 3;
+
+const CATEGORY_SHOP_TIPS = {
+  [CATEGORY.AMBIENT]:
+    'Aldi — lowest prices on pantry staples. Coles or Woolworths own-brand for solid everyday quality.',
+  [CATEGORY.FRESH]:
+    'Coles or Woolworths — great value in the fridge aisle. Harris Farm Markets when you want premium freshness.',
+  [CATEGORY.FREEZER]:
+    'Aldi or Costco — best frozen deals. Costco membership pays off for bulk quality meat and veg.',
+};
+
+const DEFAULT_SHOP_TIP =
+  'Aldi for the cheapest basket; Coles or Woolworths for reliable quality and specials.';
+
+const SHOPPING_SUGGESTIONS = [
+  {
+    keywords: ['milk', 'butter', 'cream', 'yogurt', 'cheese', 'parmesan', 'cheddar', 'feta'],
+    tip: 'Aldi or Coles for everyday dairy. Harris Farm Markets or Woolworths Organic for premium quality.',
+  },
+  {
+    keywords: ['egg', 'eggs'],
+    tip: 'Aldi or Coles home-brand eggs are great value; farmers markets for free-range top quality.',
+  },
+  {
+    keywords: ['chicken', 'beef', 'pork', 'chorizo', 'salmon', 'bacon', 'mince', 'thigh', 'breast'],
+    tip: 'Aldi or Coles for budget cuts. Local butcher, Costco, or Harris Farm for the best meat & seafood.',
+  },
+  {
+    keywords: ['basil', 'herb', 'herbs', 'lettuce', 'tomato', 'pepper', 'broccoli', 'veg', 'fruit', 'lemon'],
+    tip: 'Aldi or weekend produce markets for cheap fresh veg. Harris Farm or Woolworths Macro for organic quality.',
+  },
+  {
+    keywords: ['pasta', 'rice', 'bread', 'flour', 'oil', 'spice', 'sauce', 'soy', 'garlic', 'onion'],
+    tip: 'Aldi aisles — lowest prices. Asian grocers (e.g. Tong Li, Wing Tai) for sauces & spices; Coles Finest for upgrades.',
+  },
+  {
+    keywords: [
+      'miso',
+      'gochujang',
+      'kimchi',
+      'noodle',
+      'noodles',
+      'sesame',
+      'fish sauce',
+      'oyster',
+      'mirin',
+      'rice vinegar',
+    ],
+    tip: 'Asian supermarkets (Tong Li, Wing Tai, Tokyo Mart) for authentic sauces. Coles/Woolworths Asian aisle for basics.',
+  },
+  {
+    keywords: [
+      'lentil',
+      'lentils',
+      'dal',
+      'ghee',
+      'turmeric',
+      'cumin',
+      'coriander',
+      'momos',
+      'gundruk',
+      'timur',
+      'mustard oil',
+      'bamboo',
+    ],
+    tip: 'Nepali & South Asian grocers (e.g. Little India, Fyshwick) for dal, spices, and mustard oil. Coles/Woolworths for lentils and basics.',
+  },
+  {
+    keywords: ['ice cream', 'frozen', 'pizza', 'peas', 'chips'],
+    tip: 'Aldi frozen section — unbeatable value. Costco or Woolworths for larger packs and better ingredients.',
+  },
+];
+
+const STATUS_OPTIONS = [STATUS.FRESH, STATUS.OUT];
+
+const STATUS_META = {
+  [STATUS.FRESH]: {
+    label: 'Plentiful',
+    badge: 'bg-emerald-600 text-white',
+    section: 'fresh',
+  },
+  [STATUS.EXPIRING]: {
+    label: 'Expiring Soon',
+    badge: 'bg-amber-500 text-slate-900',
+    section: 'expiring',
+  },
+  [STATUS.OUT]: {
+    label: 'Out of Stock',
+    badge: 'bg-rose-600 text-white',
+    section: 'out',
+  },
+};
+
+const RECIPES = [
+  {
+    id: 'creamy-basil-chicken',
+    title: 'Creamy Basil Chicken',
+    prepTime: '35 min',
+    ingredients: [
+      'Chicken Thighs',
+      'Basil',
+      'Heavy Cream',
+      'Garlic',
+      'Onion',
+      'Olive Oil',
+    ],
+    instructions: [
+      'Season chicken thighs with salt and pepper. Sear in olive oil until golden, then set aside.',
+      'Sauté diced onion and minced garlic until soft. Pour in heavy cream and simmer 3–4 minutes.',
+      'Return chicken to the pan, tear in fresh basil, and simmer until cooked through.',
+      'Taste and adjust seasoning. Serve hot with rice or crusty bread.',
+    ],
+  },
+  {
+    id: 'chorizo-carbonara',
+    title: 'Chorizo Carbonara Pasta',
+    prepTime: '25 min',
+    ingredients: ['Chorizo', 'Pasta', 'Eggs', 'Parmesan', 'Garlic', 'Black Pepper'],
+    instructions: [
+      'Cook pasta in salted boiling water until al dente. Reserve 1 cup pasta water.',
+      'Brown sliced chorizo in a pan. Add minced garlic for 30 seconds.',
+      'Whisk eggs, grated Parmesan, and plenty of black pepper in a bowl.',
+      'Toss drained pasta with chorizo off the heat, then quickly mix in the egg mixture.',
+      'Loosen with pasta water until silky. Serve immediately with extra Parmesan.',
+    ],
+  },
+  {
+    id: 'spicy-stir-fry',
+    title: 'Spicy Veggie Stir-Fry',
+    prepTime: '20 min',
+    ingredients: [
+      'Bell Peppers',
+      'Broccoli',
+      'Soy Sauce',
+      'Ginger',
+      'Garlic',
+      'Rice',
+      'Chili Flakes',
+    ],
+    instructions: [
+      'Cook rice according to package directions.',
+      'Stir-fry broccoli and sliced bell peppers in hot oil over high heat for 4–5 minutes.',
+      'Add minced garlic, ginger, soy sauce, and chili flakes. Toss 1 minute more.',
+      'Serve over rice and finish with sesame oil if you have it.',
+    ],
+  },
+  {
+    id: 'greek-chicken-bowl',
+    title: 'Greek Chicken Power Bowl',
+    prepTime: '30 min',
+    ingredients: [
+      'Chicken Breast',
+      'Cucumber',
+      'Tomatoes',
+      'Feta',
+      'Olives',
+      'Lemon',
+      'Olive Oil',
+    ],
+    instructions: [
+      'Grill or pan-sear seasoned chicken breast until cooked through. Rest and slice.',
+      'Chop cucumber and tomatoes. Combine with olives and crumbled feta.',
+      'Whisk lemon juice, olive oil, salt, and pepper for a quick dressing.',
+      'Layer chicken over salad, drizzle dressing, and serve.',
+    ],
+  },
+  {
+    id: 'beef-tacos',
+    title: 'Weeknight Beef Tacos',
+    prepTime: '22 min',
+    ingredients: [
+      'Ground Beef',
+      'Taco Shells',
+      'Lettuce',
+      'Tomatoes',
+      'Cheddar',
+      'Sour Cream',
+      'Onion',
+    ],
+    instructions: [
+      'Brown ground beef with diced onion. Season with salt, pepper, and taco spices.',
+      'Warm taco shells in the oven or skillet.',
+      'Chop lettuce and tomatoes. Shred cheddar.',
+      'Fill shells with beef and toppings. Finish with sour cream.',
+    ],
+  },
+  {
+    id: 'salmon-lemon-dill',
+    title: 'Lemon Dill Salmon',
+    prepTime: '28 min',
+    ingredients: ['Salmon Fillet', 'Lemon', 'Dill', 'Butter', 'Asparagus', 'Garlic'],
+    instructions: [
+      'Pat salmon dry. Season with salt, pepper, lemon zest, and chopped dill.',
+      'Pan-sear or bake at 200°C / 400°F for 12–15 minutes until flaky.',
+      'Sauté asparagus with garlic in butter until tender-crisp.',
+      'Serve salmon over asparagus with lemon wedges and melted butter.',
+    ],
+  },
+  {
+    id: 'egg-fried-rice',
+    title: 'High-Protein Egg Fried Rice',
+    prepTime: '18 min',
+    ingredients: ['Eggs', 'Rice', 'Soy Sauce', 'Peas', 'Carrots', 'Sesame Oil', 'Green Onion'],
+    instructions: [
+      'Use day-old rice if possible. Scramble eggs in a hot wok, then set aside.',
+      'Stir-fry diced carrots and peas until bright. Add rice and break up clumps.',
+      'Return eggs, splash in soy sauce, and toss on high heat.',
+      'Finish with sesame oil and sliced green onion.',
+    ],
+  },
+  {
+    id: 'thai-holy-basil-chicken',
+    title: 'Thai Holy Basil Chicken (Pad Krapow)',
+    prepTime: '22 min',
+    cuisine: 'Asian',
+    ingredients: [
+      'Chicken Thighs',
+      'Basil',
+      'Garlic',
+      'Rice',
+      'Soy Sauce',
+      'Chili Flakes',
+      'Onion',
+    ],
+    instructions: [
+      'Cook jasmine or plain rice. Finely chop garlic and slice onion.',
+      'Mince or pound chicken thighs. Stir-fry garlic and onion in hot oil until fragrant.',
+      'Add chicken and cook through on high heat. Splash in soy sauce and chili flakes.',
+      'Tear in plenty of basil, toss 30 seconds, and serve over rice with a fried egg if you like.',
+    ],
+  },
+  {
+    id: 'teriyaki-chicken-bowl',
+    title: 'Teriyaki Chicken Rice Bowl',
+    prepTime: '28 min',
+    cuisine: 'Asian',
+    ingredients: [
+      'Chicken Breast',
+      'Rice',
+      'Soy Sauce',
+      'Ginger',
+      'Garlic',
+      'Sesame Oil',
+      'Green Onion',
+    ],
+    instructions: [
+      'Cook rice. Mix soy sauce, grated ginger, minced garlic, and a little honey or sugar for teriyaki glaze.',
+      'Pan-sear sliced chicken breast until golden. Brush with glaze and cook until sticky.',
+      'Steam or stir-fry broccoli or carrots on the side if you have them.',
+      'Serve chicken over rice, drizzle remaining glaze, and finish with sesame oil and green onion.',
+    ],
+  },
+  {
+    id: 'korean-bibimbap-bowl',
+    title: 'Korean Bibimbap-Style Bowl',
+    prepTime: '30 min',
+    cuisine: 'Asian',
+    ingredients: [
+      'Rice',
+      'Eggs',
+      'Beef Mince',
+      'Soy Sauce',
+      'Garlic',
+      'Carrots',
+      'Spinach',
+      'Sesame Oil',
+      'Chili Flakes',
+    ],
+    instructions: [
+      'Cook rice. Season beef mince with soy sauce, garlic, and sesame oil; cook in a hot pan until browned.',
+      'Quickly sauté julienned carrots and spinach (or any veg) with a pinch of salt.',
+      'Fry eggs sunny-side up. Arrange rice in bowls with veg and beef around the edges.',
+      'Top with egg, chili flakes, and extra sesame oil. Mix everything together before eating.',
+    ],
+  },
+  {
+    id: 'vietnamese-lemon-chicken',
+    title: 'Vietnamese-Style Lemon Chicken',
+    prepTime: '25 min',
+    cuisine: 'Asian',
+    ingredients: [
+      'Chicken Thighs',
+      'Lemon',
+      'Garlic',
+      'Ginger',
+      'Soy Sauce',
+      'Rice',
+      'Fish Sauce',
+      'Green Onion',
+    ],
+    instructions: [
+      'Marinate chicken thighs 15 minutes in lemon juice, fish sauce (or extra soy), garlic, and ginger.',
+      'Grill or pan-sear chicken until charred at the edges and cooked through. Rest and slice.',
+      'Cook rice. Warm any leftover marinade in the pan as a light sauce.',
+      'Serve chicken over rice with lemon wedges, sliced green onion, and herbs if you have them.',
+    ],
+  },
+  {
+    id: 'japanese-miso-salmon',
+    title: 'Miso-Ginger Glazed Salmon',
+    prepTime: '24 min',
+    cuisine: 'Asian',
+    ingredients: [
+      'Salmon Fillet',
+      'Miso Paste',
+      'Ginger',
+      'Soy Sauce',
+      'Rice',
+      'Garlic',
+      'Sesame Oil',
+    ],
+    instructions: [
+      'Whisk miso paste, grated ginger, soy sauce, and a little water into a smooth glaze.',
+      'Brush salmon fillets with glaze. Bake at 200°C / 400°F for 12–14 minutes or pan-sear skin-side down first.',
+      'Cook rice. Sauté garlic in sesame oil and toss with steamed greens if available.',
+      'Serve salmon over rice with extra glaze spooned on top.',
+    ],
+  },
+  {
+    id: 'nepali-chicken-curry',
+    title: 'Nepali Chicken Curry (Kukhura ko Tarkari)',
+    prepTime: '40 min',
+    cuisine: 'Nepali',
+    ingredients: [
+      'Chicken Thighs',
+      'Onion',
+      'Garlic',
+      'Ginger',
+      'Tomatoes',
+      'Turmeric',
+      'Cumin',
+      'Rice',
+      'Cilantro',
+    ],
+    instructions: [
+      'Blend or finely chop onion, garlic, ginger, and tomatoes into a rough paste (or chop small).',
+      'Brown chicken pieces in oil. Add turmeric and cumin; stir until fragrant.',
+      'Pour in the paste and simmer 20–25 minutes, adding a splash of water if it sticks.',
+      'Season with salt. Serve with steamed rice and fresh cilantro.',
+    ],
+  },
+  {
+    id: 'dal-bhat',
+    title: 'Dal Bhat (Lentil & Rice Plate)',
+    prepTime: '35 min',
+    cuisine: 'Nepali',
+    ingredients: [
+      'Red Lentils',
+      'Rice',
+      'Onion',
+      'Garlic',
+      'Ginger',
+      'Turmeric',
+      'Cumin',
+      'Tomatoes',
+      'Ghee',
+    ],
+    instructions: [
+      'Rinse lentils. Simmer with turmeric, chopped garlic, ginger, and water until soft (25–30 min).',
+      'In a small pan, fry cumin seeds in ghee (or oil) with diced onion until golden; stir into dal.',
+      'Cook rice separately. Dice tomatoes and stir into dal for the last 5 minutes.',
+      'Serve dal over rice — the classic Nepali comfort meal. Pickles or salad on the side if you have them.',
+    ],
+  },
+  {
+    id: 'nepali-potato-curry',
+    title: 'Nepali Potato Curry (Aloo Tarkari)',
+    prepTime: '30 min',
+    cuisine: 'Nepali',
+    ingredients: [
+      'Potatoes',
+      'Onion',
+      'Garlic',
+      'Ginger',
+      'Tomatoes',
+      'Turmeric',
+      'Cumin',
+      'Cilantro',
+      'Rice',
+    ],
+    instructions: [
+      'Peel and cube potatoes. Par-boil 8 minutes until just tender; drain.',
+      'Sauté onion, garlic, and ginger in oil. Add turmeric and cumin, then diced tomatoes.',
+      'Add potatoes and a little water. Simmer until saucy and potatoes are fully tender.',
+      'Garnish with cilantro and serve with rice or roti.',
+    ],
+  },
+  {
+    id: 'nepali-momo-soup',
+    title: 'Nepali Momo Jhol (Dumpling Soup)',
+    prepTime: '45 min',
+    cuisine: 'Nepali',
+    ingredients: [
+      'Chicken Mince',
+      'Wonton Wrappers',
+      'Onion',
+      'Garlic',
+      'Ginger',
+      'Tomatoes',
+      'Soy Sauce',
+      'Cilantro',
+      'Chili Flakes',
+    ],
+    instructions: [
+      'Mix chicken mince with finely chopped onion, garlic, ginger, soy sauce, and cilantro for filling.',
+      'Spoon filling onto wonton wrappers, pleat, and seal. Steam dumplings 10–12 minutes until cooked.',
+      'For jhol: blend tomatoes, ginger, garlic, and chili with water; simmer 10 minutes. Season with soy and lemon.',
+      'Pour warm jhol over steamed momos. Top with cilantro and serve immediately.',
+    ],
+  },
+  {
+    id: 'thukpa-noodle-soup',
+    title: 'Thukpa (Nepali Noodle Soup)',
+    prepTime: '35 min',
+    cuisine: 'Nepali',
+    ingredients: [
+      'Egg Noodles',
+      'Chicken Thighs',
+      'Onion',
+      'Garlic',
+      'Ginger',
+      'Tomatoes',
+      'Soy Sauce',
+      'Spinach',
+      'Cilantro',
+    ],
+    instructions: [
+      'Simmer sliced chicken in water with onion, garlic, and ginger for a simple broth (20 min).',
+      'Shred chicken back into the pot. Add diced tomatoes and soy sauce; simmer 5 minutes more.',
+      'Cook egg noodles separately. Divide noodles into bowls and ladle hot broth over.',
+      'Top with spinach (wilts in the bowl) and cilantro. Adjust salt and chili to taste.',
+    ],
+  },
+];
+
+function daysFromNow(offset) {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+const SEED_ITEMS = [
+  {
+    id: '1',
+    name: 'Chicken Thighs',
+    status: STATUS.FRESH,
+    expiryDate: daysFromNow(2),
+    category: CATEGORY.FRESH,
+  },
+  {
+    id: '2',
+    name: 'Basil',
+    status: STATUS.FRESH,
+    expiryDate: daysFromNow(1),
+    category: CATEGORY.FRESH,
+  },
+  {
+    id: '3',
+    name: 'Chorizo',
+    status: STATUS.FRESH,
+    expiryDate: daysFromNow(12),
+    category: CATEGORY.FRESH,
+  },
+  {
+    id: '4',
+    name: 'Garlic',
+    status: STATUS.FRESH,
+    expiryDate: null,
+    category: CATEGORY.AMBIENT,
+  },
+  {
+    id: '5',
+    name: 'Pasta',
+    status: STATUS.FRESH,
+    expiryDate: null,
+    category: CATEGORY.AMBIENT,
+  },
+  {
+    id: '6',
+    name: 'Eggs',
+    status: STATUS.FRESH,
+    expiryDate: daysFromNow(7),
+    category: CATEGORY.FRESH,
+  },
+  {
+    id: '7',
+    name: 'Parmesan',
+    status: STATUS.OUT,
+    expiryDate: null,
+    category: CATEGORY.AMBIENT,
+  },
+  {
+    id: '8',
+    name: 'Heavy Cream',
+    status: STATUS.OUT,
+    expiryDate: null,
+    category: CATEGORY.FRESH,
+  },
+  {
+    id: '9',
+    name: 'Salmon Fillet',
+    status: STATUS.FRESH,
+    expiryDate: daysFromNow(4),
+    category: CATEGORY.FREEZER,
+  },
+  {
+    id: '10',
+    name: 'Lemon',
+    status: STATUS.FRESH,
+    expiryDate: daysFromNow(14),
+    category: CATEGORY.FRESH,
+  },
+];
+
+function normalizeName(value) {
+  return value.trim().toLowerCase();
+}
+
+function loadOnboarding() {
+  try {
+    const raw = localStorage.getItem(ONBOARDING_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { dismissed: Array.isArray(parsed.dismissed) ? parsed.dismissed : [] };
+    }
+  } catch {
+    /* defaults */
+  }
+  return { dismissed: [] };
+}
+
+function saveOnboarding(state) {
+  localStorage.setItem(ONBOARDING_KEY, JSON.stringify(state));
+}
+
+function useOnboarding() {
+  const [onboarding, setOnboarding] = useState(loadOnboarding);
+
+  const isDismissed = useCallback(
+    (id) => onboarding.dismissed.includes(id),
+    [onboarding.dismissed],
+  );
+
+  const dismiss = useCallback((id) => {
+    setOnboarding((prev) => {
+      if (prev.dismissed.includes(id)) return prev;
+      const next = { dismissed: [...prev.dismissed, id] };
+      saveOnboarding(next);
+      return next;
+    });
+  }, []);
+
+  const resetOnboarding = useCallback(() => {
+    const next = { dismissed: [] };
+    saveOnboarding(next);
+    setOnboarding(next);
+  }, []);
+
+  return { isDismissed, dismiss, resetOnboarding };
+}
+
+function TipBanner({ title, children, onDismiss, accentClass = 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' }) {
+  return (
+    <div className={`mb-4 flex gap-3 rounded-xl border p-3 ${accentClass}`}>
+      <Info className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="text-heading text-sm font-semibold">{title}</p>
+        <p className="text-muted mt-1 text-xs leading-relaxed">{children}</p>
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-white/60 dark:hover:bg-slate-800"
+        aria-label="Dismiss tip"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+function ColorLegendCard() {
+  return (
+    <section className="surface-card mb-5 p-4">
+      <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Color guide</h2>
+      <p className="text-muted mb-3 text-sm">What each color means across the app.</p>
+      <ul className="space-y-2.5">
+        {COLOR_LEGEND.map((item) => (
+          <li key={item.label} className="flex items-start gap-3">
+            <span className={`mt-0.5 h-4 w-4 shrink-0 rounded-full ${item.swatch}`} aria-hidden />
+            <div>
+              <p className="text-heading text-sm font-semibold">{item.label}</p>
+              <p className="text-muted text-xs">{item.desc}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function EmptyState({ icon: Icon, title, description }) {
+  return (
+    <div className="surface-inset border-dashed px-6 py-10 text-center">
+      {Icon && <Icon className="mx-auto mb-3 h-11 w-11 text-slate-400 dark:text-slate-500" strokeWidth={1.5} />}
+      <p className="text-heading text-sm font-semibold">{title}</p>
+      <p className="text-muted mx-auto mt-2 max-w-xs text-xs leading-relaxed">{description}</p>
+    </div>
+  );
+}
+
+function CollapsibleInstructions({ recipe }) {
+  const [open, setOpen] = useState(false);
+  const stepCount = recipe.instructions.length;
+
+  return (
+    <div className="surface-inset mb-4 p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-left"
+        aria-expanded={open}
+      >
+        <span className="text-muted text-xs font-semibold uppercase tracking-wide">
+          Cooking instructions ({stepCount} steps)
+        </span>
+        {open ? (
+          <ChevronUp className="h-4 w-4 text-slate-500" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-slate-500" />
+        )}
+      </button>
+      {open && (
+        <ol className="mt-3 list-decimal space-y-2 border-t border-slate-200 pt-3 pl-5 text-sm leading-relaxed text-slate-700 dark:border-slate-600 dark:text-slate-300">
+          {recipe.instructions.map((step, index) => (
+            <li key={`${recipe.id}-step-${index}`}>{step}</li>
+          ))}
+        </ol>
+      )}
+      {!open && (
+        <p className="text-muted mt-2 text-xs">Tap to expand step-by-step directions.</p>
+      )}
+    </div>
+  );
+}
+
+function getShoppingSuggestion(item) {
+  const name = normalizeName(item.name);
+  for (const rule of SHOPPING_SUGGESTIONS) {
+    if (rule.keywords.some((keyword) => name.includes(keyword))) {
+      return rule.tip;
+    }
+  }
+  return CATEGORY_SHOP_TIPS[item.category] ?? DEFAULT_SHOP_TIP;
+}
+
+function migrateItem(item) {
+  const category = CATEGORY_OPTIONS.includes(item.category) ? item.category : CATEGORY.FRESH;
+  let status = item.status === STATUS.OUT ? STATUS.OUT : STATUS.FRESH;
+  return {
+    ...item,
+    expiryDate: item.expiryDate ?? null,
+    category,
+    status,
+  };
+}
+
+function daysUntilExpiry(iso) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(`${iso}T12:00:00`);
+  expiry.setHours(0, 0, 0, 0);
+  return Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
+}
+
+function isExpiringSoon(item) {
+  if (!item.expiryDate || item.status === STATUS.OUT) return false;
+  return daysUntilExpiry(item.expiryDate) <= EXPIRING_SOON_DAYS;
+}
+
+function getDisplayStatus(item) {
+  if (item.status === STATUS.OUT) return STATUS.OUT;
+  if (isExpiringSoon(item)) return STATUS.EXPIRING;
+  return STATUS.FRESH;
+}
+
+function loadItems() {
+  const legacyKeys = ['fridge-inventory-v2', 'fridge-inventory-v1'];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map(migrateItem);
+      }
+    }
+    for (const key of legacyKeys) {
+      const legacy = localStorage.getItem(key);
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(migrateItem);
+        }
+      }
+    }
+  } catch {
+    /* use seed */
+  }
+  return SEED_ITEMS;
+}
+
+function groupByCategory(items, category) {
+  const inCategory = items.filter(
+    (item) => item.category === category && item.status !== STATUS.OUT,
+  );
+  const expiring = inCategory.filter(isExpiringSoon).sort(sortByUrgencyThenName);
+  const plentiful = inCategory
+    .filter((item) => !isExpiringSoon(item))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { expiring, plentiful };
+}
+
+function groupShoppingList(items) {
+  return items
+    .filter((item) => item.status === STATUS.OUT)
+    .sort((a, b) => {
+      const cat = a.category.localeCompare(b.category);
+      if (cat !== 0) return cat;
+      return a.name.localeCompare(b.name);
+    });
+}
+
+function formatExpiryDate(iso) {
+  if (!iso) return null;
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatExpiryUrgency(item) {
+  if (!item.expiryDate) return null;
+  const days = daysUntilExpiry(item.expiryDate);
+  const dateLabel = formatExpiryDate(item.expiryDate);
+  if (days < 0) return `Expired ${dateLabel}`;
+  if (days === 0) return 'Expires today';
+  if (days === 1) return 'Expires tomorrow';
+  return `Expires in ${days} days (${dateLabel})`;
+}
+
+function sortByUrgencyThenName(a, b) {
+  if (a.expiryDate && b.expiryDate) {
+    const cmp = a.expiryDate.localeCompare(b.expiryDate);
+    if (cmp !== 0) return cmp;
+  } else if (a.expiryDate) return -1;
+  else if (b.expiryDate) return 1;
+  return a.name.localeCompare(b.name);
+}
+
+function saveItems(items) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+}
+
+function findInventoryMatch(ingredientName, items) {
+  const needle = normalizeName(ingredientName);
+  return items.find((item) => normalizeName(item.name) === needle);
+}
+
+function analyzeRecipe(recipe, items) {
+  const have = [];
+  const need = [];
+
+  for (const ingredient of recipe.ingredients) {
+    const match = findInventoryMatch(ingredient, items);
+    if (!match || match.status === STATUS.OUT) {
+      need.push(ingredient);
+    } else {
+      have.push({ name: ingredient, status: getDisplayStatus(match) });
+    }
+  }
+
+  return { have, need, canCook: need.length === 0 };
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        user: { ...DEFAULT_SETTINGS.user, ...parsed.user },
+      };
+    }
+  } catch {
+    /* defaults */
+  }
+  return DEFAULT_SETTINGS;
+}
+
+function saveSettings(settings) {
+  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function useAppSettings() {
+  const [settings, setSettings] = useState(loadSettings);
+  const channelRef = useRef(null);
+  const isRemoteUpdate = useRef(false);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', settings.theme === 'dark');
+    saveSettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return undefined;
+
+    const channel = new BroadcastChannel(SETTINGS_CHANNEL_NAME);
+    channelRef.current = channel;
+
+    channel.onmessage = (event) => {
+      if (event.data?.type === 'SYNC_SETTINGS' && event.data.settings) {
+        isRemoteUpdate.current = true;
+        setSettings(event.data.settings);
+      }
+    };
+
+    return () => channel.close();
+  }, []);
+
+  const updateSettings = useCallback((updater) => {
+    setSettings((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (!isRemoteUpdate.current) {
+        channelRef.current?.postMessage({ type: 'SYNC_SETTINGS', settings: next });
+      }
+      isRemoteUpdate.current = false;
+      return next;
+    });
+  }, []);
+
+  return { settings, updateSettings };
+}
+
+function useFridgeSync() {
+  const [items, setItems] = useState(loadItems);
+  const channelRef = useRef(null);
+  const isRemoteUpdate = useRef(false);
+
+  useEffect(() => {
+    saveItems(items);
+  }, [items]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return undefined;
+
+    const channel = new BroadcastChannel(CHANNEL_NAME);
+    channelRef.current = channel;
+
+    channel.onmessage = (event) => {
+      if (event.data?.type === 'SYNC_ITEMS' && Array.isArray(event.data.items)) {
+        isRemoteUpdate.current = true;
+        setItems(event.data.items);
+      }
+    };
+
+    return () => channel.close();
+  }, []);
+
+  const broadcast = useCallback((nextItems) => {
+    channelRef.current?.postMessage({ type: 'SYNC_ITEMS', items: nextItems });
+  }, []);
+
+  const updateItems = useCallback(
+    (updater) => {
+      setItems((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        if (!isRemoteUpdate.current) {
+          broadcast(next);
+        }
+        isRemoteUpdate.current = false;
+        return next;
+      });
+    },
+    [broadcast],
+  );
+
+  return [items, updateItems];
+}
+
+function loadSavedRecipeIds() {
+  try {
+    const raw = localStorage.getItem(SAVED_RECIPES_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((id) => typeof id === 'string');
+    }
+  } catch {
+    /* defaults */
+  }
+  return [];
+}
+
+function useSavedRecipes() {
+  const [savedIds, setSavedIds] = useState(loadSavedRecipeIds);
+  const channelRef = useRef(null);
+  const isRemoteUpdate = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem(SAVED_RECIPES_STORAGE_KEY, JSON.stringify(savedIds));
+  }, [savedIds]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return undefined;
+
+    const channel = new BroadcastChannel(SAVED_RECIPES_CHANNEL_NAME);
+    channelRef.current = channel;
+
+    channel.onmessage = (event) => {
+      if (event.data?.type === 'SYNC_SAVED_RECIPES' && Array.isArray(event.data.savedIds)) {
+        isRemoteUpdate.current = true;
+        setSavedIds(event.data.savedIds);
+      }
+    };
+
+    return () => channel.close();
+  }, []);
+
+  const broadcast = useCallback((nextIds) => {
+    channelRef.current?.postMessage({ type: 'SYNC_SAVED_RECIPES', savedIds: nextIds });
+  }, []);
+
+  const isSaved = useCallback((recipeId) => savedIds.includes(recipeId), [savedIds]);
+
+  const toggleSave = useCallback(
+    (recipeId) => {
+      setSavedIds((prev) => {
+        const next = prev.includes(recipeId)
+          ? prev.filter((id) => id !== recipeId)
+          : [...prev, recipeId];
+        if (!isRemoteUpdate.current) {
+          broadcast(next);
+        }
+        isRemoteUpdate.current = false;
+        return next;
+      });
+    },
+    [broadcast],
+  );
+
+  return { savedIds, isSaved, toggleSave };
+}
+
+function StatusBadge({ status, onOpenPicker }) {
+  const meta = STATUS_META[status];
+  return (
+    <button
+      type="button"
+      onClick={onOpenPicker}
+      className={`min-h-11 shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide transition active:scale-95 ${meta.badge}`}
+      aria-label={`Status: ${meta.label}. Tap to choose a different status.`}
+    >
+      {meta.label}
+    </button>
+  );
+}
+
+function CategoryToggle({ value, onChange }) {
+  return (
+    <div
+      className="grid w-full grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900"
+      role="group"
+      aria-label="Storage location"
+    >
+      {CATEGORY_OPTIONS.map((cat) => {
+        const meta = CATEGORY_META[cat];
+        const selected = value === cat;
+        return (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => onChange(cat)}
+            className={`rounded-lg px-2 py-2 text-xs font-bold transition active:scale-95 ${
+              selected
+                ? meta.tabActive
+                : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200'
+            }`}
+            aria-pressed={selected}
+          >
+            <span className="mr-0.5" aria-hidden>
+              {meta.emoji}
+            </span>
+            {cat}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ItemEditorSheet({ item, onSave, onClose }) {
+  const [needToBuy, setNeedToBuy] = useState(item.status === STATUS.OUT);
+  const [category, setCategory] = useState(item.category);
+  const [hasExpiry, setHasExpiry] = useState(Boolean(item.expiryDate));
+  const [expiryDate, setExpiryDate] = useState(item.expiryDate ?? '');
+  const expiringHint = !needToBuy && hasExpiry && expiryDate && isExpiringSoon({
+    ...item,
+    status: STATUS.FRESH,
+    expiryDate,
+  });
+
+  const handleSave = () => {
+    onSave({
+      status: needToBuy ? STATUS.OUT : STATUS.FRESH,
+      category,
+      expiryDate: hasExpiry && expiryDate ? expiryDate : null,
+    });
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="item-editor-title"
+    >
+      <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 id="item-editor-title" className="text-heading text-lg font-bold">
+              {item.name}
+            </h3>
+            <p className="text-muted mt-1 text-sm">
+              Storage, expiry date, and shopping list
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <p className="text-muted mb-2 text-xs font-semibold uppercase tracking-wide">
+          Storage
+        </p>
+        <div className="mb-4">
+          <CategoryToggle value={category} onChange={setCategory} />
+        </div>
+
+        <label className="surface-inset mb-3 flex cursor-pointer items-center gap-2 px-3 py-3 text-sm text-slate-700 dark:text-slate-300">
+          <input
+            type="checkbox"
+            checked={needToBuy}
+            onChange={(e) => setNeedToBuy(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 bg-white text-sky-600 focus:ring-sky-500 dark:border-slate-500 dark:bg-slate-900"
+          />
+          Add to shopping list (need to buy)
+        </label>
+
+        <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+          <input
+            type="checkbox"
+            checked={hasExpiry}
+            onChange={(e) => setHasExpiry(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
+          />
+          Set expiry date
+        </label>
+        {hasExpiry && (
+          <input
+            type="date"
+            value={expiryDate}
+            onChange={(e) => setExpiryDate(e.target.value)}
+            className="input-field mb-3"
+          />
+        )}
+        {expiringHint && (
+          <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+            This date is within {EXPIRING_SOON_DAYS} days — it will show under Expiring Soon
+            automatically.
+          </p>
+        )}
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-300"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
+  const catMeta = CATEGORY_META[item.category];
+  const suggestion = getShoppingSuggestion(item);
+
+  return (
+    <li className="surface-row px-3 py-3">
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={() => onGotIt(item.id)}
+          className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 text-sky-700 transition active:scale-95 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300"
+          aria-label={`Mark ${item.name} as bought`}
+          title="Got it — back in stock"
+        >
+          <CircleCheck className="h-5 w-5" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-heading text-sm font-medium">{item.name}</p>
+          {catMeta && (
+            <p className="mt-0.5 text-xs text-slate-500">
+              {catMeta.emoji} {catMeta.label}
+            </p>
+          )}
+          <p className={`mt-2 flex gap-1.5 rounded-lg px-2.5 py-2 text-xs leading-relaxed ${SHOPPING_ACCENT.bgMuted} ${SHOPPING_ACCENT.text}`}>
+            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden />
+            <span>
+              <span className="font-semibold">Where to buy:</span> {suggestion}
+            </span>
+          </p>
+        </div>
+        <StatusBadge status={STATUS.OUT} onOpenPicker={() => onOpenEditor(item)} />
+        <button
+          type="button"
+          onClick={() => onDelete(item.id)}
+          className={`rounded-lg p-2 text-slate-500 transition ${SHOPPING_ACCENT.hover}`}
+          aria-label={`Remove ${item.name}`}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function InventoryItemRow({ item, onOpenEditor, onDelete, showCategory = false }) {
+  const urgencyLabel = formatExpiryUrgency(item);
+  const catMeta = CATEGORY_META[item.category];
+  const displayStatus = getDisplayStatus(item);
+  return (
+    <li className="surface-row flex items-center gap-2 px-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-heading truncate text-sm font-medium">{item.name}</p>
+        {showCategory && catMeta && (
+          <p className="mt-0.5 text-xs text-slate-500">
+            {catMeta.emoji} {catMeta.label}
+          </p>
+        )}
+        {urgencyLabel && item.status !== STATUS.OUT && (
+          <p
+            className={`mt-0.5 flex items-center gap-1 text-xs ${
+              isExpiringSoon(item) ? 'text-amber-700' : 'text-slate-600'
+            }`}
+          >
+            <Calendar className="h-3 w-3 shrink-0" />
+            {urgencyLabel}
+          </p>
+        )}
+      </div>
+      <StatusBadge status={displayStatus} onOpenPicker={() => onOpenEditor(item)} />
+      <button
+        type="button"
+        onClick={() => onDelete(item.id)}
+        className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
+        aria-label={`Remove ${item.name}`}
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </li>
+  );
+}
+
+function InventorySection({ title, emoji, accent, itemCount, children, emptyText }) {
+  return (
+    <section className="mb-5">
+      <h2 className={`mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider ${accent}`}>
+        <span aria-hidden>{emoji}</span>
+        {title}
+      </h2>
+      {itemCount > 0 ? (
+        <ul className="space-y-2">{children}</ul>
+      ) : (
+        <p className="surface-inset border-dashed px-3 py-4 text-center text-xs text-slate-500 dark:text-slate-400">
+          {emptyText}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ShareFallbackModal({ message, onClose }) {
+  const [copied, setCopied] = useState(false);
+
+  const copyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  useEffect(() => {
+    copyMessage();
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="share-modal-title"
+    >
+      <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h3 id="share-modal-title" className="text-heading text-lg font-bold">
+              Share with your partner
+            </h3>
+            <p className="text-muted mt-1 text-sm">
+              Native sharing isn&apos;t available here — message copied to clipboard.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <textarea
+          readOnly
+          value={message}
+          className="input-field h-32 resize-none"
+        />
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={copyMessage}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
+          >
+            <Copy className="h-4 w-4" />
+            {copied ? 'Copied!' : 'Copy again'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-300"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StorageLocationTabs({ activeView, onChange, shoppingCount }) {
+  return (
+    <div className="mb-5 space-y-2">
+      <div className="grid grid-cols-3 gap-2">
+        {CATEGORY_OPTIONS.map((cat) => {
+          const meta = CATEGORY_META[cat];
+          const active = activeView === cat;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => onChange(cat)}
+              className={`rounded-xl border px-2 py-3 text-center transition active:scale-[0.98] ${
+                active
+                  ? 'border-emerald-300 bg-emerald-50 ring-2 ring-emerald-500 dark:border-emerald-600 dark:bg-emerald-950/60 dark:ring-emerald-500'
+                  : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-slate-500'
+              }`}
+            >
+              <span className="text-lg" aria-hidden>
+                {meta.emoji}
+              </span>
+              <p className="text-heading mt-1 text-xs font-bold">{meta.label}</p>
+              <p className="text-muted text-[10px]">{meta.subtitle}</p>
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange(INVENTORY_VIEW.SHOPPING)}
+        className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition active:scale-[0.98] ${
+          activeView === INVENTORY_VIEW.SHOPPING
+            ? SHOPPING_ACCENT.bgActive
+            : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-slate-500'
+        }`}
+      >
+        <span className="text-heading flex items-center gap-2 text-sm font-bold">
+          <span aria-hidden>🛒</span>
+          Shopping List
+        </span>
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-white ${SHOPPING_ACCENT.badge}`}
+        >
+          {shoppingCount}
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function InventoryView({ items, updateItems, onboarding }) {
+  const { isDismissed, dismiss } = onboarding;
+  const [draft, setDraft] = useState('');
+  const [addCategory, setAddCategory] = useState(CATEGORY.FRESH);
+  const [addExpiry, setAddExpiry] = useState(false);
+  const [addExpiryDate, setAddExpiryDate] = useState('');
+  const [shopDraft, setShopDraft] = useState('');
+  const [shopCategory, setShopCategory] = useState(CATEGORY.FRESH);
+  const [activeView, setActiveView] = useState(CATEGORY.FRESH);
+  const [editingItem, setEditingItem] = useState(null);
+  const [shareMessage, setShareMessage] = useState(null);
+
+  const shoppingList = useMemo(() => groupShoppingList(items), [items]);
+
+  const categoryGrouped = useMemo(() => {
+    if (activeView === INVENTORY_VIEW.SHOPPING) return null;
+    return groupByCategory(items, activeView);
+  }, [items, activeView]);
+
+  const resetAddForm = () => {
+    setDraft('');
+    setAddCategory(CATEGORY.FRESH);
+    setAddExpiry(false);
+    setAddExpiryDate('');
+  };
+
+  const addItem = (e) => {
+    e.preventDefault();
+    const name = draft.trim();
+    if (!name) return;
+    const existing = items.find((i) => normalizeName(i.name) === normalizeName(name));
+    if (existing) {
+      resetAddForm();
+      return;
+    }
+    updateItems((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        name,
+        status: STATUS.FRESH,
+        category: addCategory,
+        expiryDate: addExpiry && addExpiryDate ? addExpiryDate : null,
+      },
+    ]);
+    resetAddForm();
+    if (activeView !== INVENTORY_VIEW.SHOPPING) {
+      setActiveView(addCategory);
+    }
+  };
+
+  const addShoppingItem = (e) => {
+    e.preventDefault();
+    const name = shopDraft.trim();
+    if (!name) return;
+    const needle = normalizeName(name);
+    updateItems((prev) => {
+      const existingIdx = prev.findIndex((i) => normalizeName(i.name) === needle);
+      if (existingIdx >= 0) {
+        const next = [...prev];
+        next[existingIdx] = {
+          ...next[existingIdx],
+          status: STATUS.OUT,
+          category: shopCategory,
+        };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          name,
+          status: STATUS.OUT,
+          category: shopCategory,
+          expiryDate: null,
+        },
+      ];
+    });
+    setShopDraft('');
+  };
+
+  const saveItemEdits = (id, updates) => {
+    updateItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updates } : item)),
+    );
+  };
+
+  const deleteItem = (id) => {
+    updateItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const markItemStocked = (id) => {
+    updateItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: STATUS.FRESH } : item)),
+    );
+  };
+
+  const buildShoppingMessage = () => {
+    const missing = shoppingList.map((i) => i.name);
+    if (missing.length === 0) {
+      return 'Hey! Our fridge shopping list is empty right now — we\'re all stocked up!';
+    }
+    return `Hey! Heading home or near the shops? Can you grab these missing items for the fridge: ${missing.join(', ')}?`;
+  };
+
+  const pingPartner = async () => {
+    const message = buildShoppingMessage();
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Fridge Shopping List', text: message });
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+      }
+    }
+    setShareMessage(message);
+  };
+
+  return (
+    <div className="pb-28">
+      <header className="mb-4">
+        <h1 className="text-heading flex items-center gap-2.5 text-2xl font-extrabold tracking-tight">
+          <Refrigerator className="h-7 w-7 shrink-0 text-emerald-600" aria-hidden />
+          What&apos;s in the Fridge?
+        </h1>
+        <p className="text-muted mt-1.5 text-sm leading-relaxed">
+          Expiring Soon is automatic from dates · within {EXPIRING_SOON_DAYS} days
+        </p>
+      </header>
+
+      {!isDismissed('welcome') && (
+        <TipBanner
+          title="Welcome to your household fridge"
+          onDismiss={() => dismiss('welcome')}
+        >
+          Add items by storage location. Open the sky Shopping List tab for everything you need
+          to buy. Settings lets you invite your partner and switch dark mode.
+        </TipBanner>
+      )}
+
+      {!isDismissed('color-hint') && activeView !== INVENTORY_VIEW.SHOPPING && (
+        <TipBanner
+          title="Quick color guide"
+          accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
+          onDismiss={() => dismiss('color-hint')}
+        >
+          <span className="font-semibold text-emerald-700 dark:text-emerald-400">Green</span> = in
+          stock · <span className="font-semibold text-amber-700 dark:text-amber-400">Amber</span> =
+          expiring soon ·{' '}
+          <span className="font-semibold text-rose-700 dark:text-rose-400">Rose badge</span> = out
+          of stock ·{' '}
+          <span className={`font-semibold ${SHOPPING_ACCENT.textLabel}`}>Sky tab</span> = shopping
+          list
+        </TipBanner>
+      )}
+
+      <StorageLocationTabs
+        activeView={activeView}
+        onChange={setActiveView}
+        shoppingCount={shoppingList.length}
+      />
+
+      {activeView === INVENTORY_VIEW.SHOPPING ? (
+        <>
+          {!isDismissed('shopping-tip') && (
+            <TipBanner
+              title="Your shared shopping list"
+              accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
+              onDismiss={() => dismiss('shopping-tip')}
+            >
+              Add items with +, tap the checkmark when you&apos;ve bought something, or ping your
+              partner to grab groceries. Australian shop tips appear on each row.
+            </TipBanner>
+          )}
+
+          <form
+            onSubmit={addShoppingItem}
+            className={`surface-card mb-4 space-y-3 border-2 p-4 ${SHOPPING_ACCENT.borderSoft}`}
+          >
+            <p className={`text-xs font-semibold uppercase tracking-wide ${SHOPPING_ACCENT.textLabel}`}>
+              Add to shopping list
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={shopDraft}
+                onChange={(e) => setShopDraft(e.target.value)}
+                placeholder='What do you need? (e.g. "Milk")'
+                className={`input-field min-w-0 flex-1 ${SHOPPING_ACCENT.focus}`}
+              />
+              <button
+                type="submit"
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-lg active:scale-95 ${SHOPPING_ACCENT.btn}`}
+                aria-label="Add to shopping list"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            </div>
+            <div>
+              <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
+                Usually found in
+              </p>
+              <CategoryToggle value={shopCategory} onChange={setShopCategory} />
+            </div>
+          </form>
+
+          <p className="text-muted mb-3 text-xs leading-relaxed">
+            Each item includes Australian shop tips — cheap picks and quality options.
+          </p>
+
+          <InventorySection
+            title="Shopping List — All Locations"
+            emoji="🛒"
+            accent={SHOPPING_ACCENT.section}
+            itemCount={shoppingList.length}
+            emptyText="Nothing to buy — tap + above to add items."
+          >
+            {shoppingList.map((item) => (
+              <ShoppingListItemRow
+                key={item.id}
+                item={item}
+                onOpenEditor={setEditingItem}
+                onDelete={deleteItem}
+                onGotIt={markItemStocked}
+              />
+            ))}
+          </InventorySection>
+
+          <button
+            type="button"
+            onClick={pingPartner}
+            className={`mt-2 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] ${SHOPPING_ACCENT.btn}`}
+          >
+            <Share2 className="h-5 w-5" />
+            🚀 Ping Shopping List to Partner
+          </button>
+        </>
+      ) : (
+        categoryGrouped && (
+          <>
+            <form onSubmit={addItem} className="surface-card mb-4 space-y-3 p-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder='Item name (e.g. "Chorizo")'
+                  className="input-field min-w-0 flex-1"
+                />
+                <button
+                  type="submit"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 active:scale-95"
+                  aria-label="Add item"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+              </div>
+              <div>
+                <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
+                  Storage location
+                </p>
+                <CategoryToggle value={addCategory} onChange={setAddCategory} />
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={addExpiry}
+                  onChange={(e) => setAddExpiry(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
+                />
+                Add expiry date (optional)
+              </label>
+              {addExpiry && (
+                <input
+                  type="date"
+                  value={addExpiryDate}
+                  onChange={(e) => setAddExpiryDate(e.target.value)}
+                  className="input-field"
+                />
+              )}
+            </form>
+
+            <p className="text-muted mb-4 text-sm">
+              {CATEGORY_META[activeView].emoji}{' '}
+              <span className="font-semibold text-slate-800 dark:text-slate-200">
+                {CATEGORY_META[activeView].label}
+              </span>{' '}
+              — {CATEGORY_META[activeView].subtitle}
+            </p>
+
+            <InventorySection
+              title={`Expiring Soon (within ${EXPIRING_SOON_DAYS} days)`}
+              emoji="🟠"
+              accent="text-amber-600"
+              itemCount={categoryGrouped.expiring.length}
+              emptyText="Nothing urgent in this location — add an expiry date to track."
+            >
+              {categoryGrouped.expiring.map((item) => (
+                <InventoryItemRow
+                  key={item.id}
+                  item={item}
+                  onOpenEditor={setEditingItem}
+                  onDelete={deleteItem}
+                />
+              ))}
+            </InventorySection>
+
+            <InventorySection
+              title="Plentiful"
+              emoji="🟢"
+              accent="text-emerald-600"
+              itemCount={categoryGrouped.plentiful.length}
+              emptyText="No plentiful items here yet — add something above."
+            >
+              {categoryGrouped.plentiful.map((item) => (
+                <InventoryItemRow
+                  key={item.id}
+                  item={item}
+                  onOpenEditor={setEditingItem}
+                  onDelete={deleteItem}
+                />
+              ))}
+            </InventorySection>
+          </>
+        )
+      )}
+
+      {shareMessage && (
+        <ShareFallbackModal message={shareMessage} onClose={() => setShareMessage(null)} />
+      )}
+
+      {editingItem && (
+        <ItemEditorSheet
+          item={editingItem}
+          onSave={(updates) => saveItemEdits(editingItem.id, updates)}
+          onClose={() => setEditingItem(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function RecipeCard({ recipe, analysis, isSaved, onToggleSave, onMarkCooked }) {
+  return (
+    <li className="surface-card p-4 shadow-lg">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-heading text-lg font-bold">{recipe.title}</h2>
+          <p className="text-muted text-xs font-medium">
+            {recipe.cuisine ? `${recipe.cuisine} · ` : ''}Prep: {recipe.prepTime}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {analysis.canCook && (
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
+              Ready!
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onToggleSave(recipe.id)}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl border transition active:scale-95 ${
+              isSaved
+                ? 'border-violet-300 bg-violet-100 text-violet-700 dark:border-violet-700 dark:bg-violet-950/60 dark:text-violet-300'
+                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-violet-300 hover:text-violet-600 dark:border-slate-600 dark:bg-slate-900 dark:hover:text-violet-400'
+            }`}
+            aria-label={isSaved ? 'Remove from saved recipes' : 'Save recipe'}
+            aria-pressed={isSaved}
+          >
+            <Bookmark className={`h-5 w-5 ${isSaved ? 'fill-current' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {analysis.have.length > 0 ? (
+        <div className="mb-3">
+          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
+            What you have
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {analysis.have.map((ing) => (
+              <span
+                key={ing.name}
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  ing.status === STATUS.EXPIRING
+                    ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700'
+                    : 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:ring-emerald-700'
+                }`}
+              >
+                {ing.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-muted mb-3 text-xs">
+          Add matching ingredients in Fridge to see what you already have for this recipe.
+        </p>
+      )}
+
+      {analysis.need.length > 0 && (
+        <div className="mb-4">
+          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
+            What you need
+          </p>
+          <ul className="flex flex-wrap gap-1.5">
+            {analysis.need.map((name) => (
+              <li
+                key={name}
+                className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:ring-rose-700"
+              >
+                {name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <CollapsibleInstructions recipe={recipe} />
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <button
+          type="button"
+          onClick={() => onMarkCooked(recipe)}
+          className="surface-inset flex flex-1 items-center justify-center gap-2 py-3 text-sm font-semibold text-slate-800 transition hover:border-emerald-500 hover:text-emerald-700 active:scale-[0.98] dark:text-slate-200 dark:hover:border-emerald-600 dark:hover:text-emerald-400"
+        >
+          <ChefHat className="h-4 w-4" />
+          Cooked It!
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggleSave(recipe.id)}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition active:scale-[0.98] ${
+            isSaved
+              ? 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-200'
+              : 'border-slate-200 text-slate-700 hover:border-violet-300 hover:text-violet-700 dark:border-slate-600 dark:text-slate-300 dark:hover:text-violet-400'
+          }`}
+        >
+          <Bookmark className={`h-4 w-4 ${isSaved ? 'fill-current' : ''}`} />
+          {isSaved ? 'Saved' : 'Save recipe'}
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function RecipesView({ items, updateItems, savedRecipes }) {
+  const { savedIds, isSaved, toggleSave } = savedRecipes;
+  const [recipeView, setRecipeView] = useState(RECIPE_VIEW.MATCHED);
+
+  const cookableRecipes = useMemo(() => {
+    return RECIPES.map((recipe) => {
+      const analysis = analyzeRecipe(recipe, items);
+      const usableCount = analysis.have.filter(
+        (h) => h.status === STATUS.FRESH || h.status === STATUS.EXPIRING,
+      ).length;
+      return { recipe, analysis, score: usableCount };
+    })
+      .filter(({ analysis }) => analysis.have.length > 0)
+      .sort((a, b) => b.score - a.score);
+  }, [items]);
+
+  const savedRecipeCards = useMemo(() => {
+    return savedIds
+      .map((id) => RECIPES.find((recipe) => recipe.id === id))
+      .filter(Boolean)
+      .map((recipe) => ({
+        recipe,
+        analysis: analyzeRecipe(recipe, items),
+      }))
+      .sort((a, b) => a.recipe.title.localeCompare(b.recipe.title));
+  }, [savedIds, items]);
+
+  const markCooked = (recipe) => {
+    updateItems((prev) => {
+      const next = [...prev];
+      for (const ingredient of recipe.ingredients) {
+        const idx = next.findIndex(
+          (item) => normalizeName(item.name) === normalizeName(ingredient),
+        );
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], status: STATUS.OUT };
+        }
+      }
+      return next;
+    });
+  };
+
+  const list =
+    recipeView === RECIPE_VIEW.SAVED ? savedRecipeCards : cookableRecipes;
+
+  return (
+    <div className="pb-28">
+      <header className="mb-4">
+        <h1 className="text-heading text-2xl font-extrabold">What Can We Cook?</h1>
+        <p className="text-muted mt-1.5 text-sm">
+          {recipeView === RECIPE_VIEW.SAVED
+            ? 'Your bookmarked recipes — always available here'
+            : 'Matched from Fresh & Expiring Soon items in your fridge'}
+        </p>
+      </header>
+
+      <div className="mb-5 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setRecipeView(RECIPE_VIEW.MATCHED)}
+          className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition active:scale-[0.98] ${
+            recipeView === RECIPE_VIEW.MATCHED
+              ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+              : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
+          }`}
+        >
+          <ChefHat className="h-4 w-4" />
+          For you
+          {cookableRecipes.length > 0 && (
+            <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {cookableRecipes.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setRecipeView(RECIPE_VIEW.SAVED)}
+          className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition active:scale-[0.98] ${
+            recipeView === RECIPE_VIEW.SAVED
+              ? 'border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950/50 dark:text-violet-300'
+              : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
+          }`}
+        >
+          <Bookmark className={`h-4 w-4 ${recipeView === RECIPE_VIEW.SAVED ? 'fill-current' : ''}`} />
+          Saved
+          {savedIds.length > 0 && (
+            <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {savedIds.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {list.length === 0 ? (
+        <EmptyState
+          icon={recipeView === RECIPE_VIEW.SAVED ? Bookmark : ChefHat}
+          title={recipeView === RECIPE_VIEW.SAVED ? 'No saved recipes yet' : 'No recipes yet'}
+          description={
+            recipeView === RECIPE_VIEW.SAVED
+              ? 'Tap the bookmark on any recipe in “For you” to save favourites for quick access.'
+              : 'Add ingredients marked Fresh or Expiring Soon in your Fridge tabs — we’ll match meals you can cook.'
+          }
+        />
+      ) : (
+        <ul className="space-y-4">
+          {list.map(({ recipe, analysis }) => (
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              analysis={analysis}
+              isSaved={isSaved(recipe.id)}
+              onToggleSave={toggleSave}
+              onMarkCooked={markCooked}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SettingsView({ settings, updateSettings, updateItems, onboarding }) {
+  const { resetOnboarding } = onboarding;
+  const [name, setName] = useState(settings.user.name);
+  const [email, setEmail] = useState(settings.user.email);
+  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setName(settings.user.name);
+    setEmail(settings.user.email);
+  }, [settings.user.name, settings.user.email]);
+
+  const saveProfile = () => {
+    updateSettings((prev) => ({
+      ...prev,
+      user: { name: name.trim(), email: email.trim() },
+    }));
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const setTheme = (theme) => {
+    updateSettings((prev) => ({ ...prev, theme }));
+  };
+
+  const inviteMessage = `Join our household on What's in the Fridge! Use join code: ${HOUSEHOLD_CODE}`;
+
+  const copyInviteCode = async () => {
+    try {
+      await navigator.clipboard.writeText(HOUSEHOLD_CODE);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const shareInvite = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Join our fridge",
+          text: inviteMessage,
+        });
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+      }
+    }
+    copyInviteCode();
+  };
+
+  const resetDemo = () => updateItems(SEED_ITEMS);
+  const clearAll = () => updateItems([]);
+
+  return (
+    <div className="pb-28">
+      <header className="mb-5">
+        <h1 className="text-heading flex items-center gap-2.5 text-2xl font-extrabold">
+          <Settings className="h-7 w-7 text-emerald-600" aria-hidden />
+          Settings
+        </h1>
+        <p className="text-muted mt-1.5 text-sm">Appearance, account, and household</p>
+      </header>
+
+      <ColorLegendCard />
+
+      <section className="surface-card mb-5 p-4">
+        <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Appearance</h2>
+        <p className="text-muted mb-3 text-sm">Choose light or dark mode for the app.</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setTheme('light')}
+            className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition active:scale-[0.98] ${
+              settings.theme === 'light'
+                ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
+            }`}
+          >
+            <Sun className="h-5 w-5" />
+            Light
+          </button>
+          <button
+            type="button"
+            onClick={() => setTheme('dark')}
+            className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition active:scale-[0.98] ${
+              settings.theme === 'dark'
+                ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
+            }`}
+          >
+            <Moon className="h-5 w-5" />
+            Dark
+          </button>
+        </div>
+      </section>
+
+      <section className="surface-card mb-5 p-4">
+        <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
+          <User className="h-4 w-4 text-emerald-600" />
+          Your account
+        </h2>
+        <p className="text-muted mb-3 text-sm">Saved on this device for the prototype.</p>
+        <div className="space-y-3">
+          <div>
+            <label htmlFor="settings-name" className="text-muted mb-1 block text-xs font-semibold uppercase">
+              Display name
+            </label>
+            <input
+              id="settings-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Alex"
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label htmlFor="settings-email" className="text-muted mb-1 block text-xs font-semibold uppercase">
+              Email
+            </label>
+            <input
+              id="settings-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="input-field"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={saveProfile}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
+          >
+            {saved ? <Check className="h-4 w-4" /> : null}
+            {saved ? 'Saved!' : 'Save profile'}
+          </button>
+        </div>
+        {settings.user.name && (
+          <p className="text-muted mt-3 text-xs">
+            Signed in as <span className="font-semibold text-slate-800 dark:text-slate-200">{settings.user.name}</span>
+          </p>
+        )}
+      </section>
+
+      <section className="surface-card mb-5 p-4">
+        <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
+          <Users className="h-4 w-4 text-violet-600" />
+          Invite partner / housemate
+        </h2>
+        <p className="text-muted mb-3 text-sm">
+          Share this code so you both see the same live inventory (open two tabs to demo sync).
+        </p>
+        <p className="text-muted mb-1 text-xs font-semibold uppercase">Household join code</p>
+        <p className="text-heading mb-4 font-mono text-3xl font-bold tracking-widest">{HOUSEHOLD_CODE}</p>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={copyInviteCode}
+            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+          >
+            <Copy className="h-4 w-4" />
+            {copied ? 'Code copied!' : 'Copy join code'}
+          </button>
+          <button
+            type="button"
+            onClick={shareInvite}
+            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-3 text-sm font-bold text-white active:scale-[0.98]"
+          >
+            <Share2 className="h-4 w-4" />
+            Share invite
+          </button>
+        </div>
+        <p className="text-muted mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs leading-relaxed dark:bg-violet-950/50">
+          {inviteMessage}
+        </p>
+      </section>
+
+      <section className="surface-inset p-4">
+        <h2 className="text-heading mb-2 flex items-center gap-2 text-sm font-bold">
+          <FlaskConical className="h-4 w-4 text-amber-600" />
+          Demo tools
+        </h2>
+        <p className="text-muted mb-3 text-xs">Reset sample data or replay onboarding tips.</p>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={resetOnboarding}
+            className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:text-slate-200"
+          >
+            Show tips again
+          </button>
+          <button
+            type="button"
+            onClick={resetDemo}
+            className="rounded-xl bg-slate-200 py-3 text-sm font-semibold text-slate-900 active:scale-[0.98] dark:bg-slate-700 dark:text-slate-100"
+          >
+            Reset demo inventory
+          </button>
+          <button
+            type="button"
+            onClick={clearAll}
+            className="rounded-xl border border-rose-300 py-3 text-sm font-semibold text-rose-700 active:scale-[0.98] dark:border-rose-800 dark:text-rose-400"
+          >
+            Clear all items
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+const TABS = [
+  { id: 'inventory', label: 'Fridge', icon: Refrigerator },
+  { id: 'recipes', label: 'Cook', icon: ChefHat },
+  { id: 'settings', label: 'Settings', icon: Settings },
+];
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('inventory');
+  const [items, updateItems] = useFridgeSync();
+  const { settings, updateSettings } = useAppSettings();
+  const savedRecipes = useSavedRecipes();
+  const onboarding = useOnboarding();
+
+  return (
+    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
+      <main className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
+        {activeTab === 'inventory' && (
+          <InventoryView items={items} updateItems={updateItems} onboarding={onboarding} />
+        )}
+        {activeTab === 'recipes' && (
+          <RecipesView items={items} updateItems={updateItems} savedRecipes={savedRecipes} />
+        )}
+        {activeTab === 'settings' && (
+          <SettingsView
+            settings={settings}
+            updateSettings={updateSettings}
+            updateItems={updateItems}
+            onboarding={onboarding}
+          />
+        )}
+      </main>
+
+      <nav
+        className="nav-bar fixed bottom-0 left-0 right-0 z-40"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <div className="mx-auto flex max-w-lg">
+          {TABS.map(({ id, label, icon: Icon }) => {
+            const active = activeTab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`flex min-h-[60px] flex-1 flex-col items-center justify-center gap-1 px-2 py-2 text-sm font-semibold transition active:scale-[0.98] ${
+                  active
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
+                }`}
+              >
+                <Icon
+                  className={`h-6 w-6 ${active ? 'text-emerald-600 dark:text-emerald-400' : ''}`}
+                  strokeWidth={active ? 2.25 : 2}
+                />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+}
