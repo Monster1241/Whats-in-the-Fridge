@@ -1111,6 +1111,8 @@ function InventoryView({ items, updateItems, onboarding }) {
   const [activeView, setActiveView] = useState(CATEGORY.FRESH);
   const [editingItem, setEditingItem] = useState(null);
   const [shareMessage, setShareMessage] = useState(null);
+  const [showAddAdvanced, setShowAddAdvanced] = useState(false);
+  const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
 
   const shoppingList = useMemo(() => groupShoppingList(items), [items]);
 
@@ -1235,8 +1237,8 @@ function InventoryView({ items, updateItems, onboarding }) {
           title="Welcome to your household fridge"
           onDismiss={() => dismiss('welcome')}
         >
-          Add items by storage location. Open the sky Shopping List tab for everything you need
-          to buy. Settings lets you invite your partner and switch dark mode.
+          Add items quickly, then use Shopping List for what you need to buy. Open Settings to
+          share your household code and switch theme.
         </TipBanner>
       )}
 
@@ -1246,13 +1248,11 @@ function InventoryView({ items, updateItems, onboarding }) {
           accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
           onDismiss={() => dismiss('color-hint')}
         >
-          <span className="font-semibold text-emerald-700 dark:text-emerald-400">Green</span> = in
-          stock · <span className="font-semibold text-amber-700 dark:text-amber-400">Amber</span> =
-          expiring soon ·{' '}
-          <span className="font-semibold text-rose-700 dark:text-rose-400">Rose badge</span> = out
-          of stock ·{' '}
-          <span className={`font-semibold ${SHOPPING_ACCENT.textLabel}`}>Sky tab</span> = shopping
-          list
+          <span className="font-semibold text-emerald-700 dark:text-emerald-400">Green</span> in
+          stock · <span className="font-semibold text-amber-700 dark:text-amber-400">Amber</span>{' '}
+          expiring · <span className="font-semibold text-rose-700 dark:text-rose-400">Rose</span>{' '}
+          out of stock · <span className={`font-semibold ${SHOPPING_ACCENT.textLabel}`}>Sky</span>{' '}
+          shopping list
         </TipBanner>
       )}
 
@@ -1270,8 +1270,7 @@ function InventoryView({ items, updateItems, onboarding }) {
               accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
               onDismiss={() => dismiss('shopping-tip')}
             >
-              Add items with +, tap the checkmark when you&apos;ve bought something, or ping your
-              partner to grab groceries. Australian shop tips appear on each row.
+              Add missing items, tap check when bought, or share the list with your partner.
             </TipBanner>
           )}
 
@@ -1298,17 +1297,24 @@ function InventoryView({ items, updateItems, onboarding }) {
                 <Plus className="h-5 w-5" />
               </button>
             </div>
-            <div>
-              <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
-                Usually found in
-              </p>
-              <CategoryToggle value={shopCategory} onChange={setShopCategory} />
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowShoppingAdvanced((v) => !v)}
+              className="text-muted text-left text-xs font-semibold"
+            >
+              {showShoppingAdvanced ? 'Hide options' : 'More options'}
+            </button>
+            {showShoppingAdvanced && (
+              <div>
+                <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
+                  Usually found in
+                </p>
+                <CategoryToggle value={shopCategory} onChange={setShopCategory} />
+              </div>
+            )}
           </form>
 
-          <p className="text-muted mb-3 text-xs leading-relaxed">
-            Each item includes Australian shop tips — cheap picks and quality options.
-          </p>
+          <p className="text-muted mb-3 text-xs leading-relaxed">Each row includes a quick shop tip.</p>
 
           <InventorySection
             title="Shopping List — All Locations"
@@ -1357,29 +1363,40 @@ function InventoryView({ items, updateItems, onboarding }) {
                   <Plus className="h-5 w-5" />
                 </button>
               </div>
-              <div>
-                <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
-                  Storage location
-                </p>
-                <CategoryToggle value={addCategory} onChange={setAddCategory} />
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddAdvanced((v) => !v)}
+                className="text-muted text-left text-xs font-semibold"
+              >
+                {showAddAdvanced ? 'Hide options' : 'More options'}
+              </button>
+              {showAddAdvanced && (
+                <>
+                  <div>
+                    <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
+                      Storage location
+                    </p>
+                    <CategoryToggle value={addCategory} onChange={setAddCategory} />
+                  </div>
 
-              <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={addExpiry}
-                  onChange={(e) => setAddExpiry(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
-                />
-                Add expiry date (optional)
-              </label>
-              {addExpiry && (
-                <input
-                  type="date"
-                  value={addExpiryDate}
-                  onChange={(e) => setAddExpiryDate(e.target.value)}
-                  className="input-field"
-                />
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={addExpiry}
+                      onChange={(e) => setAddExpiry(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
+                    />
+                    Add expiry date (optional)
+                  </label>
+                  {addExpiry && (
+                    <input
+                      type="date"
+                      value={addExpiryDate}
+                      onChange={(e) => setAddExpiryDate(e.target.value)}
+                      className="input-field"
+                    />
+                  )}
+                </>
               )}
             </form>
 
@@ -1614,7 +1631,7 @@ function RecipesView({ items, updateItems, savedRecipes }) {
           }`}
         >
           <ChefHat className="h-4 w-4" />
-          For you
+          Matched
           {cookableRecipes.length > 0 && (
             <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
               {cookableRecipes.length}
@@ -1646,7 +1663,7 @@ function RecipesView({ items, updateItems, savedRecipes }) {
           title={recipeView === RECIPE_VIEW.SAVED ? 'No saved recipes yet' : 'No recipes yet'}
           description={
             recipeView === RECIPE_VIEW.SAVED
-              ? 'Tap the bookmark on any recipe in “For you” to save favourites for quick access.'
+              ? 'Tap the bookmark on any recipe in “Matched” to save favourites for quick access.'
               : 'Add ingredients marked Fresh or Expiring Soon in your Fridge tabs — we’ll match meals you can cook.'
           }
         />
@@ -1668,12 +1685,15 @@ function RecipesView({ items, updateItems, savedRecipes }) {
   );
 }
 
-function SettingsView({ settings, updateSettings, updateItems, onboarding, householdCode }) {
+function SettingsView({ settings, updateSettings, updateItems, onboarding, householdCode, onJoinHousehold }) {
   const { resetOnboarding } = onboarding;
   const [name, setName] = useState(settings.user.name);
   const [email, setEmail] = useState(settings.user.email);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [joinStatus, setJoinStatus] = useState('');
+  const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     setName(settings.user.name);
@@ -1724,7 +1744,27 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
     copyInviteCode();
   };
 
-  const clearAll = () => updateItems([]);
+  const handleJoinHousehold = async () => {
+    const normalized = joinCode.trim().toUpperCase();
+    if (!normalized) return;
+    setJoinStatus('Joining...');
+    try {
+      await onJoinHousehold(normalized);
+      setJoinStatus(`Connected: ${normalized}`);
+      setJoinCode('');
+    } catch {
+      setJoinStatus('Could not join household right now.');
+    }
+  };
+
+  const clearAll = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    updateItems([]);
+    setConfirmClear(false);
+  };
 
   return (
     <div className="pb-28">
@@ -1821,10 +1861,10 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
       <section className="surface-card mb-5 p-4">
         <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
           <Users className="h-4 w-4 text-violet-600" />
-          Invite partner / housemate
+          Household sharing
         </h2>
         <p className="text-muted mb-3 text-sm">
-          Share this code with your partner. Everyone using this app shares the same database.
+          Share your code so your partner joins the same household inventory.
         </p>
         <p className="text-muted mb-1 text-xs font-semibold uppercase">Household join code</p>
         <p className="text-heading mb-4 font-mono text-3xl font-bold tracking-widest">
@@ -1837,7 +1877,7 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
             className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
           >
             <Copy className="h-4 w-4" />
-            {copied ? 'Code copied!' : 'Copy join code'}
+            {copied ? 'Copied!' : 'Copy my code'}
           </button>
           <button
             type="button"
@@ -1845,12 +1885,33 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
             className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-3 text-sm font-bold text-white active:scale-[0.98]"
           >
             <Share2 className="h-4 w-4" />
-            Share invite
+            Share code
           </button>
         </div>
         <p className="text-muted mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs leading-relaxed dark:bg-violet-950/50">
           {inviteMessage}
         </p>
+        <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <p className="text-muted mb-1 text-xs font-semibold uppercase">Join another household</p>
+          <p className="text-muted mb-2 text-xs">Paste a code to switch to that shared household.</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              placeholder="FRIDGE-XXXXXXXX"
+              className="input-field flex-1"
+            />
+            <button
+              type="button"
+              onClick={handleJoinHousehold}
+              className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white active:scale-[0.98]"
+            >
+              Join
+            </button>
+          </div>
+          {joinStatus && <p className="text-muted mt-2 text-xs">{joinStatus}</p>}
+        </div>
       </section>
 
       <section className="surface-inset p-4">
@@ -1858,7 +1919,7 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
           <FlaskConical className="h-4 w-4 text-amber-600" />
           Data tools
         </h2>
-        <p className="text-muted mb-3 text-xs">Manage your cloud-stored inventory and tips.</p>
+        <p className="text-muted mb-3 text-xs">Manage help tips and inventory.</p>
         <div className="flex flex-col gap-2">
           <button
             type="button"
@@ -1872,7 +1933,7 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
             onClick={clearAll}
             className="rounded-xl border border-rose-300 py-3 text-sm font-semibold text-rose-700 active:scale-[0.98] dark:border-rose-800 dark:text-rose-400"
           >
-            Clear all items
+            {confirmClear ? 'Tap again to confirm clear all' : 'Clear all items'}
           </button>
         </div>
       </section>
@@ -1882,7 +1943,7 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
 
 const TABS = [
   { id: 'inventory', label: 'Fridge', icon: Refrigerator },
-  { id: 'recipes', label: 'Cook', icon: ChefHat },
+  { id: 'recipes', label: 'Recipes', icon: ChefHat },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -1942,12 +2003,15 @@ export default function App() {
   const {
     loading,
     error,
+    saveError,
+    dismissSaveError,
     reload,
     items,
     updateItems,
     settings,
     updateSettings,
     householdCode,
+    joinHousehold,
     savedRecipes,
     onboarding,
   } = useAppData();
@@ -1963,6 +2027,18 @@ export default function App() {
   return (
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
       <main className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
+        {saveError && (
+          <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+            Could not sync latest change. We will retry automatically on your next edit.
+            <button
+              type="button"
+              onClick={dismissSaveError}
+              className="ml-2 font-semibold underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         {activeTab === 'inventory' && (
           <InventoryView items={items} updateItems={updateItems} onboarding={onboarding} />
         )}
@@ -1976,6 +2052,7 @@ export default function App() {
             updateItems={updateItems}
             onboarding={onboarding}
             householdCode={householdCode}
+            onJoinHousehold={joinHousehold}
           />
         )}
       </main>

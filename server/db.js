@@ -2,12 +2,17 @@ import { MongoClient } from 'mongodb';
 
 const DB_NAME = 'whats-in-the-fridge';
 const COLLECTION = 'households';
-const HOUSEHOLD_ID = 'default';
+const HOUSEHOLD_PREFIX = 'household:';
+const LEGACY_DEFAULT_ID = 'default';
 
 const globalForMongo = globalThis;
 
 export function generateHouseholdCode() {
-  const suffix = Math.floor(1000 + Math.random() * 9000);
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let suffix = '';
+  for (let i = 0; i < 8; i += 1) {
+    suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
   return `FRIDGE-${suffix}`;
 }
 
@@ -42,24 +47,42 @@ function getDb() {
   return db;
 }
 
-export async function getHouseholdState() {
+export function normalizeHouseholdCode(code) {
+  return String(code || '')
+    .trim()
+    .toUpperCase();
+}
+
+function householdIdForCode(code) {
+  return `${HOUSEHOLD_PREFIX}${normalizeHouseholdCode(code)}`;
+}
+
+export async function getHouseholdState(householdCode) {
+  const normalizedCode = normalizeHouseholdCode(householdCode);
+  if (!normalizedCode) {
+    throw new Error('householdCode is required.');
+  }
+
   const collection = getDb().collection(COLLECTION);
-  let doc = await collection.findOne({ _id: HOUSEHOLD_ID });
+  let doc = await collection.findOne({ _id: householdIdForCode(normalizedCode) });
 
   if (!doc) {
+    const legacyDoc = await collection.findOne({ _id: LEGACY_DEFAULT_ID });
+    const code = normalizedCode;
     doc = {
-      _id: HOUSEHOLD_ID,
       ...EMPTY_STATE,
-      householdCode: generateHouseholdCode(),
+      ...(legacyDoc || {}),
+      _id: householdIdForCode(code),
+      householdCode: code,
       updatedAt: new Date(),
     };
     await collection.insertOne(doc);
   }
 
   if (!doc.householdCode) {
-    doc.householdCode = generateHouseholdCode();
+    doc.householdCode = normalizedCode;
     await collection.updateOne(
-      { _id: HOUSEHOLD_ID },
+      { _id: doc._id },
       { $set: { householdCode: doc.householdCode, updatedAt: new Date() } },
     );
   }
@@ -74,7 +97,12 @@ export async function getHouseholdState() {
   };
 }
 
-export async function updateHouseholdState(partial) {
+export async function updateHouseholdState(householdCode, partial) {
+  const normalizedCode = normalizeHouseholdCode(householdCode);
+  if (!normalizedCode) {
+    throw new Error('householdCode is required.');
+  }
+
   const collection = getDb().collection(COLLECTION);
   const update = { updatedAt: new Date() };
 
@@ -82,15 +110,13 @@ export async function updateHouseholdState(partial) {
   if (partial.settings !== undefined) update.settings = partial.settings;
   if (partial.savedRecipeIds !== undefined) update.savedRecipeIds = partial.savedRecipeIds;
   if (partial.onboarding !== undefined) update.onboarding = partial.onboarding;
-  if (partial.householdCode !== undefined) update.householdCode = partial.householdCode;
-
   await collection.updateOne(
-    { _id: HOUSEHOLD_ID },
-    { $set: update },
+    { _id: householdIdForCode(normalizedCode) },
+    { $set: { ...update, householdCode: normalizedCode }, $setOnInsert: { ...EMPTY_STATE } },
     { upsert: true },
   );
 
-  return getHouseholdState();
+  return getHouseholdState(normalizedCode);
 }
 
 export async function closeDb() {

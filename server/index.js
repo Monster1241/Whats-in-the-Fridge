@@ -3,12 +3,20 @@ import express from 'express';
 import cors from 'cors';
 import { closeDb } from './db.js';
 import { ensureDb } from './ensureDb.js';
+import { isOriginAllowed } from './env.js';
 import { handleGetState, handleHealth, handlePutState } from './handlers.js';
 
 const PORT = Number(process.env.PORT) || 3001;
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (isOriginAllowed(origin)) return callback(null, true);
+      return callback(new Error('CORS origin denied'));
+    },
+  }),
+);
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/api/health', async (req, res) => {

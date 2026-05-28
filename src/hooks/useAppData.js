@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchAppState, saveAppState } from '../api.js';
+import { fetchAppState, saveAppState, setStoredHouseholdCode } from '../api.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'light',
@@ -28,6 +28,7 @@ const SAVE_DELAY_MS = 400;
 export function useAppData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [saveError, setSaveError] = useState(null);
   const [items, setItems] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [savedIds, setSavedIds] = useState([]);
@@ -58,6 +59,7 @@ export function useAppData() {
       skipSaveRef.current = true;
       applyState(state);
       setError(null);
+      setSaveError(null);
       return state;
     } catch (err) {
       setError(err.message || 'Could not connect to the server.');
@@ -117,17 +119,18 @@ export function useAppData() {
           settings: nextSettings,
           savedRecipeIds: nextSaved,
           onboarding: nextOnboarding,
+          householdCode,
         });
         skipSaveRef.current = true;
         applyState(state);
-        setError(null);
+        setSaveError(null);
       } catch (err) {
-        setError(err.message || 'Failed to save to MongoDB.');
+        setSaveError(err.message || 'Failed to save to MongoDB.');
       }
     }, SAVE_DELAY_MS);
 
     return () => clearTimeout(saveTimerRef.current);
-  }, [items, settings, savedIds, onboarding, loading, error, applyState]);
+  }, [items, settings, savedIds, onboarding, loading, error, householdCode, applyState]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark');
@@ -157,6 +160,20 @@ export function useAppData() {
     setOnboarding({ dismissed: [] });
   }, []);
 
+  const joinHousehold = useCallback((code) => {
+    const normalized = String(code || '')
+      .trim()
+      .toUpperCase();
+    if (!normalized) return Promise.resolve();
+    setStoredHouseholdCode(normalized);
+    setHouseholdCode(normalized);
+    return reload();
+  }, [reload]);
+
+  const dismissSaveError = useCallback(() => {
+    setSaveError(null);
+  }, []);
+
   const isSaved = useCallback((recipeId) => savedIds.includes(recipeId), [savedIds]);
 
   const toggleSave = useCallback((recipeId) => {
@@ -168,12 +185,15 @@ export function useAppData() {
   return {
     loading,
     error,
+    saveError,
+    dismissSaveError,
     reload,
     items,
     updateItems,
     settings,
     updateSettings,
     householdCode,
+    joinHousehold,
     savedRecipes: { savedIds, isSaved, toggleSave },
     onboarding: { isDismissed, dismiss: dismissOnboarding, resetOnboarding },
   };

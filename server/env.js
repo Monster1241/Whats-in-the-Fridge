@@ -31,3 +31,33 @@ export function getEnvDiagnostics() {
     vercel: Boolean(process.env.VERCEL),
   };
 }
+
+export function getAllowedOrigins() {
+  const configured = (process.env.CORS_ORIGIN || process.env.APP_ORIGIN || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return new Set([
+    ...configured,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+  ]);
+}
+
+export function isOriginAllowed(origin) {
+  if (!origin) return true;
+  if (getAllowedOrigins().has(origin)) return true;
+
+  // Allow the current Vercel deployment URL automatically.
+  if (process.env.VERCEL_URL && origin === `https://${process.env.VERCEL_URL}`) {
+    return true;
+  }
+
+  // Allow Vercel preview and production subdomains by default.
+  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) {
+    return true;
+  }
+
+  return false;
+}
