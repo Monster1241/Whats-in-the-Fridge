@@ -2086,6 +2086,7 @@ export default function App() {
         onLogin={auth.login}
         onCreateHousehold={auth.createHousehold}
         onJoinHousehold={auth.joinHousehold}
+        onFinishHouseholdSetup={auth.finishHouseholdSetup}
       />
     );
   }
@@ -2100,6 +2101,7 @@ export default function App() {
         onLogin={auth.login}
         onCreateHousehold={auth.createHousehold}
         onJoinHousehold={auth.joinHousehold}
+        onFinishHouseholdSetup={auth.finishHouseholdSetup}
       />
     );
   }

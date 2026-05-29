@@ -82,9 +82,12 @@ export function useAuth() {
   const handleCreateHousehold = useCallback(async () => {
     setError(null);
     const data = await createHousehold();
+    return data;
+  }, []);
+
+  const finishHouseholdSetup = useCallback((data) => {
     applySession(data);
     setNeedsHousehold(false);
-    return data;
   }, [applySession]);
 
   const handleJoinHousehold = useCallback(async (inviteCode) => {
@@ -131,6 +134,7 @@ export function useAuth() {
     login: handleLogin,
     verifyEmail: handleVerifyEmail,
     createHousehold: handleCreateHousehold,
+    finishHouseholdSetup,
     joinHousehold: handleJoinHousehold,
     logout: handleLogout,
     deleteAccount: handleDeleteAccount,

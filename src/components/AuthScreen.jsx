@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChefHat, Home, LogIn, Refrigerator, UserPlus, Users } from 'lucide-react';
+import { ChefHat, Copy, Home, LogIn, Refrigerator, Share2, UserPlus, Users } from 'lucide-react';
 
 export function AuthScreen({
   needsHousehold,
@@ -9,6 +9,7 @@ export function AuthScreen({
   onLogin,
   onCreateHousehold,
   onJoinHousehold,
+  onFinishHouseholdSetup,
 }) {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
@@ -17,6 +18,8 @@ export function AuthScreen({
   const [householdMode, setHouseholdMode] = useState(null);
   const [busy, setBusy] = useState(false);
   const [localMessage, setLocalMessage] = useState('');
+  const [createdSession, setCreatedSession] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const run = async (fn) => {
     setBusy(true);
@@ -30,6 +33,100 @@ export function AuthScreen({
       setBusy(false);
     }
   };
+
+  const createdCode =
+    createdSession?.household?.inviteCode ||
+    createdSession?.householdCode ||
+    createdSession?.inviteCode ||
+    '';
+
+  const inviteMessage = createdCode
+    ? `Join our household on What's in the Fridge! Use invite code: ${createdCode}`
+    : '';
+
+  const copyCode = async () => {
+    if (!createdCode) return;
+    try {
+      await navigator.clipboard.writeText(createdCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const shareCode = async () => {
+    if (!createdCode) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "Join our fridge",
+          text: inviteMessage,
+        });
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') return;
+      }
+    }
+    copyCode();
+  };
+
+  const continueToApp = () => {
+    if (!createdSession) return;
+    onFinishHouseholdSetup(createdSession);
+    setCreatedSession(null);
+  };
+
+  if (needsHousehold && createdSession) {
+    return (
+      <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col justify-center px-5 py-8">
+        <header className="mb-6 text-center">
+          <Refrigerator className="mx-auto mb-3 h-10 w-10 text-emerald-600" aria-hidden />
+          <h1 className="text-heading text-2xl font-extrabold">Your household is ready</h1>
+          <p className="text-muted mt-2 text-sm">
+            Share this code with your partner so they can join the same fridge.
+          </p>
+        </header>
+
+        <div className="surface-card mb-5 p-5 text-center">
+          <p className="text-muted mb-2 text-xs font-semibold uppercase tracking-wide">
+            Household invite code
+          </p>
+          <p className="text-heading font-mono text-4xl font-bold tracking-widest">{createdCode}</p>
+          <button
+            type="button"
+            onClick={copyCode}
+            className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+          >
+            <Copy className="h-4 w-4" />
+            {copied ? 'Copied!' : 'Copy code'}
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={shareCode}
+            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-3.5 text-sm font-bold text-white active:scale-[0.98]"
+          >
+            <Share2 className="h-5 w-5" />
+            Share code
+          </button>
+          <button
+            type="button"
+            onClick={continueToApp}
+            className="rounded-xl bg-emerald-600 py-3.5 text-sm font-semibold text-white active:scale-[0.98]"
+          >
+            Continue to app
+          </button>
+        </div>
+
+        <p className="text-muted mt-4 text-center text-xs leading-relaxed">
+          You can find this code anytime in Settings → Household sharing.
+        </p>
+      </div>
+    );
+  }
 
   if (needsHousehold) {
     return (
@@ -78,8 +175,7 @@ export function AuthScreen({
         ) : householdMode === 'create' ? (
           <div className="surface-card space-y-4 p-5">
             <p className="text-muted text-sm">
-              We&apos;ll generate a unique invite code. Share it so your partner can join the same
-              inventory.
+              We&apos;ll generate a unique invite code. You can copy or share it on the next screen.
             </p>
             <button
               type="button"
@@ -87,7 +183,8 @@ export function AuthScreen({
               onClick={() =>
                 run(async () => {
                   const data = await onCreateHousehold();
-                  setLocalMessage(`Your household code: ${data.household?.inviteCode || data.householdCode}`);
+                  setCreatedSession(data);
+                  setHouseholdMode(null);
                 })
               }
               className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
@@ -117,8 +214,8 @@ export function AuthScreen({
               disabled={busy || !inviteCode.trim()}
               onClick={() =>
                 run(async () => {
-                  await onJoinHousehold(inviteCode.trim());
-                  setLocalMessage('Joined household successfully.');
+                  const data = await onJoinHousehold(inviteCode.trim());
+                  onFinishHouseholdSetup(data);
                 })
               }
               className="w-full rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
