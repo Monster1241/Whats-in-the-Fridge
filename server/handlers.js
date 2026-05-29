@@ -14,6 +14,7 @@ import {
   setUserHousehold,
   updateHouseholdAppState,
   verifyUserEmail,
+  deleteUserAccount,
 } from './db.js';
 
 function authPayload(user) {
@@ -284,4 +285,17 @@ export async function handlePutState(req, res) {
 
   const state = await updateHouseholdAppState(auth.user.household_id, partial);
   res.status(200).json(state);
+}
+
+export async function handleDeleteAccount(req, res) {
+  try {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+
+    await deleteUserAccount(auth.user.id);
+    res.status(200).json({ ok: true, message: 'Account deleted.' });
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
 }

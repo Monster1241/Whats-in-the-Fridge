@@ -1688,13 +1688,16 @@ function RecipesView({ items, updateItems, savedRecipes }) {
   );
 }
 
-function SettingsView({ settings, updateSettings, updateItems, onboarding, householdCode, accountEmail, onLogout }) {
+function SettingsView({ settings, updateSettings, updateItems, onboarding, householdCode, accountEmail, onLogout, onDeleteAccount }) {
   const { resetOnboarding } = onboarding;
   const [name, setName] = useState(settings.user.name);
   const [email, setEmail] = useState(settings.user.email || accountEmail);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => {
     setName(settings.user.name);
@@ -1752,6 +1755,19 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
     }
     updateItems([]);
     setConfirmClear(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteBusy(true);
+    setDeleteError('');
+    try {
+      await onDeleteAccount();
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      setDeleteError(err.message || 'Could not delete account.');
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   return (
@@ -1909,8 +1925,74 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
           >
             Log out
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDeleteError('');
+              setShowDeleteConfirm(true);
+            }}
+            className="rounded-xl border border-rose-400 py-3 text-sm font-semibold text-rose-700 active:scale-[0.98] dark:border-rose-700 dark:text-rose-400"
+          >
+            Delete account
+          </button>
         </div>
       </section>
+
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-title"
+        >
+          <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 id="delete-account-title" className="text-heading text-lg font-bold">
+                  Delete your account?
+                </h3>
+                <p className="text-muted mt-2 text-sm leading-relaxed">
+                  This permanently removes your login and profile. If you are the only person in
+                  your household, all fridge inventory and settings for that household are deleted
+                  too. This cannot be undone.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteBusy}
+                className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {deleteError && (
+              <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+                {deleteError}
+              </p>
+            )}
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={handleDeleteAccount}
+                className="rounded-xl bg-rose-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+              >
+                {deleteBusy ? 'Deleting…' : 'Yes, delete my account'}
+              </button>
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={() => setShowDeleteConfirm(false)}
+                className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2073,6 +2155,7 @@ export default function App() {
             householdCode={householdCode}
             accountEmail={auth.user?.email}
             onLogout={auth.logout}
+            onDeleteAccount={auth.deleteAccount}
           />
         )}
       </main>

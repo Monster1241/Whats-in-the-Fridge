@@ -333,6 +333,46 @@ export async function replaceInventoryForHousehold(householdId, items) {
   await inventory.insertMany(docs);
 }
 
+export async function deleteHouseholdData(householdId) {
+  const db = getDb();
+  const householdOid = new ObjectId(householdId);
+  await db.collection('inventory').deleteMany({ household_id: householdId });
+  await db.collection('households').deleteOne({ _id: householdOid });
+}
+
+/**
+ * Deletes the user. If they are the only member of a household, removes that household and inventory too.
+ */
+export async function deleteUserAccount(userId) {
+  const users = getDb().collection('users');
+  const userOid = new ObjectId(userId);
+  const doc = await users.findOne({ _id: userOid });
+  if (!doc) {
+    const err = new Error('User not found.');
+    err.status = 404;
+    throw err;
+  }
+
+  let householdRemoved = false;
+
+  if (doc.household_id) {
+    const householdId = doc.household_id.toString();
+    const otherMembers = await users.countDocuments({
+      household_id: doc.household_id,
+      _id: { $ne: userOid },
+    });
+    await users.deleteOne({ _id: userOid });
+    if (otherMembers === 0) {
+      await deleteHouseholdData(householdId);
+      householdRemoved = true;
+    }
+  } else {
+    await users.deleteOne({ _id: userOid });
+  }
+
+  return { householdRemoved };
+}
+
 export async function closeDb() {
   if (globalForMongo._mongo?.client) {
     await globalForMongo._mongo.client.close();

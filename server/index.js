@@ -14,6 +14,7 @@ import {
   handlePutState,
   handleSignup,
   handleVerifyEmail,
+  handleDeleteAccount,
 } from './handlers.js';
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -107,6 +108,15 @@ app.put('/api/state', async (req, res) => {
   } catch (err) {
     console.error('PUT /api/state', err);
     res.status(err.status || 500).json({ error: err.message || 'Failed to save data to MongoDB.' });
+  }
+});
+
+app.delete('/api/auth/account', async (req, res) => {
+  try {
+    await handleDeleteAccount(req, res);
+  } catch (err) {
+    console.error('DELETE /api/auth/account', err);
+    res.status(err.status || 500).json({ error: err.message || 'Could not delete account.' });
   }
 });
 

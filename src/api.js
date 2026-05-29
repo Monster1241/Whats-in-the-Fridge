@@ -118,6 +118,14 @@ export function logout() {
   setAuthToken('');
 }
 
+export async function deleteAccount() {
+  const res = await fetch(`${API_BASE}/auth/account`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
 export async function fetchAppState() {
   const res = await fetch(`${API_BASE}/state`, {
     headers: authHeaders(),
