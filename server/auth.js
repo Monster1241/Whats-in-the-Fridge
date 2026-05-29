@@ -2,7 +2,13 @@ import { createHmac, scryptSync, timingSafeEqual } from 'crypto';
 import bcrypt from 'bcryptjs';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+/** OWASP recommends ≥10 bcrypt cost; 12 gives comfortable margin for new passwords. */
+const MIN_BCRYPT_ROUNDS = 10;
 const BCRYPT_ROUNDS = 12;
+
+if (BCRYPT_ROUNDS < MIN_BCRYPT_ROUNDS) {
+  throw new Error(`BCRYPT_ROUNDS must be at least ${MIN_BCRYPT_ROUNDS}.`);
+}
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET?.trim();

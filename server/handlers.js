@@ -80,16 +80,26 @@ async function requireVerified(req, res) {
   return auth;
 }
 
+/**
+ * Ensures the authenticated user belongs to a household and that the JWT household
+ * claim matches the live DB record (prevents stale or forged household access).
+ */
 function requireHouseholdSession(auth, res) {
   if (!auth.user.household_id) {
     res.status(403).json({ error: 'Join or create a household to continue.' });
     return null;
   }
-  if (auth.session.householdId && auth.session.householdId !== auth.user.household_id) {
-    res.status(403).json({ error: 'Household access denied.' });
+  const jwtHouseholdId = auth.session.householdId ?? null;
+  if (jwtHouseholdId !== auth.user.household_id) {
+    res.status(403).json({ error: 'Household access denied. Please sign in again.' });
     return null;
   }
   return auth;
+}
+
+/** Household id scoped from verified JWT + DB user (use for all inventory/state queries). */
+function getScopedHouseholdId(auth) {
+  return auth.user.household_id;
 }
 
 export async function handleHealth(_req, res) {
@@ -273,12 +283,25 @@ export async function handleJoinHousehold(req, res) {
   }
 }
 
+function sanitizeInventoryItems(items) {
+  return items.map((item) => {
+    const {
+      household_id: _hid,
+      householdId: _hId,
+      _id: _mongoId,
+      ...safe
+    } = item ?? {};
+    return safe;
+  });
+}
+
 export async function handleGetState(req, res) {
   const auth = await requireVerified(req, res);
   if (!auth) return;
   if (!requireHouseholdSession(auth, res)) return;
 
-  const state = await getHouseholdAppState(auth.user.household_id);
+  const householdId = getScopedHouseholdId(auth);
+  const state = await getHouseholdAppState(householdId);
   res.status(200).json(state);
 }
 
@@ -287,6 +310,7 @@ export async function handlePutState(req, res) {
   if (!auth) return;
   if (!requireHouseholdSession(auth, res)) return;
 
+  const householdId = getScopedHouseholdId(auth);
   const { items, settings, savedRecipeIds, onboarding } = req.body ?? {};
   const partial = {};
 
@@ -295,7 +319,7 @@ export async function handlePutState(req, res) {
       res.status(400).json({ error: 'items must be an array' });
       return;
     }
-    partial.items = items;
+    partial.items = sanitizeInventoryItems(items);
   }
   if (settings !== undefined) partial.settings = settings;
   if (savedRecipeIds !== undefined) {
@@ -307,7 +331,7 @@ export async function handlePutState(req, res) {
   }
   if (onboarding !== undefined) partial.onboarding = onboarding;
 
-  const state = await updateHouseholdAppState(auth.user.household_id, partial);
+  const state = await updateHouseholdAppState(householdId, partial);
   res.status(200).json(state);
 }
 
@@ -330,8 +354,9 @@ export async function handleGetHouseholdMembers(req, res) {
     if (!auth) return;
     if (!requireHouseholdSession(auth, res)) return;
 
-    const members = await getHouseholdMembers(auth.user.household_id);
-    const currentUserIsOwner = await checkIsHouseholdOwner(auth.user.household_id, auth.user.id);
+    const householdId = getScopedHouseholdId(auth);
+    const members = await getHouseholdMembers(householdId);
+    const currentUserIsOwner = await checkIsHouseholdOwner(householdId, auth.user.id);
 
     res.status(200).json({
       members: members.map((member) => ({
@@ -374,7 +399,8 @@ export async function handleRemoveHouseholdMember(req, res) {
     }
 
     await removeHouseholdMember(auth.user.id, targetUserId);
-    const members = await getHouseholdMembers(auth.user.household_id);
+    const householdId = getScopedHouseholdId(auth);
+    const members = await getHouseholdMembers(householdId);
 
     res.status(200).json({
       ok: true,

@@ -23,6 +23,17 @@ export function normalizeInviteCode(code) {
     .replace(/\s+/g, '');
 }
 
+/** Reject malformed household ids before any inventory or household-scoped query. */
+export function assertScopedHouseholdId(householdId) {
+  const id = String(householdId ?? '').trim();
+  if (!ObjectId.isValid(id)) {
+    const err = new Error('Invalid household scope.');
+    err.status = 400;
+    throw err;
+  }
+  return id;
+}
+
 export function generateVerificationCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -382,8 +393,9 @@ export async function findHouseholdByInviteCode(inviteCode) {
 }
 
 export async function getHouseholdMeta(householdId) {
+  const scopedId = assertScopedHouseholdId(householdId);
   const households = getDb().collection('households');
-  const doc = await households.findOne({ _id: new ObjectId(householdId) });
+  const doc = await households.findOne({ _id: new ObjectId(scopedId) });
   if (!doc) return null;
   return {
     id: doc._id.toString(),
@@ -395,8 +407,9 @@ export async function getHouseholdMeta(householdId) {
 }
 
 export async function getInventoryForHousehold(householdId) {
+  const scopedId = assertScopedHouseholdId(householdId);
   const inventory = getDb().collection('inventory');
-  const docs = await inventory.find({ household_id: householdId }).toArray();
+  const docs = await inventory.find({ household_id: scopedId }).toArray();
   return docs.map(({ _id, household_id, ...item }) => ({
     ...item,
     id: item.id || _id.toString(),
@@ -404,13 +417,14 @@ export async function getInventoryForHousehold(householdId) {
 }
 
 export async function getHouseholdAppState(householdId) {
-  const meta = await getHouseholdMeta(householdId);
+  const scopedId = assertScopedHouseholdId(householdId);
+  const meta = await getHouseholdMeta(scopedId);
   if (!meta) {
     const err = new Error('Household not found.');
     err.status = 404;
     throw err;
   }
-  const items = await getInventoryForHousehold(householdId);
+  const items = await getInventoryForHousehold(scopedId);
   return {
     items,
     settings: meta.settings,
@@ -422,8 +436,9 @@ export async function getHouseholdAppState(householdId) {
 }
 
 export async function updateHouseholdAppState(householdId, partial) {
+  const scopedId = assertScopedHouseholdId(householdId);
   const households = getDb().collection('households');
-  const householdOid = new ObjectId(householdId);
+  const householdOid = new ObjectId(scopedId);
   const existing = await households.findOne({ _id: householdOid });
   if (!existing) {
     const err = new Error('Household not found.');
@@ -441,15 +456,16 @@ export async function updateHouseholdAppState(householdId, partial) {
   }
 
   if (partial.items !== undefined) {
-    await replaceInventoryForHousehold(householdId, partial.items);
+    await replaceInventoryForHousehold(scopedId, partial.items);
   }
 
-  return getHouseholdAppState(householdId);
+  return getHouseholdAppState(scopedId);
 }
 
 export async function replaceInventoryForHousehold(householdId, items) {
+  const scopedId = assertScopedHouseholdId(householdId);
   const inventory = getDb().collection('inventory');
-  await inventory.deleteMany({ household_id: householdId });
+  await inventory.deleteMany({ household_id: scopedId });
   if (!Array.isArray(items) || items.length === 0) return;
 
   const docs = items.map((item) => ({
@@ -458,16 +474,17 @@ export async function replaceInventoryForHousehold(householdId, items) {
     category: item.category,
     status: item.status,
     expiryDate: item.expiryDate ?? null,
-    household_id: householdId,
+    household_id: scopedId,
     updated_at: new Date(),
   }));
   await inventory.insertMany(docs);
 }
 
 export async function deleteHouseholdData(householdId) {
+  const scopedId = assertScopedHouseholdId(householdId);
   const db = getDb();
-  const householdOid = new ObjectId(householdId);
-  await db.collection('inventory').deleteMany({ household_id: householdId });
+  const householdOid = new ObjectId(scopedId);
+  await db.collection('inventory').deleteMany({ household_id: scopedId });
   await db.collection('households').deleteOne({ _id: householdOid });
 }
 

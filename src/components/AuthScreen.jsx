@@ -341,6 +341,19 @@ export function AuthScreen({
           {busy ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Log in'}
         </button>
       </form>
+
+      <div
+        className="mt-4 rounded-xl border border-slate-200/70 bg-slate-50/60 px-3.5 py-3 text-center dark:border-slate-700/60 dark:bg-slate-900/40"
+        role="note"
+      >
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
+          Beta privacy note
+        </p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500/90 dark:text-slate-500">
+          Your email is only used for account sign-in and verification codes. Fridge inventory and
+          settings stay isolated to your household — other households cannot see your data.
+        </p>
+      </div>
     </div>
   );
 }
