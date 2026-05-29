@@ -24,7 +24,10 @@ export function handleOptions(req, res) {
   return true;
 }
 
+import { toFriendlyError } from './errors.js';
+
 export function sendError(res, err, fallback = 'Request failed') {
-  const status = err.status || 500;
-  res.status(status).json({ error: err.message || fallback });
+  const friendly = toFriendlyError(err);
+  const status = friendly.status || 500;
+  res.status(status).json({ error: friendly.message || fallback });
 }

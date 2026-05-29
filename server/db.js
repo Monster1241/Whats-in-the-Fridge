@@ -36,9 +36,69 @@ export async function connectDb(uri) {
   return db;
 }
 
+async function pickUniqueInviteCode(households) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const invite_code = generateInviteCode();
+    const existing = await households.findOne({ invite_code });
+    if (!existing) return invite_code;
+  }
+  throw new Error('Could not generate a unique invite code.');
+}
+
+/** Backfill legacy household docs that predate invite_code (fixes E11000 dup key: null). */
+async function migrateLegacyHouseholds(db) {
+  const households = db.collection('households');
+  const legacy = await households
+    .find({
+      $or: [
+        { invite_code: { $exists: false } },
+        { invite_code: null },
+        { invite_code: '' },
+      ],
+    })
+    .toArray();
+
+  for (const doc of legacy) {
+    let invite_code;
+    if (doc.householdCode) {
+      const normalized = normalizeInviteCode(doc.householdCode);
+      const taken = await households.findOne({
+        invite_code: normalized,
+        _id: { $ne: doc._id },
+      });
+      invite_code = taken ? await pickUniqueInviteCode(households) : normalized;
+    } else {
+      invite_code = await pickUniqueInviteCode(households);
+    }
+
+    await households.updateOne(
+      { _id: doc._id },
+      {
+        $set: { invite_code },
+        $unset: { householdCode: '' },
+      },
+    );
+  }
+}
+
 async function ensureIndexes(db) {
+  await migrateLegacyHouseholds(db);
+
+  const households = db.collection('households');
+  try {
+    await households.dropIndex('invite_code_1');
+  } catch {
+    // Index may not exist yet.
+  }
+
   await db.collection('users').createIndex({ email: 1 }, { unique: true });
-  await db.collection('households').createIndex({ invite_code: 1 }, { unique: true });
+  await households.createIndex(
+    { invite_code: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { invite_code: { $type: 'string' } },
+    },
+  );
   await db.collection('inventory').createIndex({ household_id: 1 });
 }
 
@@ -112,25 +172,20 @@ export async function setUserHousehold(userId, householdId) {
 
 export async function createHousehold() {
   const households = getDb().collection('households');
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    const invite_code = generateInviteCode();
-    const existing = await households.findOne({ invite_code });
-    if (existing) continue;
-    const doc = {
-      invite_code,
-      created_at: new Date(),
-      settings: { ...DEFAULT_SETTINGS },
-      savedRecipeIds: [],
-      onboarding: { dismissed: [] },
-    };
-    const result = await households.insertOne(doc);
-    return {
-      id: result.insertedId.toString(),
-      invite_code,
-      created_at: doc.created_at,
-    };
-  }
-  throw new Error('Could not generate a unique household code. Please try again.');
+  const invite_code = await pickUniqueInviteCode(households);
+  const doc = {
+    invite_code,
+    created_at: new Date(),
+    settings: { ...DEFAULT_SETTINGS },
+    savedRecipeIds: [],
+    onboarding: { dismissed: [] },
+  };
+  const result = await households.insertOne(doc);
+  return {
+    id: result.insertedId.toString(),
+    invite_code,
+    created_at: doc.created_at,
+  };
 }
 
 export async function findHouseholdByInviteCode(inviteCode) {

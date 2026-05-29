@@ -1,6 +1,7 @@
 import { ensureDb } from './ensureDb.js';
 import { getEnvDiagnostics, getMongoUri } from './env.js';
 import { getBearerUser, hashPassword, signToken, verifyPassword } from './auth.js';
+import { toFriendlyError } from './errors.js';
 import {
   createHousehold,
   createUser,
@@ -73,12 +74,17 @@ export async function handleSignup(req, res) {
     return;
   }
 
-  await ensureDb();
-  const user = await createUser({
-    email,
-    passwordHash: hashPassword(password),
-  });
-  res.status(201).json(authPayload(user));
+  try {
+    await ensureDb();
+    const user = await createUser({
+      email,
+      passwordHash: hashPassword(password),
+    });
+    res.status(201).json(authPayload(user));
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
 }
 
 export async function handleLogin(req, res) {
