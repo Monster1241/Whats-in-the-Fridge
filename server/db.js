@@ -148,14 +148,11 @@ export async function createUser({ email, passwordHash }) {
     throw err;
   }
 
-  const verificationCode = generateVerificationCode();
-
   const doc = {
     email: normalizedEmail,
     password_hash: passwordHash,
     household_id: null,
-    isVerified: false,
-    verificationCode,
+    isVerified: true,
     created_at: new Date(),
   };
   const result = await users.insertOne(doc);
@@ -178,6 +175,16 @@ export async function findUserById(userId) {
   }
   const doc = await users.findOne({ _id: oid });
   return mapUserDoc(doc);
+}
+
+/** Marks legacy unverified accounts as verified (verification step disabled for now). */
+export async function markUserVerified(userId) {
+  const users = getDb().collection('users');
+  await users.updateOne(
+    { _id: new ObjectId(userId) },
+    { $set: { isVerified: true }, $unset: { verificationCode: '' } },
+  );
+  return findUserById(userId);
 }
 
 export async function verifyUserEmail(userId, code) {

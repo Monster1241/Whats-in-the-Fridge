@@ -2,7 +2,6 @@ import { ensureDb } from './ensureDb.js';
 import { getEnvDiagnostics, getMongoUri } from './env.js';
 import { getBearerUser, hashPassword, signToken, verifyPassword } from './auth.js';
 import { toFriendlyError } from './errors.js';
-import { sendVerificationEmail } from './email.js';
 import {
   createHousehold,
   createUser,
@@ -10,6 +9,7 @@ import {
   findUserByEmail,
   findUserById,
   getHouseholdAppState,
+  markUserVerified,
   normalizeInviteCode,
   setUserHousehold,
   updateHouseholdAppState,
@@ -50,10 +50,13 @@ async function requireAuth(req, res) {
     res.status(friendly.status || 503).json({ error: friendly.message });
     return null;
   }
-  const user = await findUserById(session.userId);
+  let user = await findUserById(session.userId);
   if (!user) {
     res.status(401).json({ error: 'Session expired. Please log in again.' });
     return null;
+  }
+  if (!user.isVerified) {
+    user = await markUserVerified(session.userId);
   }
   return { session, user };
 }
@@ -130,7 +133,6 @@ export async function handleSignup(req, res) {
       email,
       passwordHash: await hashPassword(password),
     });
-    await sendVerificationEmail(user.email, user.verificationCode);
     res.status(201).json(authPayload(user));
   } catch (err) {
     const friendly = toFriendlyError(err);
@@ -147,10 +149,13 @@ export async function handleLogin(req, res) {
 
   try {
     await ensureDb();
-    const user = await findUserByEmail(email);
+    let user = await findUserByEmail(email);
     if (!user || !(await verifyPassword(password, user.password_hash))) {
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
+    }
+    if (!user.isVerified) {
+      user = await markUserVerified(user.id);
     }
 
     res.status(200).json(authPayload(user));
