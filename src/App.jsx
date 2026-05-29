@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AuthScreen } from './components/AuthScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
+import { useAuth } from './hooks/useAuth.js';
 import {
   Bookmark,
   Calendar,
@@ -1685,20 +1687,18 @@ function RecipesView({ items, updateItems, savedRecipes }) {
   );
 }
 
-function SettingsView({ settings, updateSettings, updateItems, onboarding, householdCode, onJoinHousehold }) {
+function SettingsView({ settings, updateSettings, updateItems, onboarding, householdCode, accountEmail, onLogout }) {
   const { resetOnboarding } = onboarding;
   const [name, setName] = useState(settings.user.name);
-  const [email, setEmail] = useState(settings.user.email);
+  const [email, setEmail] = useState(settings.user.email || accountEmail);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [joinCode, setJoinCode] = useState('');
-  const [joinStatus, setJoinStatus] = useState('');
   const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
     setName(settings.user.name);
-    setEmail(settings.user.email);
-  }, [settings.user.name, settings.user.email]);
+    setEmail(settings.user.email || accountEmail || '');
+  }, [settings.user.name, settings.user.email, accountEmail]);
 
   const saveProfile = () => {
     updateSettings((prev) => ({
@@ -1714,8 +1714,8 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
   };
 
   const inviteMessage = householdCode
-    ? `Join our household on What's in the Fridge! Use join code: ${householdCode}`
-    : 'Loading household code…';
+    ? `Join our household on What's in the Fridge! Invite code: ${householdCode}`
+    : 'Loading invite code…';
 
   const copyInviteCode = async () => {
     if (!householdCode) return;
@@ -1742,19 +1742,6 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
       }
     }
     copyInviteCode();
-  };
-
-  const handleJoinHousehold = async () => {
-    const normalized = joinCode.trim().toUpperCase();
-    if (!normalized) return;
-    setJoinStatus('Joining...');
-    try {
-      await onJoinHousehold(normalized);
-      setJoinStatus(`Connected: ${normalized}`);
-      setJoinCode('');
-    } catch {
-      setJoinStatus('Could not join household right now.');
-    }
   };
 
   const clearAll = () => {
@@ -1814,7 +1801,7 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
           <User className="h-4 w-4 text-emerald-600" />
           Your account
         </h2>
-        <p className="text-muted mb-3 text-sm">Saved to your MongoDB database.</p>
+        <p className="text-muted mb-3 text-sm">Saved to your household account.</p>
         <div className="space-y-3">
           <div>
             <label htmlFor="settings-name" className="text-muted mb-1 block text-xs font-semibold uppercase">
@@ -1864,9 +1851,9 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
           Household sharing
         </h2>
         <p className="text-muted mb-3 text-sm">
-          Share your code so your partner joins the same household inventory.
+          Share this invite code so your partner can sign up and join your household.
         </p>
-        <p className="text-muted mb-1 text-xs font-semibold uppercase">Household join code</p>
+        <p className="text-muted mb-1 text-xs font-semibold uppercase">Invite code</p>
         <p className="text-heading mb-4 font-mono text-3xl font-bold tracking-widest">
           {householdCode || '—'}
         </p>
@@ -1891,27 +1878,6 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
         <p className="text-muted mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs leading-relaxed dark:bg-violet-950/50">
           {inviteMessage}
         </p>
-        <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
-          <p className="text-muted mb-1 text-xs font-semibold uppercase">Join another household</p>
-          <p className="text-muted mb-2 text-xs">Paste a code to switch to that shared household.</p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              placeholder="FRIDGE-XXXXXXXX"
-              className="input-field flex-1"
-            />
-            <button
-              type="button"
-              onClick={handleJoinHousehold}
-              className="rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white active:scale-[0.98]"
-            >
-              Join
-            </button>
-          </div>
-          {joinStatus && <p className="text-muted mt-2 text-xs">{joinStatus}</p>}
-        </div>
       </section>
 
       <section className="surface-inset p-4">
@@ -1934,6 +1900,13 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
             className="rounded-xl border border-rose-300 py-3 text-sm font-semibold text-rose-700 active:scale-[0.98] dark:border-rose-800 dark:text-rose-400"
           >
             {confirmClear ? 'Tap again to confirm clear all' : 'Clear all items'}
+          </button>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:text-slate-200"
+          >
+            Log out
           </button>
         </div>
       </section>
@@ -1965,7 +1938,7 @@ function ErrorScreen({ error, onRetry }) {
         <ol className="text-muted mb-5 list-decimal space-y-2 pl-5 text-sm">
           <li>
             <strong>Vercel:</strong> Project → Settings → Environment Variables → add{' '}
-            <code className="text-xs">MONGODB_URI</code> (your Atlas connection string), then redeploy.
+            <code className="text-xs">MONGODB_URI</code> and <code className="text-xs">JWT_SECRET</code>, then redeploy.
           </li>
           <li>
             In MongoDB Atlas → Network Access, allow <code className="text-xs">0.0.0.0/0</code> so Vercel can connect.
@@ -2000,6 +1973,8 @@ function ErrorScreen({ error, onRetry }) {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('inventory');
+  const auth = useAuth();
+  const appReady = auth.canUseApp;
   const {
     loading,
     error,
@@ -2011,13 +1986,44 @@ export default function App() {
     settings,
     updateSettings,
     householdCode,
-    joinHousehold,
     savedRecipes,
     onboarding,
-  } = useAppData();
+  } = useAppData(appReady);
+
+  if (auth.booting) {
+    return <LoadingScreen message="Checking session…" />;
+  }
+
+  if (!auth.isAuthenticated) {
+    return (
+      <AuthScreen
+        needsHousehold={false}
+        error={auth.error}
+        setError={auth.setError}
+        onSignup={auth.signup}
+        onLogin={auth.login}
+        onCreateHousehold={auth.createHousehold}
+        onJoinHousehold={auth.joinHousehold}
+      />
+    );
+  }
+
+  if (auth.needsHousehold) {
+    return (
+      <AuthScreen
+        needsHousehold
+        error={auth.error}
+        setError={auth.setError}
+        onSignup={auth.signup}
+        onLogin={auth.login}
+        onCreateHousehold={auth.createHousehold}
+        onJoinHousehold={auth.joinHousehold}
+      />
+    );
+  }
 
   if (loading) {
-    return <LoadingScreen message="Loading from MongoDB…" />;
+    return <LoadingScreen message="Loading your household…" />;
   }
 
   if (error) {
@@ -2052,7 +2058,8 @@ export default function App() {
             updateItems={updateItems}
             onboarding={onboarding}
             householdCode={householdCode}
-            onJoinHousehold={joinHousehold}
+            accountEmail={auth.user?.email}
+            onLogout={auth.logout}
           />
         )}
       </main>

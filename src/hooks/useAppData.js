@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchAppState, saveAppState, setStoredHouseholdCode } from '../api.js';
+import { fetchAppState, saveAppState } from '../api.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'light',
@@ -25,8 +25,8 @@ function migrateItems(items) {
 
 const SAVE_DELAY_MS = 400;
 
-export function useAppData() {
-  const [loading, setLoading] = useState(true);
+export function useAppData(enabled) {
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [items, setItems] = useState([]);
@@ -48,10 +48,11 @@ export function useAppData() {
     setOnboarding(
       state.onboarding?.dismissed ? state.onboarding : { dismissed: [] },
     );
-    setHouseholdCode(state.householdCode || '');
+    setHouseholdCode(state.householdCode || state.inviteCode || '');
   }, []);
 
   const reload = useCallback(async () => {
+    if (!enabled) return null;
     setLoading(true);
     setError(null);
     try {
@@ -67,16 +68,23 @@ export function useAppData() {
     } finally {
       setLoading(false);
     }
-  }, [applyState]);
+  }, [applyState, enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return undefined;
+    }
+
     let cancelled = false;
 
     (async () => {
       try {
         setError(null);
+        setLoading(true);
         const state = await fetchAppState();
         if (!cancelled) {
+          skipSaveRef.current = true;
           applyState(state);
           setLoading(false);
         }
@@ -91,18 +99,19 @@ export function useAppData() {
     return () => {
       cancelled = true;
     };
-  }, [applyState]);
+  }, [applyState, enabled]);
 
   useEffect(() => {
+    if (!enabled) return undefined;
     const onFocus = () => {
       reload().catch(() => {});
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [reload]);
+  }, [reload, enabled]);
 
   useEffect(() => {
-    if (loading || error) return undefined;
+    if (!enabled || loading || error) return undefined;
 
     if (skipSaveRef.current) {
       skipSaveRef.current = false;
@@ -119,7 +128,6 @@ export function useAppData() {
           settings: nextSettings,
           savedRecipeIds: nextSaved,
           onboarding: nextOnboarding,
-          householdCode,
         });
         skipSaveRef.current = true;
         applyState(state);
@@ -130,7 +138,7 @@ export function useAppData() {
     }, SAVE_DELAY_MS);
 
     return () => clearTimeout(saveTimerRef.current);
-  }, [items, settings, savedIds, onboarding, loading, error, householdCode, applyState]);
+  }, [items, settings, savedIds, onboarding, loading, error, enabled, applyState]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark');
@@ -160,16 +168,6 @@ export function useAppData() {
     setOnboarding({ dismissed: [] });
   }, []);
 
-  const joinHousehold = useCallback((code) => {
-    const normalized = String(code || '')
-      .trim()
-      .toUpperCase();
-    if (!normalized) return Promise.resolve();
-    setStoredHouseholdCode(normalized);
-    setHouseholdCode(normalized);
-    return reload();
-  }, [reload]);
-
   const dismissSaveError = useCallback(() => {
     setSaveError(null);
   }, []);
@@ -193,7 +191,6 @@ export function useAppData() {
     settings,
     updateSettings,
     householdCode,
-    joinHousehold,
     savedRecipes: { savedIds, isSaved, toggleSave },
     onboarding: { isDismissed, dismiss: dismissOnboarding, resetOnboarding },
   };

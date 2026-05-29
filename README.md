@@ -1,6 +1,6 @@
 # What's in the Fridge?
 
-Mobile-first React app for tracking kitchen inventory and recipe ideas. All household data is stored in **MongoDB** — inventory, settings, saved recipes, and onboarding state.
+Mobile-first React app for tracking kitchen inventory and recipe ideas. Each household has its own secure data in **MongoDB**, accessed only after email/password login.
 
 ## Setup
 
@@ -16,13 +16,12 @@ npm install
 cp .env.example .env
 ```
 
-3. Paste your MongoDB connection URL into `.env`:
+3. Configure `.env`:
 
 ```
 MONGODB_URI=mongodb+srv://your-user:your-password@cluster.mongodb.net/?retryWrites=true&w=majority
+JWT_SECRET=use-a-long-random-string-here
 ```
-
-Get this from [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) → your cluster → **Connect** → **Drivers** → copy the connection string and replace `<password>` with your database user password.
 
 4. Start the app (API + frontend):
 
@@ -32,17 +31,34 @@ npm run dev
 
 Open `http://localhost:5173`. The Vite dev server proxies `/api` requests to the backend on port 3001.
 
-## What is stored in MongoDB
+## MongoDB collections
 
-| Data | Description |
-|------|-------------|
-| `items` | Fridge inventory (name, category, status, expiry) |
-| `settings` | Theme, user name & email |
-| `savedRecipeIds` | Bookmarked recipe IDs |
-| `onboarding` | Dismissed tip banners |
-| `householdCode` | Auto-generated invite code (e.g. `FRIDGE-4821`) |
+| Collection | Fields | Purpose |
+|------------|--------|---------|
+| `users` | `email`, `password_hash`, `household_id` | Login accounts |
+| `households` | `invite_code`, `settings`, `savedRecipeIds`, `onboarding` | Shared household state |
+| `inventory` | `household_id`, `name`, `category`, `status`, `expiryDate` | Food items (scoped per household) |
 
-Recipe definitions (titles, ingredients, instructions) remain in the app code as a catalog — only **your** data is in the database.
+Invite codes look like **`XYZ-123`** (6 characters). Partners sign up, then choose **Join existing household** and enter that code.
+
+Recipe definitions remain in the app code — only household data is stored in the database.
+
+## Auth flow
+
+1. **Sign up** or **Log in** with email + password.
+2. **Create a new household** (get an invite code) or **Join** with your partner's code.
+3. Session token is saved in `localStorage` so you stay logged in on your phone.
+
+## API routes
+
+| Route | Method | Auth |
+|-------|--------|------|
+| `/api/auth/signup` | POST | — |
+| `/api/auth/login` | POST | — |
+| `/api/auth/me` | GET | Bearer token |
+| `/api/household/create` | POST | Bearer token |
+| `/api/household/join` | POST | Bearer token |
+| `/api/state` | GET, PUT | Bearer token + household |
 
 ## Scripts
 
@@ -58,16 +74,16 @@ Recipe definitions (titles, ingredients, instructions) remain in the app code as
 
 1. Push this project to GitHub and import it in [Vercel](https://vercel.com).
 2. **Environment variables** (Settings → Environment Variables):
-   - **`MONGODB_URI`** — your MongoDB Atlas connection string (required)
-   - Do **not** set `VITE_API_URL` to `localhost` — leave it empty so the app calls `/api` on the same Vercel domain.
-   - `PORT` is **not** used on Vercel (only for local `npm run dev:server`).
-3. In **MongoDB Atlas** → **Network Access** → add `0.0.0.0/0` (allow from anywhere) so Vercel serverless functions can reach your cluster.
-4. Redeploy after adding env vars.
-
-The `api/` folder runs as Vercel serverless functions (`/api/health`, `/api/state`). The Vite app is served from `dist/`.
+   - **`MONGODB_URI`** — MongoDB Atlas connection string (required)
+   - **`JWT_SECRET`** — long random secret for session tokens (required)
+   - Optional: **`CORS_ORIGIN`** — your production URL if needed
+   - Do **not** set `VITE_API_URL` to `localhost` on Vercel.
+3. In **MongoDB Atlas** → **Network Access** → add `0.0.0.0/0` so serverless functions can connect.
+4. **Redeploy** after adding env vars.
 
 ## Features
 
-- **Fridge** — Inventory by storage type, shopping list, expiry tracking
-- **Cook** — Recipe matching, Asian & Nepali recipes, saved bookmarks
-- **Settings** — Light/dark mode, profile, household invite code
+- **Fridge** — Ambient / Fresh / Freezer tabs, shopping list, expiry tracking
+- **Recipes** — Matched meals from inventory, saved bookmarks
+- **Settings** — Theme, profile, invite code, log out
+- **Ping partner** — Share shopping list via native share
