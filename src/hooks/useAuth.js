@@ -3,6 +3,7 @@ import {
   createHousehold,
   fetchSession,
   joinHousehold,
+  leaveHousehold as leaveHouseholdApi,
   login,
   deleteAccount,
   logout as clearToken,
@@ -115,6 +116,13 @@ export function useAuth() {
     setNeedsHousehold(false);
   }, []);
 
+  const handleLeaveHousehold = useCallback(async () => {
+    setError(null);
+    const data = await leaveHouseholdApi();
+    applySession(data);
+    return data;
+  }, [applySession]);
+
   const isAuthenticated = Boolean(user);
   const isVerified = Boolean(user?.isVerified);
   const canUseApp = isAuthenticated && isVerified && Boolean(user?.householdId);
@@ -138,5 +146,6 @@ export function useAuth() {
     joinHousehold: handleJoinHousehold,
     logout: handleLogout,
     deleteAccount: handleDeleteAccount,
+    leaveHousehold: handleLeaveHousehold,
   };
 }

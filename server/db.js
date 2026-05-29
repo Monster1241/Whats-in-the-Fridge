@@ -227,11 +227,134 @@ export async function setUserHousehold(userId, householdId) {
   );
 }
 
-export async function createHousehold() {
+export async function clearUserHousehold(userId) {
+  const users = getDb().collection('users');
+  await users.updateOne(
+    { _id: new ObjectId(userId) },
+    { $unset: { household_id: '' } },
+  );
+}
+
+async function ensureHouseholdOwnerId(householdId) {
+  const households = getDb().collection('households');
+  const householdOid = new ObjectId(householdId);
+  const doc = await households.findOne({ _id: householdOid });
+  if (!doc) return null;
+  if (doc.owner_id) return doc.owner_id.toString();
+
+  const users = getDb().collection('users');
+  const first = await users.findOne(
+    { household_id: householdOid },
+    { sort: { created_at: 1 } },
+  );
+  if (!first) return null;
+
+  await households.updateOne(
+    { _id: householdOid },
+    { $set: { owner_id: first._id, updated_at: new Date() } },
+  );
+  return first._id.toString();
+}
+
+export async function isHouseholdOwner(householdId, userId) {
+  const ownerId = await ensureHouseholdOwnerId(householdId);
+  return ownerId === userId;
+}
+
+export async function getHouseholdMembers(householdId) {
+  const ownerId = await ensureHouseholdOwnerId(householdId);
+  const users = getDb().collection('users');
+  const docs = await users
+    .find({ household_id: new ObjectId(householdId) })
+    .sort({ created_at: 1 })
+    .toArray();
+
+  return docs.map((doc) => ({
+    id: doc._id.toString(),
+    email: doc.email,
+    isOwner: doc._id.toString() === ownerId,
+    joinedAt: doc.created_at,
+  }));
+}
+
+export async function leaveHousehold(userId) {
+  const users = getDb().collection('users');
+  const userOid = new ObjectId(userId);
+  const doc = await users.findOne({ _id: userOid });
+  if (!doc?.household_id) {
+    const err = new Error('You are not in a household.');
+    err.status = 400;
+    throw err;
+  }
+
+  const householdId = doc.household_id.toString();
+  const householdOid = doc.household_id;
+  const ownerId = await ensureHouseholdOwnerId(householdId);
+  const isOwner = ownerId === userId;
+
+  await clearUserHousehold(userId);
+
+  const remaining = await users
+    .find({ household_id: householdOid })
+    .sort({ created_at: 1 })
+    .toArray();
+
+  if (remaining.length === 0) {
+    await deleteHouseholdData(householdId);
+    return { householdDeleted: true };
+  }
+
+  if (isOwner) {
+    const households = getDb().collection('households');
+    await households.updateOne(
+      { _id: householdOid },
+      { $set: { owner_id: remaining[0]._id, updated_at: new Date() } },
+    );
+  }
+
+  return { householdDeleted: false };
+}
+
+export async function removeHouseholdMember(requesterId, targetUserId) {
+  if (requesterId === targetUserId) {
+    const err = new Error('Use leave household to remove yourself.');
+    err.status = 400;
+    throw err;
+  }
+
+  const users = getDb().collection('users');
+  const requester = await users.findOne({ _id: new ObjectId(requesterId) });
+  if (!requester?.household_id) {
+    const err = new Error('You are not in a household.');
+    err.status = 400;
+    throw err;
+  }
+
+  const householdId = requester.household_id.toString();
+  const isOwner = await isHouseholdOwner(householdId, requesterId);
+  if (!isOwner) {
+    const err = new Error('Only the household owner can remove members.');
+    err.status = 403;
+    throw err;
+  }
+
+  const target = await users.findOne({ _id: new ObjectId(targetUserId) });
+  if (!target?.household_id || target.household_id.toString() !== householdId) {
+    const err = new Error('That person is not in your household.');
+    err.status = 404;
+    throw err;
+  }
+
+  await clearUserHousehold(targetUserId);
+  return { removedUserId: targetUserId };
+}
+
+export async function createHousehold(ownerUserId) {
   const households = getDb().collection('households');
   const invite_code = await pickUniqueInviteCode(households);
   const doc = {
     invite_code,
+    owner_id: new ObjectId(ownerUserId),
     created_at: new Date(),
     settings: { ...DEFAULT_SETTINGS },
     savedRecipeIds: [],
@@ -241,6 +364,7 @@ export async function createHousehold() {
   return {
     id: result.insertedId.toString(),
     invite_code,
+    owner_id: ownerUserId,
     created_at: doc.created_at,
   };
 }

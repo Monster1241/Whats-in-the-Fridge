@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AuthScreen } from './components/AuthScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
 import { useAuth } from './hooks/useAuth.js';
+import { fetchHouseholdMembers, removeHouseholdMember } from './api.js';
 import {
   Bookmark,
   Calendar,
@@ -13,6 +14,7 @@ import {
   Copy,
   FlaskConical,
   Info,
+  LogOut,
   MapPin,
   Moon,
   Plus,
@@ -22,6 +24,7 @@ import {
   Sun,
   Trash2,
   User,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react';
@@ -1687,7 +1690,17 @@ function RecipesView({ items, updateItems, savedRecipes }) {
   );
 }
 
-function SettingsView({ settings, updateSettings, updateItems, onboarding, householdCode, accountEmail, onLogout, onDeleteAccount }) {
+function SettingsView({
+  settings,
+  updateSettings,
+  updateItems,
+  onboarding,
+  householdCode,
+  accountEmail,
+  onLogout,
+  onDeleteAccount,
+  onLeaveHousehold,
+}) {
   const { resetOnboarding } = onboarding;
   const [name, setName] = useState(settings.user.name);
   const [email, setEmail] = useState(settings.user.email || accountEmail);
@@ -1695,8 +1708,37 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
   const [copied, setCopied] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [members, setMembers] = useState([]);
+  const [currentUserIsOwner, setCurrentUserIsOwner] = useState(false);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [membersError, setMembersError] = useState('');
+  const [showAddPerson, setShowAddPerson] = useState(false);
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [leaveBusy, setLeaveBusy] = useState(false);
+  const [memberActionError, setMemberActionError] = useState('');
+
+  const loadMembers = useCallback(async () => {
+    setMembersLoading(true);
+    setMembersError('');
+    try {
+      const data = await fetchHouseholdMembers();
+      setMembers(data.members || []);
+      setCurrentUserIsOwner(Boolean(data.currentUserIsOwner));
+    } catch (err) {
+      setMembersError(err.message || 'Could not load household members.');
+    } finally {
+      setMembersLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMembers();
+  }, [loadMembers]);
 
   useEffect(() => {
     setName(settings.user.name);
@@ -1766,6 +1808,34 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
       setDeleteError(err.message || 'Could not delete account.');
     } finally {
       setDeleteBusy(false);
+    }
+  };
+
+  const handleRemoveMember = async () => {
+    if (!confirmRemoveMember) return;
+    setRemoveBusy(true);
+    setMemberActionError('');
+    try {
+      const data = await removeHouseholdMember(confirmRemoveMember.id);
+      setMembers(data.members || []);
+      setConfirmRemoveMember(null);
+    } catch (err) {
+      setMemberActionError(err.message || 'Could not remove member.');
+    } finally {
+      setRemoveBusy(false);
+    }
+  };
+
+  const handleLeaveHousehold = async () => {
+    setLeaveBusy(true);
+    setMemberActionError('');
+    try {
+      await onLeaveHousehold();
+      setShowLeaveConfirm(false);
+    } catch (err) {
+      setMemberActionError(err.message || 'Could not leave household.');
+    } finally {
+      setLeaveBusy(false);
     }
   };
 
@@ -1864,36 +1934,116 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
       <section className="surface-card mb-5 p-4">
         <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
           <Users className="h-4 w-4 text-violet-600" />
-          Household sharing
+          Who&apos;s in your household
         </h2>
         <p className="text-muted mb-3 text-sm">
-          Share this invite code so your partner can sign up and join your household.
+          Everyone here shares the same fridge inventory and settings.
         </p>
-        <p className="text-muted mb-1 text-xs font-semibold uppercase">Invite code</p>
-        <p className="text-heading mb-4 font-mono text-3xl font-bold tracking-widest">
-          {householdCode || '—'}
-        </p>
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={copyInviteCode}
-            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
-          >
-            <Copy className="h-4 w-4" />
-            {copied ? 'Copied!' : 'Copy my code'}
-          </button>
-          <button
-            type="button"
-            onClick={shareInvite}
-            className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-3 text-sm font-bold text-white active:scale-[0.98]"
-          >
-            <Share2 className="h-4 w-4" />
-            Share code
-          </button>
-        </div>
-        <p className="text-muted mt-3 rounded-lg bg-violet-50 px-3 py-2 text-xs leading-relaxed dark:bg-violet-950/50">
-          {inviteMessage}
-        </p>
+
+        {membersLoading ? (
+          <p className="text-muted py-2 text-sm">Loading members…</p>
+        ) : membersError ? (
+          <div className="space-y-2">
+            <p className="text-sm text-rose-600 dark:text-rose-400">{membersError}</p>
+            <button
+              type="button"
+              onClick={loadMembers}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          <ul className="mb-4 space-y-2">
+            {members.map((member) => (
+              <li
+                key={member.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-600 dark:bg-slate-900/50"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-heading truncate text-sm font-semibold">{member.email}</p>
+                  <div className="mt-0.5 flex flex-wrap gap-1.5">
+                    {member.isCurrentUser && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                        You
+                      </span>
+                    )}
+                    {member.isOwner && (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:bg-violet-950 dark:text-violet-300">
+                        Owner
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {currentUserIsOwner && !member.isCurrentUser && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMemberActionError('');
+                      setConfirmRemoveMember({ id: member.id, email: member.email });
+                    }}
+                    className="shrink-0 rounded-lg border border-rose-300 px-2.5 py-1.5 text-xs font-semibold text-rose-700 active:scale-[0.98] dark:border-rose-800 dark:text-rose-400"
+                  >
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowAddPerson((prev) => !prev)}
+          className="mb-3 flex items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 active:scale-[0.98] dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200"
+        >
+          <UserPlus className="h-4 w-4" />
+          {showAddPerson ? 'Hide invite code' : 'Add another person'}
+        </button>
+
+        {showAddPerson && (
+          <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50/80 p-3 dark:border-violet-800 dark:bg-violet-950/30">
+            <p className="text-muted mb-1 text-xs font-semibold uppercase">Invite code</p>
+            <p className="text-heading mb-3 font-mono text-2xl font-bold tracking-widest">
+              {householdCode || '—'}
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={copyInviteCode}
+                className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+              >
+                <Copy className="h-4 w-4" />
+                {copied ? 'Copied!' : 'Copy code'}
+              </button>
+              <button
+                type="button"
+                onClick={shareInvite}
+                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-2.5 text-sm font-bold text-white active:scale-[0.98]"
+              >
+                <Share2 className="h-4 w-4" />
+                Share code
+              </button>
+            </div>
+            <p className="text-muted mt-3 text-xs leading-relaxed">{inviteMessage}</p>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => {
+            setMemberActionError('');
+            setShowLeaveConfirm(true);
+          }}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 active:scale-[0.98] dark:border-slate-600 dark:text-slate-300"
+        >
+          <LogOut className="h-4 w-4" />
+          Leave household
+        </button>
+
+        {memberActionError && (
+          <p className="text-muted mt-3 text-xs text-rose-600 dark:text-rose-400">{memberActionError}</p>
+        )}
       </section>
 
       <section className="surface-inset p-4">
@@ -1919,7 +2069,7 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
           </button>
           <button
             type="button"
-            onClick={onLogout}
+            onClick={() => setShowLogoutConfirm(true)}
             className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:text-slate-200"
           >
             Log out
@@ -1936,6 +2086,55 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
           </button>
         </div>
       </section>
+
+      {showLogoutConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="logout-title"
+        >
+          <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 id="logout-title" className="text-heading text-lg font-bold">
+                  Log out?
+                </h3>
+                <p className="text-muted mt-2 text-sm leading-relaxed">
+                  You&apos;ll need to sign in again to access your household fridge.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  onLogout();
+                }}
+                className="rounded-xl bg-slate-800 py-3 text-sm font-semibold text-white active:scale-[0.98] dark:bg-slate-200 dark:text-slate-900"
+              >
+                Yes, log out
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDeleteConfirm && (
         <div
@@ -1984,6 +2183,109 @@ function SettingsView({ settings, updateSettings, updateItems, onboarding, house
                 type="button"
                 disabled={deleteBusy}
                 onClick={() => setShowDeleteConfirm(false)}
+                className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmRemoveMember && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="remove-member-title"
+        >
+          <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 id="remove-member-title" className="text-heading text-lg font-bold">
+                  Remove from household?
+                </h3>
+                <p className="text-muted mt-2 text-sm leading-relaxed">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    {confirmRemoveMember.email}
+                  </span>{' '}
+                  will lose access to this household&apos;s fridge. They can rejoin later with the
+                  invite code.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConfirmRemoveMember(null)}
+                disabled={removeBusy}
+                className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={removeBusy}
+                onClick={handleRemoveMember}
+                className="rounded-xl bg-rose-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+              >
+                {removeBusy ? 'Removing…' : 'Yes, remove them'}
+              </button>
+              <button
+                type="button"
+                disabled={removeBusy}
+                onClick={() => setConfirmRemoveMember(null)}
+                className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLeaveConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="leave-household-title"
+        >
+          <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 id="leave-household-title" className="text-heading text-lg font-bold">
+                  Leave household?
+                </h3>
+                <p className="text-muted mt-2 text-sm leading-relaxed">
+                  You will no longer see this household&apos;s fridge inventory or settings. You can
+                  create a new household or join another one with an invite code.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLeaveConfirm(false)}
+                disabled={leaveBusy}
+                className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={leaveBusy}
+                onClick={handleLeaveHousehold}
+                className="rounded-xl bg-slate-800 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900"
+              >
+                {leaveBusy ? 'Leaving…' : 'Yes, leave household'}
+              </button>
+              <button
+                type="button"
+                disabled={leaveBusy}
+                onClick={() => setShowLeaveConfirm(false)}
                 className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
               >
                 Cancel
@@ -2145,6 +2447,7 @@ export default function App() {
             accountEmail={auth.user?.email}
             onLogout={auth.logout}
             onDeleteAccount={auth.deleteAccount}
+            onLeaveHousehold={auth.leaveHousehold}
           />
         )}
       </main>

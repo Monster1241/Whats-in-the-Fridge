@@ -7,11 +7,14 @@ import { isOriginAllowed } from './env.js';
 import {
   handleCreateHousehold,
   handleGetState,
+  handleGetHouseholdMembers,
   handleHealth,
   handleJoinHousehold,
+  handleLeaveHousehold,
   handleLogin,
   handleMe,
   handlePutState,
+  handleRemoveHouseholdMember,
   handleSignup,
   handleVerifyEmail,
   handleDeleteAccount,
@@ -90,6 +93,33 @@ app.post('/api/household/join', async (req, res) => {
   } catch (err) {
     console.error('POST /api/household/join', err);
     res.status(err.status || 500).json({ error: err.message || 'Could not join household' });
+  }
+});
+
+app.get('/api/household/members', async (req, res) => {
+  try {
+    await handleGetHouseholdMembers(req, res);
+  } catch (err) {
+    console.error('GET /api/household/members', err);
+    res.status(err.status || 500).json({ error: err.message || 'Could not load household members' });
+  }
+});
+
+app.post('/api/household/leave', async (req, res) => {
+  try {
+    await handleLeaveHousehold(req, res);
+  } catch (err) {
+    console.error('POST /api/household/leave', err);
+    res.status(err.status || 500).json({ error: err.message || 'Could not leave household' });
+  }
+});
+
+app.post('/api/household/members/remove', async (req, res) => {
+  try {
+    await handleRemoveHouseholdMember(req, res);
+  } catch (err) {
+    console.error('POST /api/household/members/remove', err);
+    res.status(err.status || 500).json({ error: err.message || 'Could not remove household member' });
   }
 });
 

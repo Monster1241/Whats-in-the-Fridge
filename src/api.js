@@ -114,6 +114,32 @@ export async function joinHousehold(inviteCode) {
   return data;
 }
 
+export async function fetchHouseholdMembers() {
+  const res = await fetch(`${API_BASE}/household/members`, {
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
+export async function leaveHousehold() {
+  const res = await fetch(`${API_BASE}/household/leave`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+  });
+  const data = await parseJson(res);
+  if (data.token) setAuthToken(data.token);
+  return data;
+}
+
+export async function removeHouseholdMember(userId) {
+  const res = await fetch(`${API_BASE}/household/members/remove`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ userId }),
+  });
+  return parseJson(res);
+}
+
 export function logout() {
   setAuthToken('');
 }

@@ -9,22 +9,31 @@ import {
   findUserByEmail,
   findUserById,
   getHouseholdAppState,
+  getHouseholdMembers,
+  isHouseholdOwner as checkIsHouseholdOwner,
+  leaveHousehold,
   markUserVerified,
   normalizeInviteCode,
+  removeHouseholdMember,
   setUserHousehold,
   updateHouseholdAppState,
   verifyUserEmail,
   deleteUserAccount,
 } from './db.js';
 
-function authPayload(user) {
+async function authPayload(user) {
   const isVerified = Boolean(user.isVerified);
+  let isHouseholdOwner = false;
+  if (user.household_id) {
+    isHouseholdOwner = await checkIsHouseholdOwner(user.household_id, user.id);
+  }
   return {
     user: {
       id: user.id,
       email: user.email,
       householdId: user.household_id,
       isVerified,
+      isHouseholdOwner,
     },
     needsVerification: !isVerified,
     needsHousehold: isVerified && !user.household_id,
@@ -133,7 +142,7 @@ export async function handleSignup(req, res) {
       email,
       passwordHash: await hashPassword(password),
     });
-    res.status(201).json(authPayload(user));
+    res.status(201).json(await authPayload(user));
   } catch (err) {
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
@@ -158,7 +167,7 @@ export async function handleLogin(req, res) {
       user = await markUserVerified(user.id);
     }
 
-    res.status(200).json(authPayload(user));
+    res.status(200).json(await authPayload(user));
   } catch (err) {
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
@@ -169,7 +178,7 @@ export async function handleMe(req, res) {
   try {
     const auth = await requireAuth(req, res);
     if (!auth) return;
-    res.status(200).json(authPayload(auth.user));
+    res.status(200).json(await authPayload(auth.user));
   } catch (err) {
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
@@ -188,7 +197,7 @@ export async function handleVerifyEmail(req, res) {
 
   try {
     const user = await verifyUserEmail(auth.user.id, code);
-    res.status(200).json(authPayload(user));
+    res.status(200).json(await authPayload(user));
   } catch (err) {
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
@@ -204,19 +213,24 @@ export async function handleCreateHousehold(req, res) {
     return;
   }
 
-  const household = await createHousehold();
-  await setUserHousehold(auth.user.id, household.id);
-  const user = await findUserById(auth.user.id);
-  const state = await getHouseholdAppState(household.id);
+  try {
+    const household = await createHousehold(auth.user.id);
+    await setUserHousehold(auth.user.id, household.id);
+    const user = await findUserById(auth.user.id);
+    const state = await getHouseholdAppState(household.id);
 
-  res.status(201).json({
-    ...authPayload(user),
-    household: {
-      id: household.id,
-      inviteCode: household.invite_code,
-    },
-    ...state,
-  });
+    res.status(201).json({
+      ...(await authPayload(user)),
+      household: {
+        id: household.id,
+        inviteCode: household.invite_code,
+      },
+      ...state,
+    });
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
 }
 
 export async function handleJoinHousehold(req, res) {
@@ -240,18 +254,23 @@ export async function handleJoinHousehold(req, res) {
     return;
   }
 
-  await setUserHousehold(auth.user.id, household.id);
-  const user = await findUserById(auth.user.id);
-  const state = await getHouseholdAppState(household.id);
+  try {
+    await setUserHousehold(auth.user.id, household.id);
+    const user = await findUserById(auth.user.id);
+    const state = await getHouseholdAppState(household.id);
 
-  res.status(200).json({
-    ...authPayload(user),
-    household: {
-      id: household.id,
-      inviteCode: household.invite_code,
-    },
-    ...state,
-  });
+    res.status(200).json({
+      ...(await authPayload(user)),
+      household: {
+        id: household.id,
+        inviteCode: household.invite_code,
+      },
+      ...state,
+    });
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
 }
 
 export async function handleGetState(req, res) {
@@ -299,6 +318,71 @@ export async function handleDeleteAccount(req, res) {
 
     await deleteUserAccount(auth.user.id);
     res.status(200).json({ ok: true, message: 'Account deleted.' });
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleGetHouseholdMembers(req, res) {
+  try {
+    const auth = await requireVerified(req, res);
+    if (!auth) return;
+    if (!requireHouseholdSession(auth, res)) return;
+
+    const members = await getHouseholdMembers(auth.user.household_id);
+    const currentUserIsOwner = await checkIsHouseholdOwner(auth.user.household_id, auth.user.id);
+
+    res.status(200).json({
+      members: members.map((member) => ({
+        ...member,
+        isCurrentUser: member.id === auth.user.id,
+      })),
+      currentUserIsOwner,
+    });
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleLeaveHousehold(req, res) {
+  try {
+    const auth = await requireVerified(req, res);
+    if (!auth) return;
+    if (!requireHouseholdSession(auth, res)) return;
+
+    await leaveHousehold(auth.user.id);
+    const user = await findUserById(auth.user.id);
+    res.status(200).json(await authPayload(user));
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleRemoveHouseholdMember(req, res) {
+  try {
+    const auth = await requireVerified(req, res);
+    if (!auth) return;
+    if (!requireHouseholdSession(auth, res)) return;
+
+    const targetUserId = req.body?.userId?.trim();
+    if (!targetUserId) {
+      res.status(400).json({ error: 'User id is required.' });
+      return;
+    }
+
+    await removeHouseholdMember(auth.user.id, targetUserId);
+    const members = await getHouseholdMembers(auth.user.household_id);
+
+    res.status(200).json({
+      ok: true,
+      members: members.map((member) => ({
+        ...member,
+        isCurrentUser: member.id === auth.user.id,
+      })),
+    });
   } catch (err) {
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
