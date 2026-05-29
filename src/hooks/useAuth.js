@@ -6,21 +6,25 @@ import {
   login,
   logout as clearToken,
   signup,
+  verifyEmail,
 } from '../api.js';
 
 export function useAuth() {
   const [booting, setBooting] = useState(true);
   const [user, setUser] = useState(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [needsHousehold, setNeedsHousehold] = useState(false);
   const [error, setError] = useState(null);
 
   const applySession = useCallback((data) => {
     if (!data) {
       setUser(null);
+      setNeedsVerification(false);
       setNeedsHousehold(false);
       return;
     }
     setUser(data.user);
+    setNeedsVerification(Boolean(data.needsVerification));
     setNeedsHousehold(Boolean(data.needsHousehold));
   }, []);
 
@@ -41,6 +45,7 @@ export function useAuth() {
         if (!cancelled) {
           setError(err.message || 'Could not restore session.');
           setUser(null);
+          setNeedsVerification(false);
           setNeedsHousehold(false);
         }
       } finally {
@@ -66,6 +71,13 @@ export function useAuth() {
     return data;
   }, [applySession]);
 
+  const handleVerifyEmail = useCallback(async (code) => {
+    setError(null);
+    const data = await verifyEmail(code);
+    applySession(data);
+    return data;
+  }, [applySession]);
+
   const handleCreateHousehold = useCallback(async () => {
     setError(null);
     const data = await createHousehold();
@@ -85,21 +97,29 @@ export function useAuth() {
   const handleLogout = useCallback(() => {
     clearToken();
     setUser(null);
+    setNeedsVerification(false);
     setNeedsHousehold(false);
     setError(null);
   }, []);
 
+  const isAuthenticated = Boolean(user);
+  const isVerified = Boolean(user?.isVerified);
+  const canUseApp = isAuthenticated && isVerified && Boolean(user?.householdId);
+
   return {
     booting,
     user,
+    needsVerification,
     needsHousehold,
-    isAuthenticated: Boolean(user),
-    canUseApp: Boolean(user?.householdId),
+    isAuthenticated,
+    isVerified,
+    canUseApp,
     error,
     setError,
     refreshSession,
     signup: handleSignup,
     login: handleLogin,
+    verifyEmail: handleVerifyEmail,
     createHousehold: handleCreateHousehold,
     joinHousehold: handleJoinHousehold,
     logout: handleLogout,

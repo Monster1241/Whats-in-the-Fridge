@@ -13,6 +13,7 @@ import {
   handleMe,
   handlePutState,
   handleSignup,
+  handleVerifyEmail,
 } from './handlers.js';
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -61,6 +62,15 @@ app.get('/api/auth/me', async (req, res) => {
   } catch (err) {
     console.error('GET /api/auth/me', err);
     res.status(err.status || 500).json({ error: err.message || 'Session check failed' });
+  }
+});
+
+app.post('/api/auth/verify', async (req, res) => {
+  try {
+    await handleVerifyEmail(req, res);
+  } catch (err) {
+    console.error('POST /api/auth/verify', err);
+    res.status(err.status || 500).json({ error: err.message || 'Verification failed' });
   }
 });
 

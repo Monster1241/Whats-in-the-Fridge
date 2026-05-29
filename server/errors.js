@@ -17,7 +17,19 @@ export function toFriendlyError(err) {
 
   if (err.status) return err;
 
-  const friendly = new Error(err.message || 'Something went wrong. Please try again.');
-  friendly.status = err.status || 500;
+  const message = String(err.message || '');
+  if (message.includes('JWT_SECRET')) {
+    const friendly = new Error(message);
+    friendly.status = 503;
+    return friendly;
+  }
+  if (message.includes('MONGODB_URI') || message.includes('Cannot connect to MongoDB')) {
+    const friendly = new Error(message);
+    friendly.status = 503;
+    return friendly;
+  }
+
+  const friendly = new Error(message || 'Something went wrong. Please try again.');
+  friendly.status = 500;
   return friendly;
 }

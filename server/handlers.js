@@ -2,6 +2,7 @@ import { ensureDb } from './ensureDb.js';
 import { getEnvDiagnostics, getMongoUri } from './env.js';
 import { getBearerUser, hashPassword, signToken, verifyPassword } from './auth.js';
 import { toFriendlyError } from './errors.js';
+import { sendVerificationEmail } from './email.js';
 import {
   createHousehold,
   createUser,
@@ -12,22 +13,70 @@ import {
   normalizeInviteCode,
   setUserHousehold,
   updateHouseholdAppState,
+  verifyUserEmail,
 } from './db.js';
 
 function authPayload(user) {
+  const isVerified = Boolean(user.isVerified);
   return {
     user: {
       id: user.id,
       email: user.email,
       householdId: user.household_id,
+      isVerified,
     },
-    needsHousehold: !user.household_id,
+    needsVerification: !isVerified,
+    needsHousehold: isVerified && !user.household_id,
     token: signToken({
       userId: user.id,
       email: user.email,
       householdId: user.household_id,
+      isVerified,
     }),
   };
+}
+
+async function requireAuth(req, res) {
+  const session = getBearerUser(req);
+  if (!session) {
+    res.status(401).json({ error: 'Not authenticated.' });
+    return null;
+  }
+  try {
+    await ensureDb();
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 503).json({ error: friendly.message });
+    return null;
+  }
+  const user = await findUserById(session.userId);
+  if (!user) {
+    res.status(401).json({ error: 'Session expired. Please log in again.' });
+    return null;
+  }
+  return { session, user };
+}
+
+async function requireVerified(req, res) {
+  const auth = await requireAuth(req, res);
+  if (!auth) return null;
+  if (!auth.user.isVerified) {
+    res.status(403).json({ error: 'Email not verified. Please verify your account first.' });
+    return null;
+  }
+  return auth;
+}
+
+function requireHouseholdSession(auth, res) {
+  if (!auth.user.household_id) {
+    res.status(403).json({ error: 'Join or create a household to continue.' });
+    return null;
+  }
+  if (auth.session.householdId && auth.session.householdId !== auth.user.household_id) {
+    res.status(403).json({ error: 'Household access denied.' });
+    return null;
+  }
+  return auth;
 }
 
 export async function handleHealth(_req, res) {
@@ -78,8 +127,9 @@ export async function handleSignup(req, res) {
     await ensureDb();
     const user = await createUser({
       email,
-      passwordHash: hashPassword(password),
+      passwordHash: await hashPassword(password),
     });
+    await sendVerificationEmail(user.email, user.verificationCode);
     res.status(201).json(authPayload(user));
   } catch (err) {
     const friendly = toFriendlyError(err);
@@ -94,79 +144,67 @@ export async function handleLogin(req, res) {
     return;
   }
 
-  await ensureDb();
-  const user = await findUserByEmail(email);
-  if (!user || !verifyPassword(password, user.password_hash)) {
-    res.status(401).json({ error: 'Invalid email or password.' });
-    return;
-  }
+  try {
+    await ensureDb();
+    const user = await findUserByEmail(email);
+    if (!user || !(await verifyPassword(password, user.password_hash))) {
+      res.status(401).json({ error: 'Invalid email or password.' });
+      return;
+    }
 
-  res.status(200).json(
-    authPayload({
-      id: user.id,
-      email: user.email,
-      household_id: user.household_id,
-    }),
-  );
+    res.status(200).json(authPayload(user));
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
 }
 
 export async function handleMe(req, res) {
-  const session = getBearerUser(req);
-  if (!session) {
-    res.status(401).json({ error: 'Not authenticated.' });
+  try {
+    const auth = await requireAuth(req, res);
+    if (!auth) return;
+    res.status(200).json(authPayload(auth.user));
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleVerifyEmail(req, res) {
+  const auth = await requireAuth(req, res);
+  if (!auth) return;
+
+  const { code } = req.body ?? {};
+  if (!code) {
+    res.status(400).json({ error: 'Verification code is required.' });
     return;
   }
 
-  await ensureDb();
-  const user = await findUserById(session.userId);
-  if (!user) {
-    res.status(401).json({ error: 'Session expired. Please log in again.' });
-    return;
+  try {
+    const user = await verifyUserEmail(auth.user.id, code);
+    res.status(200).json(authPayload(user));
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
   }
-
-  res.status(200).json({
-    user: {
-      id: user.id,
-      email: user.email,
-      householdId: user.household_id,
-    },
-    needsHousehold: !user.household_id,
-    token: signToken({
-      userId: user.id,
-      email: user.email,
-      householdId: user.household_id,
-    }),
-  });
 }
 
 export async function handleCreateHousehold(req, res) {
-  const session = getBearerUser(req);
-  if (!session) {
-    res.status(401).json({ error: 'Not authenticated.' });
-    return;
-  }
+  const auth = await requireVerified(req, res);
+  if (!auth) return;
 
-  await ensureDb();
-  const user = await findUserById(session.userId);
-  if (!user) {
-    res.status(401).json({ error: 'Session expired. Please log in again.' });
-    return;
-  }
-  if (user.household_id) {
+  if (auth.user.household_id) {
     res.status(400).json({ error: 'You are already in a household.' });
     return;
   }
 
   const household = await createHousehold();
-  await setUserHousehold(user.id, household.id);
-
+  await setUserHousehold(auth.user.id, household.id);
+  const user = await findUserById(auth.user.id);
   const state = await getHouseholdAppState(household.id);
+
   res.status(201).json({
-    ...authPayload({
-      id: user.id,
-      email: user.email,
-      household_id: household.id,
-    }),
+    ...authPayload(user),
     household: {
       id: household.id,
       inviteCode: household.invite_code,
@@ -176,11 +214,8 @@ export async function handleCreateHousehold(req, res) {
 }
 
 export async function handleJoinHousehold(req, res) {
-  const session = getBearerUser(req);
-  if (!session) {
-    res.status(401).json({ error: 'Not authenticated.' });
-    return;
-  }
+  const auth = await requireVerified(req, res);
+  if (!auth) return;
 
   const inviteCode = normalizeInviteCode(req.body?.inviteCode);
   if (!inviteCode) {
@@ -188,13 +223,7 @@ export async function handleJoinHousehold(req, res) {
     return;
   }
 
-  await ensureDb();
-  const user = await findUserById(session.userId);
-  if (!user) {
-    res.status(401).json({ error: 'Session expired. Please log in again.' });
-    return;
-  }
-  if (user.household_id) {
+  if (auth.user.household_id) {
     res.status(400).json({ error: 'You are already in a household.' });
     return;
   }
@@ -205,15 +234,12 @@ export async function handleJoinHousehold(req, res) {
     return;
   }
 
-  await setUserHousehold(user.id, household.id);
+  await setUserHousehold(auth.user.id, household.id);
+  const user = await findUserById(auth.user.id);
   const state = await getHouseholdAppState(household.id);
 
   res.status(200).json({
-    ...authPayload({
-      id: user.id,
-      email: user.email,
-      household_id: household.id,
-    }),
+    ...authPayload(user),
     household: {
       id: household.id,
       inviteCode: household.invite_code,
@@ -222,37 +248,19 @@ export async function handleJoinHousehold(req, res) {
   });
 }
 
-function requireHouseholdSession(req, res) {
-  const session = getBearerUser(req);
-  if (!session) {
-    res.status(401).json({ error: 'Not authenticated.' });
-    return null;
-  }
-  if (!session.householdId) {
-    res.status(403).json({ error: 'Join or create a household to continue.' });
-    return null;
-  }
-  return session;
-}
-
 export async function handleGetState(req, res) {
-  const session = requireHouseholdSession(req, res);
-  if (!session) return;
+  const auth = await requireVerified(req, res);
+  if (!auth) return;
+  if (!requireHouseholdSession(auth, res)) return;
 
-  await ensureDb();
-  const user = await findUserById(session.userId);
-  if (!user?.household_id || user.household_id !== session.householdId) {
-    res.status(403).json({ error: 'Household access denied.' });
-    return;
-  }
-
-  const state = await getHouseholdAppState(user.household_id);
+  const state = await getHouseholdAppState(auth.user.household_id);
   res.status(200).json(state);
 }
 
 export async function handlePutState(req, res) {
-  const session = requireHouseholdSession(req, res);
-  if (!session) return;
+  const auth = await requireVerified(req, res);
+  if (!auth) return;
+  if (!requireHouseholdSession(auth, res)) return;
 
   const { items, settings, savedRecipeIds, onboarding } = req.body ?? {};
   const partial = {};
@@ -274,13 +282,6 @@ export async function handlePutState(req, res) {
   }
   if (onboarding !== undefined) partial.onboarding = onboarding;
 
-  await ensureDb();
-  const user = await findUserById(session.userId);
-  if (!user?.household_id || user.household_id !== session.householdId) {
-    res.status(403).json({ error: 'Household access denied.' });
-    return;
-  }
-
-  const state = await updateHouseholdAppState(user.household_id, partial);
+  const state = await updateHouseholdAppState(auth.user.household_id, partial);
   res.status(200).json(state);
 }

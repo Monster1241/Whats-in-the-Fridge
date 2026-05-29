@@ -70,12 +70,29 @@ Recipe definitions remain in the app code — only household data is stored in t
 | `npm run build` | Production frontend build |
 | `npm start` | Run API server (needs `.env`) |
 
+## Verification emails (Resend)
+
+1. Create a free account at [resend.com](https://resend.com).
+2. **API Keys** → Create API Key → copy `re_...`.
+3. Add to `.env` (local) and **Vercel** (production):
+
+```
+RESEND_API_KEY=re_your_key_here
+RESEND_FROM_EMAIL=What's in the Fridge <onboarding@resend.dev>
+```
+
+4. **Free tier note:** `onboarding@resend.dev` only delivers to the email address on your Resend account until you [verify your own domain](https://resend.com/docs/dashboard/domains/introduction). For real users, add a domain in Resend and set e.g. `RESEND_FROM_EMAIL=Fridge <noreply@yourdomain.com>`.
+
+Without `RESEND_API_KEY`, the 6-digit code is printed in the server console only (dev fallback).
+
 ## Deploy on Vercel
 
 1. Push this project to GitHub and import it in [Vercel](https://vercel.com).
 2. **Environment variables** (Settings → Environment Variables):
    - **`MONGODB_URI`** — MongoDB Atlas connection string (required)
    - **`JWT_SECRET`** — long random secret for session tokens (required)
+   - **`RESEND_API_KEY`** — for verification emails (required in production)
+   - **`RESEND_FROM_EMAIL`** — sender address (optional; defaults to `onboarding@resend.dev`)
    - Optional: **`CORS_ORIGIN`** — your production URL if needed
    - Do **not** set `VITE_API_URL` to `localhost` on Vercel.
 3. In **MongoDB Atlas** → **Network Access** → add `0.0.0.0/0` so serverless functions can connect.

@@ -23,6 +23,23 @@ export function normalizeInviteCode(code) {
     .replace(/\s+/g, '');
 }
 
+export function generateVerificationCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function mapUserDoc(doc) {
+  if (!doc) return null;
+  const isVerified = doc.isVerified === undefined ? true : Boolean(doc.isVerified);
+  return {
+    id: doc._id.toString(),
+    email: doc.email,
+    password_hash: doc.password_hash,
+    household_id: doc.household_id ? doc.household_id.toString() : null,
+    isVerified,
+    verificationCode: doc.verificationCode ?? null,
+  };
+}
+
 export async function connectDb(uri) {
   if (globalForMongo._mongo?.db) {
     return globalForMongo._mongo.db;
@@ -32,7 +49,7 @@ export async function connectDb(uri) {
   await client.connect();
   const db = client.db(DB_NAME);
   globalForMongo._mongo = { client, db };
-  await ensureIndexes(db);
+  await ensureIndexesSafe(db);
   return db;
 }
 
@@ -102,6 +119,17 @@ async function ensureIndexes(db) {
   await db.collection('inventory').createIndex({ household_id: 1 });
 }
 
+async function ensureIndexesSafe(db) {
+  if (globalForMongo._indexesReady) return;
+  try {
+    await ensureIndexes(db);
+    globalForMongo._indexesReady = true;
+  } catch (err) {
+    console.error('[db] Index setup failed (app will still run):', err.message);
+    globalForMongo._indexesReady = true;
+  }
+}
+
 function getDb() {
   const db = globalForMongo._mongo?.db;
   if (!db) {
@@ -119,30 +147,25 @@ export async function createUser({ email, passwordHash }) {
     err.status = 409;
     throw err;
   }
+
+  const verificationCode = generateVerificationCode();
+
   const doc = {
     email: normalizedEmail,
     password_hash: passwordHash,
     household_id: null,
+    isVerified: false,
+    verificationCode,
     created_at: new Date(),
   };
   const result = await users.insertOne(doc);
-  return {
-    id: result.insertedId.toString(),
-    email: doc.email,
-    household_id: null,
-  };
+  return mapUserDoc({ ...doc, _id: result.insertedId });
 }
 
 export async function findUserByEmail(email) {
   const users = getDb().collection('users');
   const doc = await users.findOne({ email: email.trim().toLowerCase() });
-  if (!doc) return null;
-  return {
-    id: doc._id.toString(),
-    email: doc.email,
-    password_hash: doc.password_hash,
-    household_id: doc.household_id ? doc.household_id.toString() : null,
-  };
+  return mapUserDoc(doc);
 }
 
 export async function findUserById(userId) {
@@ -154,12 +177,39 @@ export async function findUserById(userId) {
     return null;
   }
   const doc = await users.findOne({ _id: oid });
-  if (!doc) return null;
-  return {
-    id: doc._id.toString(),
-    email: doc.email,
-    household_id: doc.household_id ? doc.household_id.toString() : null,
-  };
+  return mapUserDoc(doc);
+}
+
+export async function verifyUserEmail(userId, code) {
+  const users = getDb().collection('users');
+  const doc = await users.findOne({ _id: new ObjectId(userId) });
+  if (!doc) {
+    const err = new Error('User not found.');
+    err.status = 404;
+    throw err;
+  }
+
+  if (doc.isVerified === true || (doc.isVerified === undefined && !doc.verificationCode)) {
+    return mapUserDoc(doc);
+  }
+
+  const submitted = String(code || '').trim();
+  if (submitted !== String(doc.verificationCode)) {
+    const err = new Error('Invalid verification code.');
+    err.status = 400;
+    throw err;
+  }
+
+  await users.updateOne(
+    { _id: doc._id },
+    { $set: { isVerified: true }, $unset: { verificationCode: '' } },
+  );
+
+  return mapUserDoc({
+    ...doc,
+    isVerified: true,
+    verificationCode: null,
+  });
 }
 
 export async function setUserHousehold(userId, householdId) {

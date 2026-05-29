@@ -29,9 +29,18 @@ function authHeaders(extra = {}) {
 }
 
 async function parseJson(res) {
-  const body = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let body = {};
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = {};
+    }
+  }
   if (!res.ok) {
-    throw new Error(body.error || `Request failed (${res.status})`);
+    const detail = body.error || (text && text.length < 300 ? text : '');
+    throw new Error(detail || `Request failed (${res.status})`);
   }
   return body;
 }
@@ -68,6 +77,17 @@ export async function fetchSession() {
     setAuthToken('');
     return null;
   }
+  const data = await parseJson(res);
+  if (data.token) setAuthToken(data.token);
+  return data;
+}
+
+export async function verifyEmail(code) {
+  const res = await fetch(`${API_BASE}/auth/verify`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ code }),
+  });
   const data = await parseJson(res);
   if (data.token) setAuthToken(data.token);
   return data;

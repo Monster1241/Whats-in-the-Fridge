@@ -1,6 +1,8 @@
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { createHmac, scryptSync, timingSafeEqual } from 'crypto';
+import bcrypt from 'bcryptjs';
 
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const BCRYPT_ROUNDS = 12;
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET?.trim();
@@ -20,20 +22,27 @@ function fromBase64Url(value) {
   return Buffer.from(value, 'base64url').toString('utf8');
 }
 
-export function hashPassword(password) {
-  const salt = randomBytes(16);
-  const hash = scryptSync(password, salt, 64);
-  return `${salt.toString('hex')}:${hash.toString('hex')}`;
+export async function hashPassword(password) {
+  return bcrypt.hash(String(password), BCRYPT_ROUNDS);
 }
 
-export function verifyPassword(password, stored) {
-  const [saltHex, hashHex] = String(stored || '').split(':');
+function verifyLegacyScrypt(password, stored) {
+  const [saltHex, hashHex] = String(stored).split(':');
   if (!saltHex || !hashHex) return false;
   const salt = Buffer.from(saltHex, 'hex');
   const expected = Buffer.from(hashHex, 'hex');
-  const actual = scryptSync(password, salt, 64);
+  const actual = scryptSync(String(password), salt, 64);
   if (expected.length !== actual.length) return false;
   return timingSafeEqual(expected, actual);
+}
+
+export async function verifyPassword(password, stored) {
+  if (!stored) return false;
+  const hash = String(stored);
+  if (hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')) {
+    return bcrypt.compare(String(password), hash);
+  }
+  return verifyLegacyScrypt(password, hash);
 }
 
 export function signToken(payload) {
