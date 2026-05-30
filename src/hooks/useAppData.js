@@ -1,27 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchAppState, saveAppState } from '../api.js';
+import { migrateItems } from '../inventory/itemUtils.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'light',
   user: { name: '', email: '' },
 };
-
-function migrateItem(item) {
-  const category = ['Ambient', 'Fresh', 'Freezer'].includes(item.category)
-    ? item.category
-    : 'Fresh';
-  const status = item.status === 'out' ? 'out' : 'fresh';
-  return {
-    ...item,
-    expiryDate: item.expiryDate ?? null,
-    category,
-    status,
-  };
-}
-
-function migrateItems(items) {
-  return Array.isArray(items) ? items.map(migrateItem) : [];
-}
 
 const SAVE_DELAY_MS = 400;
 

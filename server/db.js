@@ -471,6 +471,7 @@ export async function replaceInventoryForHousehold(householdId, items) {
   const docs = items.map((item) => ({
     id: item.id,
     name: item.name,
+    itemType: item.itemType === 'Household' ? 'Household' : 'Food',
     category: item.category,
     status: item.status,
     expiryDate: item.expiryDate ?? null,

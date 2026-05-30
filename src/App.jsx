@@ -3,6 +3,20 @@ import { AuthScreen } from './components/AuthScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
 import { useAuth } from './hooks/useAuth.js';
 import { fetchHouseholdMembers, removeHouseholdMember } from './api.js';
+import { ItemTypeahead } from './components/ItemTypeahead.jsx';
+import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
+import {
+  defaultCategoryForItemType,
+  FOOD_CATEGORY,
+  getCategoriesForItemType,
+  getCategoryMeta,
+  INVENTORY_VIEW,
+  isShoppingView,
+  ITEM_TYPE,
+  STATUS,
+} from './inventory/constants.js';
+import { getSuggestedStore } from './inventory/getSuggestedStore.js';
+import { normalizeName } from './inventory/itemUtils.js';
 import {
   Bookmark,
   Calendar,
@@ -42,43 +56,6 @@ const COLOR_LEGEND = [
   { swatch: 'bg-violet-600', label: 'Violet', desc: 'Saved recipes & invite partner' },
 ];
 
-const CATEGORY = {
-  AMBIENT: 'Ambient',
-  FRESH: 'Fresh',
-  FREEZER: 'Freezer',
-};
-
-const CATEGORY_OPTIONS = [CATEGORY.AMBIENT, CATEGORY.FRESH, CATEGORY.FREEZER];
-
-const CATEGORY_META = {
-  [CATEGORY.AMBIENT]: {
-    emoji: '🧺',
-    label: 'Ambient',
-    subtitle: 'Pantry items',
-    tabActive: 'bg-amber-600 text-white',
-    tabIdle: 'text-amber-700 hover:bg-amber-50',
-  },
-  [CATEGORY.FRESH]: {
-    emoji: '🧊',
-    label: 'Fresh',
-    subtitle: 'Fridge items',
-    tabActive: 'bg-sky-600 text-white',
-    tabIdle: 'text-sky-700 hover:bg-sky-50',
-  },
-  [CATEGORY.FREEZER]: {
-    emoji: '❄️',
-    label: 'Freezer',
-    subtitle: 'Frozen items',
-    tabActive: 'bg-cyan-600 text-white',
-    tabIdle: 'text-cyan-700 hover:bg-cyan-50',
-  },
-};
-
-const INVENTORY_VIEW = {
-  ...CATEGORY,
-  SHOPPING: 'shopping',
-};
-
 const SHOPPING_ACCENT = {
   border: 'border-sky-300 dark:border-sky-600',
   borderSoft: 'border-sky-200 dark:border-sky-800',
@@ -93,84 +70,7 @@ const SHOPPING_ACCENT = {
   hover: 'hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-sky-950 dark:hover:text-sky-400',
 };
 
-const STATUS = {
-  FRESH: 'fresh',
-  EXPIRING: 'expiring',
-  OUT: 'out',
-};
-
 const EXPIRING_SOON_DAYS = 3;
-
-const CATEGORY_SHOP_TIPS = {
-  [CATEGORY.AMBIENT]:
-    'Aldi — lowest prices on pantry staples. Coles or Woolworths own-brand for solid everyday quality.',
-  [CATEGORY.FRESH]:
-    'Coles or Woolworths — great value in the fridge aisle. Harris Farm Markets when you want premium freshness.',
-  [CATEGORY.FREEZER]:
-    'Aldi or Costco — best frozen deals. Costco membership pays off for bulk quality meat and veg.',
-};
-
-const DEFAULT_SHOP_TIP =
-  'Aldi for the cheapest basket; Coles or Woolworths for reliable quality and specials.';
-
-const SHOPPING_SUGGESTIONS = [
-  {
-    keywords: ['milk', 'butter', 'cream', 'yogurt', 'cheese', 'parmesan', 'cheddar', 'feta'],
-    tip: 'Aldi or Coles for everyday dairy. Harris Farm Markets or Woolworths Organic for premium quality.',
-  },
-  {
-    keywords: ['egg', 'eggs'],
-    tip: 'Aldi or Coles home-brand eggs are great value; farmers markets for free-range top quality.',
-  },
-  {
-    keywords: ['chicken', 'beef', 'pork', 'chorizo', 'salmon', 'bacon', 'mince', 'thigh', 'breast'],
-    tip: 'Aldi or Coles for budget cuts. Local butcher, Costco, or Harris Farm for the best meat & seafood.',
-  },
-  {
-    keywords: ['basil', 'herb', 'herbs', 'lettuce', 'tomato', 'pepper', 'broccoli', 'veg', 'fruit', 'lemon'],
-    tip: 'Aldi or weekend produce markets for cheap fresh veg. Harris Farm or Woolworths Macro for organic quality.',
-  },
-  {
-    keywords: ['pasta', 'rice', 'bread', 'flour', 'oil', 'spice', 'sauce', 'soy', 'garlic', 'onion'],
-    tip: 'Aldi aisles — lowest prices. Asian grocers (e.g. Tong Li, Wing Tai) for sauces & spices; Coles Finest for upgrades.',
-  },
-  {
-    keywords: [
-      'miso',
-      'gochujang',
-      'kimchi',
-      'noodle',
-      'noodles',
-      'sesame',
-      'fish sauce',
-      'oyster',
-      'mirin',
-      'rice vinegar',
-    ],
-    tip: 'Asian supermarkets (Tong Li, Wing Tai, Tokyo Mart) for authentic sauces. Coles/Woolworths Asian aisle for basics.',
-  },
-  {
-    keywords: [
-      'lentil',
-      'lentils',
-      'dal',
-      'ghee',
-      'turmeric',
-      'cumin',
-      'coriander',
-      'momos',
-      'gundruk',
-      'timur',
-      'mustard oil',
-      'bamboo',
-    ],
-    tip: 'Nepali & South Asian grocers (e.g. Little India, Fyshwick) for dal, spices, and mustard oil. Coles/Woolworths for lentils and basics.',
-  },
-  {
-    keywords: ['ice cream', 'frozen', 'pizza', 'peas', 'chips'],
-    tip: 'Aldi frozen section — unbeatable value. Costco or Woolworths for larger packs and better ingredients.',
-  },
-];
 
 const STATUS_OPTIONS = [STATUS.FRESH, STATUS.OUT];
 
@@ -534,10 +434,6 @@ const RECIPES = [
   },
 ];
 
-function normalizeName(value) {
-  return value.trim().toLowerCase();
-}
-
 function TipBanner({ title, children, onDismiss, accentClass = 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' }) {
   return (
     <div className={`mb-4 flex gap-3 rounded-xl border p-3 ${accentClass}`}>
@@ -623,27 +519,6 @@ function CollapsibleInstructions({ recipe }) {
   );
 }
 
-function getShoppingSuggestion(item) {
-  const name = normalizeName(item.name);
-  for (const rule of SHOPPING_SUGGESTIONS) {
-    if (rule.keywords.some((keyword) => name.includes(keyword))) {
-      return rule.tip;
-    }
-  }
-  return CATEGORY_SHOP_TIPS[item.category] ?? DEFAULT_SHOP_TIP;
-}
-
-function migrateItem(item) {
-  const category = CATEGORY_OPTIONS.includes(item.category) ? item.category : CATEGORY.FRESH;
-  let status = item.status === STATUS.OUT ? STATUS.OUT : STATUS.FRESH;
-  return {
-    ...item,
-    expiryDate: item.expiryDate ?? null,
-    category,
-    status,
-  };
-}
-
 function daysUntilExpiry(iso) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -663,9 +538,12 @@ function getDisplayStatus(item) {
   return STATUS.FRESH;
 }
 
-function groupByCategory(items, category) {
+function groupByCategory(items, category, itemType) {
   const inCategory = items.filter(
-    (item) => item.category === category && item.status !== STATUS.OUT,
+    (item) =>
+      item.category === category &&
+      item.itemType === itemType &&
+      item.status !== STATUS.OUT,
   );
   const expiring = inCategory.filter(isExpiringSoon).sort(sortByUrgencyThenName);
   const plentiful = inCategory
@@ -712,7 +590,10 @@ function sortByUrgencyThenName(a, b) {
 
 function findInventoryMatch(ingredientName, items) {
   const needle = normalizeName(ingredientName);
-  return items.find((item) => normalizeName(item.name) === needle);
+  return items.find(
+    (item) =>
+      item.itemType !== ITEM_TYPE.HOUSEHOLD && normalizeName(item.name) === needle,
+  );
 }
 
 function analyzeRecipe(recipe, items) {
@@ -745,41 +626,9 @@ function StatusBadge({ status, onOpenPicker }) {
   );
 }
 
-function CategoryToggle({ value, onChange }) {
-  return (
-    <div
-      className="grid w-full grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900"
-      role="group"
-      aria-label="Storage location"
-    >
-      {CATEGORY_OPTIONS.map((cat) => {
-        const meta = CATEGORY_META[cat];
-        const selected = value === cat;
-        return (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => onChange(cat)}
-            className={`rounded-lg px-2 py-2 text-xs font-bold transition active:scale-95 ${
-              selected
-                ? meta.tabActive
-                : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200'
-            }`}
-            aria-pressed={selected}
-          >
-            <span className="mr-0.5" aria-hidden>
-              {meta.emoji}
-            </span>
-            {cat}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function ItemEditorSheet({ item, onSave, onClose }) {
   const [needToBuy, setNeedToBuy] = useState(item.status === STATUS.OUT);
+  const [itemType, setItemType] = useState(item.itemType ?? ITEM_TYPE.FOOD);
   const [category, setCategory] = useState(item.category);
   const [hasExpiry, setHasExpiry] = useState(Boolean(item.expiryDate));
   const [expiryDate, setExpiryDate] = useState(item.expiryDate ?? '');
@@ -789,9 +638,18 @@ function ItemEditorSheet({ item, onSave, onClose }) {
     expiryDate,
   });
 
+  const handleItemTypeChange = (nextType) => {
+    setItemType(nextType);
+    const options = getCategoriesForItemType(nextType);
+    if (!options.includes(category)) {
+      setCategory(defaultCategoryForItemType(nextType));
+    }
+  };
+
   const handleSave = () => {
     onSave({
       status: needToBuy ? STATUS.OUT : STATUS.FRESH,
+      itemType,
       category,
       expiryDate: hasExpiry && expiryDate ? expiryDate : null,
     });
@@ -826,10 +684,29 @@ function ItemEditorSheet({ item, onSave, onClose }) {
         </div>
 
         <p className="text-muted mb-2 text-xs font-semibold uppercase tracking-wide">
+          Item type
+        </p>
+        <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900">
+          {[ITEM_TYPE.FOOD, ITEM_TYPE.HOUSEHOLD].map((type) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => handleItemTypeChange(type)}
+              className={`rounded-lg py-2 text-xs font-bold transition active:scale-95 ${
+                itemType === type
+                  ? 'bg-emerald-600 text-white'
+                  : 'text-slate-600 hover:bg-slate-200/80 dark:text-slate-400 dark:hover:bg-slate-700'
+              }`}
+            >
+              {type === ITEM_TYPE.FOOD ? '🍽️ Food' : '🏠 Household'}
+            </button>
+          ))}
+        </div>
+        <p className="text-muted mb-2 text-xs font-semibold uppercase tracking-wide">
           Storage
         </p>
         <div className="mb-4">
-          <CategoryToggle value={category} onChange={setCategory} />
+          <StorageCategoryToggle itemType={itemType} value={category} onChange={setCategory} />
         </div>
 
         <label className="surface-inset mb-3 flex cursor-pointer items-center gap-2 px-3 py-3 text-sm text-slate-700 dark:text-slate-300">
@@ -842,22 +719,26 @@ function ItemEditorSheet({ item, onSave, onClose }) {
           Add to shopping list (need to buy)
         </label>
 
-        <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-          <input
-            type="checkbox"
-            checked={hasExpiry}
-            onChange={(e) => setHasExpiry(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
-          />
-          Set expiry date
-        </label>
-        {hasExpiry && (
-          <input
-            type="date"
-            value={expiryDate}
-            onChange={(e) => setExpiryDate(e.target.value)}
-            className="input-field mb-3"
-          />
+        {itemType === ITEM_TYPE.FOOD && (
+          <>
+            <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={hasExpiry}
+                onChange={(e) => setHasExpiry(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
+              />
+              Set expiry date
+            </label>
+            {hasExpiry && (
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="input-field mb-3"
+              />
+            )}
+          </>
         )}
         {expiringHint && (
           <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
@@ -888,8 +769,8 @@ function ItemEditorSheet({ item, onSave, onClose }) {
 }
 
 function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
-  const catMeta = CATEGORY_META[item.category];
-  const suggestion = getShoppingSuggestion(item);
+  const catMeta = getCategoryMeta(item.category, item.itemType);
+  const store = getSuggestedStore(item.name, item.category, item.itemType);
 
   return (
     <li className="surface-row px-3 py-3">
@@ -904,18 +785,21 @@ function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
           <CircleCheck className="h-5 w-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-heading text-sm font-medium">{item.name}</p>
-          {catMeta && (
-            <p className="mt-0.5 text-xs text-slate-500">
-              {catMeta.emoji} {catMeta.label}
-            </p>
-          )}
-          <p className={`mt-2 flex gap-1.5 rounded-lg px-2.5 py-2 text-xs leading-relaxed ${SHOPPING_ACCENT.bgMuted} ${SHOPPING_ACCENT.text}`}>
-            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" aria-hidden />
-            <span>
-              <span className="font-semibold">Where to buy:</span> {suggestion}
+          <p className="text-heading flex flex-wrap items-center gap-2 text-sm font-medium">
+            {item.name}
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-100/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-400"
+              title="Suggested store"
+            >
+              <MapPin className="h-3 w-3 opacity-70" aria-hidden />
+              {store}
             </span>
           </p>
+          {catMeta && (
+            <p className="mt-0.5 text-xs text-slate-500">
+              {item.itemType === ITEM_TYPE.HOUSEHOLD ? '🏠' : '🍽️'} {catMeta.emoji} {catMeta.label}
+            </p>
+          )}
         </div>
         <StatusBadge status={STATUS.OUT} onOpenPicker={() => onOpenEditor(item)} />
         <button
@@ -933,7 +817,7 @@ function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
 
 function InventoryItemRow({ item, onOpenEditor, onDelete, showCategory = false }) {
   const urgencyLabel = formatExpiryUrgency(item);
-  const catMeta = CATEGORY_META[item.category];
+  const catMeta = getCategoryMeta(item.category, item.itemType);
   const displayStatus = getDisplayStatus(item);
   return (
     <li className="surface-row flex items-center gap-2 px-3 py-2.5">
@@ -1055,12 +939,39 @@ function ShareFallbackModal({ message, onClose }) {
   );
 }
 
-function StorageLocationTabs({ activeView, onChange, shoppingCount }) {
+function StorageLocationTabs({
+  inventoryScope,
+  onScopeChange,
+  activeView,
+  onChange,
+  shoppingCount,
+}) {
+  const categoryOptions = getCategoriesForItemType(inventoryScope);
+
   return (
     <div className="mb-5 space-y-2">
+      <div className="grid grid-cols-2 gap-2">
+        {[ITEM_TYPE.FOOD, ITEM_TYPE.HOUSEHOLD].map((type) => {
+          const active = inventoryScope === type;
+          return (
+            <button
+              key={type}
+              type="button"
+              onClick={() => onScopeChange(type)}
+              className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition active:scale-[0.98] ${
+                active
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500 dark:border-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-200 dark:ring-emerald-500'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400'
+              }`}
+            >
+              {type === ITEM_TYPE.FOOD ? '🍽️ Food' : '🏠 Household'}
+            </button>
+          );
+        })}
+      </div>
       <div className="grid grid-cols-3 gap-2">
-        {CATEGORY_OPTIONS.map((cat) => {
-          const meta = CATEGORY_META[cat];
+        {categoryOptions.map((cat) => {
+          const meta = getCategoryMeta(cat, inventoryScope);
           const active = activeView === cat;
           return (
             <button
@@ -1107,13 +1018,16 @@ function StorageLocationTabs({ activeView, onChange, shoppingCount }) {
 
 function InventoryView({ items, updateItems, onboarding }) {
   const { isDismissed, dismiss } = onboarding;
+  const [inventoryScope, setInventoryScope] = useState(ITEM_TYPE.FOOD);
   const [draft, setDraft] = useState('');
-  const [addCategory, setAddCategory] = useState(CATEGORY.FRESH);
+  const [addItemType, setAddItemType] = useState(ITEM_TYPE.FOOD);
+  const [addCategory, setAddCategory] = useState(FOOD_CATEGORY.FRESH);
   const [addExpiry, setAddExpiry] = useState(false);
   const [addExpiryDate, setAddExpiryDate] = useState('');
   const [shopDraft, setShopDraft] = useState('');
-  const [shopCategory, setShopCategory] = useState(CATEGORY.FRESH);
-  const [activeView, setActiveView] = useState(CATEGORY.FRESH);
+  const [shopItemType, setShopItemType] = useState(ITEM_TYPE.FOOD);
+  const [shopCategory, setShopCategory] = useState(FOOD_CATEGORY.FRESH);
+  const [activeView, setActiveView] = useState(FOOD_CATEGORY.FRESH);
   const [editingItem, setEditingItem] = useState(null);
   const [shareMessage, setShareMessage] = useState(null);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
@@ -1122,13 +1036,40 @@ function InventoryView({ items, updateItems, onboarding }) {
   const shoppingList = useMemo(() => groupShoppingList(items), [items]);
 
   const categoryGrouped = useMemo(() => {
-    if (activeView === INVENTORY_VIEW.SHOPPING) return null;
-    return groupByCategory(items, activeView);
-  }, [items, activeView]);
+    if (isShoppingView(activeView)) return null;
+    return groupByCategory(items, activeView, inventoryScope);
+  }, [items, activeView, inventoryScope]);
+
+  const handleScopeChange = (nextScope) => {
+    setInventoryScope(nextScope);
+    if (!isShoppingView(activeView)) {
+      const options = getCategoriesForItemType(nextScope);
+      if (!options.includes(activeView)) {
+        setActiveView(defaultCategoryForItemType(nextScope));
+      }
+    }
+    setAddItemType(nextScope);
+    setAddCategory(defaultCategoryForItemType(nextScope));
+  };
+
+  const applySuggestion = (entry, target) => {
+    if (target === 'add') {
+      setAddItemType(entry.itemType);
+      setAddCategory(entry.category);
+      if (entry.itemType === ITEM_TYPE.HOUSEHOLD) {
+        setAddExpiry(false);
+        setAddExpiryDate('');
+      }
+    } else {
+      setShopItemType(entry.itemType);
+      setShopCategory(entry.category);
+    }
+  };
 
   const resetAddForm = () => {
     setDraft('');
-    setAddCategory(CATEGORY.FRESH);
+    setAddItemType(inventoryScope);
+    setAddCategory(defaultCategoryForItemType(inventoryScope));
     setAddExpiry(false);
     setAddExpiryDate('');
   };
@@ -1147,14 +1088,17 @@ function InventoryView({ items, updateItems, onboarding }) {
       {
         id: crypto.randomUUID(),
         name,
+        itemType: addItemType,
         status: STATUS.FRESH,
         category: addCategory,
-        expiryDate: addExpiry && addExpiryDate ? addExpiryDate : null,
+        expiryDate:
+          addItemType === ITEM_TYPE.FOOD && addExpiry && addExpiryDate ? addExpiryDate : null,
       },
     ]);
     resetAddForm();
-    if (activeView !== INVENTORY_VIEW.SHOPPING) {
+    if (!isShoppingView(activeView)) {
       setActiveView(addCategory);
+      setInventoryScope(addItemType);
     }
   };
 
@@ -1170,6 +1114,7 @@ function InventoryView({ items, updateItems, onboarding }) {
         next[existingIdx] = {
           ...next[existingIdx],
           status: STATUS.OUT,
+          itemType: shopItemType,
           category: shopCategory,
         };
         return next;
@@ -1179,6 +1124,7 @@ function InventoryView({ items, updateItems, onboarding }) {
         {
           id: crypto.randomUUID(),
           name,
+          itemType: shopItemType,
           status: STATUS.OUT,
           category: shopCategory,
           expiryDate: null,
@@ -1233,7 +1179,7 @@ function InventoryView({ items, updateItems, onboarding }) {
           What&apos;s in the Fridge?
         </h1>
         <p className="text-muted mt-1.5 text-sm leading-relaxed">
-          Expiring Soon is automatic from dates · within {EXPIRING_SOON_DAYS} days
+          Food & household supplies · expiring soon within {EXPIRING_SOON_DAYS} days (food)
         </p>
       </header>
 
@@ -1242,12 +1188,12 @@ function InventoryView({ items, updateItems, onboarding }) {
           title="Welcome to your household fridge"
           onDismiss={() => dismiss('welcome')}
         >
-          Add items quickly, then use Shopping List for what you need to buy. Open Settings to
-          share your household code and switch theme.
+          Track food and household supplies, then use Shopping List for what you need to buy.
+          Open Settings to share your household code and switch theme.
         </TipBanner>
       )}
 
-      {!isDismissed('color-hint') && activeView !== INVENTORY_VIEW.SHOPPING && (
+      {!isDismissed('color-hint') && !isShoppingView(activeView) && (
         <TipBanner
           title="Quick color guide"
           accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
@@ -1262,12 +1208,14 @@ function InventoryView({ items, updateItems, onboarding }) {
       )}
 
       <StorageLocationTabs
+        inventoryScope={inventoryScope}
+        onScopeChange={handleScopeChange}
         activeView={activeView}
         onChange={setActiveView}
         shoppingCount={shoppingList.length}
       />
 
-      {activeView === INVENTORY_VIEW.SHOPPING ? (
+      {isShoppingView(activeView) ? (
         <>
           {!isDismissed('shopping-tip') && (
             <TipBanner
@@ -1286,13 +1234,14 @@ function InventoryView({ items, updateItems, onboarding }) {
             <p className={`text-xs font-semibold uppercase tracking-wide ${SHOPPING_ACCENT.textLabel}`}>
               Add to shopping list
             </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
+            <div className="relative flex gap-2">
+              <ItemTypeahead
                 value={shopDraft}
-                onChange={(e) => setShopDraft(e.target.value)}
+                onChange={setShopDraft}
+                onPick={(entry) => applySuggestion(entry, 'shop')}
                 placeholder='What do you need? (e.g. "Milk")'
-                className={`input-field min-w-0 flex-1 ${SHOPPING_ACCENT.focus}`}
+                inputClassName={`input-field min-w-0 flex-1 ${SHOPPING_ACCENT.focus}`}
+                id="shop-item-input"
               />
               <button
                 type="submit"
@@ -1314,12 +1263,18 @@ function InventoryView({ items, updateItems, onboarding }) {
                 <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
                   Usually found in
                 </p>
-                <CategoryToggle value={shopCategory} onChange={setShopCategory} />
+                <StorageCategoryToggle
+                  itemType={shopItemType}
+                  value={shopCategory}
+                  onChange={setShopCategory}
+                />
               </div>
             )}
           </form>
 
-          <p className="text-muted mb-3 text-xs leading-relaxed">Each row includes a quick shop tip.</p>
+          <p className="text-muted mb-3 text-xs leading-relaxed">
+            Store badges suggest ALDI or Woolworths/Coles based on the item.
+          </p>
 
           <InventorySection
             title="Shopping List — All Locations"
@@ -1352,13 +1307,13 @@ function InventoryView({ items, updateItems, onboarding }) {
         categoryGrouped && (
           <>
             <form onSubmit={addItem} className="surface-card mb-4 space-y-3 p-4">
-              <div className="flex gap-2">
-                <input
-                  type="text"
+              <div className="relative flex gap-2">
+                <ItemTypeahead
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={setDraft}
+                  onPick={(entry) => applySuggestion(entry, 'add')}
                   placeholder='Item name (e.g. "Chorizo")'
-                  className="input-field min-w-0 flex-1"
+                  id="quick-add-input"
                 />
                 <button
                   type="submit"
@@ -1381,9 +1336,38 @@ function InventoryView({ items, updateItems, onboarding }) {
                     <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
                       Storage location
                     </p>
-                    <CategoryToggle value={addCategory} onChange={setAddCategory} />
+                    <StorageCategoryToggle
+                      itemType={addItemType}
+                      value={addCategory}
+                      onChange={setAddCategory}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
+                      Item type
+                    </p>
+                    <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900">
+                      {[ITEM_TYPE.FOOD, ITEM_TYPE.HOUSEHOLD].map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            setAddItemType(type);
+                            setAddCategory(defaultCategoryForItemType(type));
+                          }}
+                          className={`rounded-lg py-2 text-xs font-bold ${
+                            addItemType === type
+                              ? 'bg-emerald-600 text-white'
+                              : 'text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          {type === ITEM_TYPE.FOOD ? '🍽️ Food' : '🏠 Household'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
+                  {addItemType === ITEM_TYPE.FOOD && (
                   <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
                     <input
                       type="checkbox"
@@ -1393,7 +1377,8 @@ function InventoryView({ items, updateItems, onboarding }) {
                     />
                     Add expiry date (optional)
                   </label>
-                  {addExpiry && (
+                  )}
+                  {addItemType === ITEM_TYPE.FOOD && addExpiry && (
                     <input
                       type="date"
                       value={addExpiryDate}
@@ -1406,11 +1391,11 @@ function InventoryView({ items, updateItems, onboarding }) {
             </form>
 
             <p className="text-muted mb-4 text-sm">
-              {CATEGORY_META[activeView].emoji}{' '}
+              {getCategoryMeta(activeView, inventoryScope)?.emoji}{' '}
               <span className="font-semibold text-slate-800 dark:text-slate-200">
-                {CATEGORY_META[activeView].label}
+                {getCategoryMeta(activeView, inventoryScope)?.label}
               </span>{' '}
-              — {CATEGORY_META[activeView].subtitle}
+              — {getCategoryMeta(activeView, inventoryScope)?.subtitle}
             </p>
 
             <InventorySection

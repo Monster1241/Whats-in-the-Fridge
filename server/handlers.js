@@ -284,15 +284,14 @@ export async function handleJoinHousehold(req, res) {
 }
 
 function sanitizeInventoryItems(items) {
-  return items.map((item) => {
-    const {
-      household_id: _hid,
-      householdId: _hId,
-      _id: _mongoId,
-      ...safe
-    } = item ?? {};
-    return safe;
-  });
+  return items.map((item) => ({
+    id: item?.id,
+    name: item?.name,
+    itemType: item?.itemType === 'Household' ? 'Household' : 'Food',
+    category: item?.category,
+    status: item?.status,
+    expiryDate: item?.expiryDate ?? null,
+  }));
 }
 
 export async function handleGetState(req, res) {
