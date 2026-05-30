@@ -1,4 +1,8 @@
-import { HOUSEHOLD_CATEGORY } from './constants.js';
+import {
+  FOOD_CATEGORY,
+  HOUSEHOLD_CATEGORY,
+  ITEM_TYPE,
+} from './constants.js';
 import { normalizeName } from './itemUtils.js';
 
 /** Branded, personal care, or niche — prefer major supermarkets */
@@ -22,7 +26,6 @@ const WOOLWORTHS_COLES_KEYWORDS = [
   'pet treat',
   'dog treat',
   'cat treat',
-  'niche',
   'organic skincare',
   'electric toothbrush head',
   'whitening',
@@ -98,38 +101,255 @@ const ALDI_KEYWORDS = [
   'sparkling water',
 ];
 
+/** @typedef {{ store: string, detail: string }} ShoppingSuggestion */
+
+/** @type {{ keywords: string[], store: string, detail: string }[]} */
+const KEYWORD_RULES = [
+  {
+    keywords: ['dishwashing tablet', 'dish tablet', 'dishwashing liquid', 'dish soap', 'sponge', 'scourer'],
+    store: 'ALDI',
+    detail:
+      'ALDI home-brand cleaning is hard to beat on price. Grab multi-surface spray and sponges in the same aisle run.',
+  },
+  {
+    keywords: ['laundry liquid', 'laundry powder', 'washing powder', 'fabric softener', 'stain remover'],
+    store: 'ALDI',
+    detail:
+      'ALDI laundry liquids and powders are strong value. Woolworths/Coles only if you need a specific sensitive-skin or fragrance-free brand.',
+  },
+  {
+    keywords: ['garbage bag', 'bin bag', 'rubbish bag', 'paper towel', 'toilet paper'],
+    store: 'ALDI',
+    detail:
+      'Bulk packs at ALDI are usually cheapest. Compare unit price on the shelf — bigger rolls often win at Woolworths/Coles on special.',
+  },
+  {
+    keywords: ['face mask', 'sheet mask', 'serum', 'retinol', 'moisturiser', 'moisturizer', 'sunscreen', 'spf'],
+    store: 'Woolworths/Coles',
+    detail:
+      'Skincare and SPF have better range at Woolworths or Coles (Priceline aisle). ALDI occasionally has basics but brands are limited.',
+  },
+  {
+    keywords: ['shampoo', 'conditioner', 'hair dye', 'hair bleach', 'bleach for hair'],
+    store: 'Woolworths/Coles',
+    detail:
+      'Hair care and colour kits are easier to match at Woolworths/Coles. ALDI shampoo is fine for everyday; specialty products need the big chains.',
+  },
+  {
+    keywords: ['pet treat', 'dog treat', 'cat treat'],
+    store: 'Woolworths/Coles',
+    detail:
+      'Pet treats and niche flavours are stocked more reliably at Woolworths/Coles. Check the pet aisle end caps for weekly specials.',
+  },
+  {
+    keywords: ['milk', 'butter', 'cream', 'yogurt', 'cheese', 'parmesan', 'cheddar', 'feta'],
+    store: 'ALDI',
+    detail:
+      'ALDI or Coles for everyday dairy. Harris Farm or Woolworths Macro when you want premium or organic.',
+  },
+  {
+    keywords: ['egg', 'eggs'],
+    store: 'ALDI',
+    detail:
+      'ALDI or Coles home-brand eggs are great value; farmers markets for free-range top quality.',
+  },
+  {
+    keywords: ['chicken', 'beef', 'pork', 'chorizo', 'salmon', 'bacon', 'mince', 'thigh', 'breast'],
+    store: 'ALDI',
+    detail:
+      'ALDI or Coles for budget cuts. Local butcher, Costco, or Harris Farm for the best meat and seafood.',
+  },
+  {
+    keywords: ['basil', 'herb', 'herbs', 'lettuce', 'tomato', 'pepper', 'broccoli', 'veg', 'fruit', 'lemon'],
+    store: 'ALDI',
+    detail:
+      'ALDI or weekend produce markets for cheap fresh veg. Harris Farm or Woolworths Macro for organic quality.',
+  },
+  {
+    keywords: ['pasta', 'rice', 'bread', 'flour', 'oil', 'spice', 'sauce', 'soy', 'garlic', 'onion'],
+    store: 'ALDI',
+    detail:
+      'ALDI aisles — lowest pantry prices. Asian grocers for sauces and spices; Coles Finest or Woolworths for upgrades.',
+  },
+  {
+    keywords: [
+      'miso',
+      'gochujang',
+      'kimchi',
+      'noodle',
+      'noodles',
+      'sesame',
+      'fish sauce',
+      'oyster',
+      'mirin',
+      'rice vinegar',
+    ],
+    store: 'Woolworths/Coles',
+    detail:
+      'Asian supermarkets (Tong Li, Wing Tai, Tokyo Mart) for authentic sauces. Coles/Woolworths Asian aisle for basics.',
+  },
+  {
+    keywords: [
+      'lentil',
+      'lentils',
+      'dal',
+      'ghee',
+      'turmeric',
+      'cumin',
+      'coriander',
+      'momos',
+      'gundruk',
+      'timur',
+      'mustard oil',
+      'bamboo',
+    ],
+    store: 'Woolworths/Coles',
+    detail:
+      'Nepali and South Asian grocers for dal, spices, and mustard oil. Coles/Woolworths for lentils and everyday staples.',
+  },
+  {
+    keywords: ['ice cream', 'frozen', 'pizza', 'peas', 'chips'],
+    store: 'ALDI',
+    detail:
+      'ALDI frozen section — strong value. Costco or Woolworths for larger packs and premium ingredients.',
+  },
+];
+
+/** @type {Record<string, ShoppingSuggestion>} */
+const FOOD_CATEGORY_DEFAULTS = {
+  [FOOD_CATEGORY.AMBIENT]: {
+    store: 'ALDI',
+    detail:
+      'Pantry staples: ALDI for the lowest basket. Coles or Woolworths own-brand when you want a specific product line.',
+  },
+  [FOOD_CATEGORY.FRESH]: {
+    store: 'ALDI',
+    detail:
+      'Fridge aisle: Coles or Woolworths for range and specials. Harris Farm when you want premium freshness.',
+  },
+  [FOOD_CATEGORY.FREEZER]: {
+    store: 'ALDI',
+    detail:
+      'Frozen: ALDI or Costco for bulk value. Woolworths for wider brand choice on pizza, berries, and meals.',
+  },
+};
+
+/** @type {Record<string, ShoppingSuggestion>} */
+const HOUSEHOLD_CATEGORY_DEFAULTS = {
+  [HOUSEHOLD_CATEGORY.CLEANING]: {
+    store: 'ALDI',
+    detail:
+      'Cleaning basics (spray, cloths, bags, dish tablets) — start at ALDI. Woolworths/Coles for specialty or eco brands.',
+  },
+  [HOUSEHOLD_CATEGORY.LAUNDRY]: {
+    store: 'ALDI',
+    detail:
+      'Laundry liquid, powder, and softener — ALDI home-brand is usually best value. Major chains for sensitive-skin ranges.',
+  },
+  [HOUSEHOLD_CATEGORY.BATHROOM]: {
+    store: 'Woolworths/Coles',
+    detail:
+      'Personal care and bathroom: Woolworths or Coles for range. ALDI for toothpaste, soap, and toilet paper staples.',
+  },
+};
+
+const FOOD_FALLBACK = {
+  store: 'ALDI',
+  detail:
+    'Everyday groceries: ALDI for the cheapest basket; Woolworths or Coles for reliable quality, specials, and harder-to-find items.',
+};
+
+const HOUSEHOLD_FALLBACK = {
+  store: 'ALDI',
+  detail:
+    'Household essentials: ALDI for cleaning and laundry staples; Woolworths or Coles for personal care and branded products.',
+};
+
+function matchesWoolworthsColes(name) {
+  return WOOLWORTHS_COLES_KEYWORDS.some((kw) => name.includes(kw));
+}
+
+function matchesAldi(name) {
+  return ALDI_KEYWORDS.some((kw) => name.includes(kw));
+}
+
 /**
  * @param {string} itemName
  * @param {string} category
  * @param {string} [itemType]
- * @returns {string} Retail store suggestion for shopping list badge
+ * @returns {ShoppingSuggestion}
  */
-export function getSuggestedStore(itemName, category, itemType = 'Food') {
+export function getShoppingSuggestion(itemName, category, itemType = ITEM_TYPE.FOOD) {
   const name = normalizeName(itemName);
 
-  if (WOOLWORTHS_COLES_KEYWORDS.some((kw) => name.includes(kw))) {
-    return 'Woolworths/Coles';
-  }
-
-  if (itemType === 'Household' && category === HOUSEHOLD_CATEGORY.BATHROOM) {
-    if (
-      name.includes('toothpaste') ||
-      name.includes('mouthwash') ||
-      name.includes('deodorant') ||
-      name.includes('soap bar')
-    ) {
-      return 'ALDI';
+  for (const rule of KEYWORD_RULES) {
+    if (rule.keywords.some((kw) => name.includes(kw))) {
+      return { store: rule.store, detail: rule.detail };
     }
-    return 'Woolworths/Coles';
   }
 
-  if (ALDI_KEYWORDS.some((kw) => name.includes(kw))) {
-    return 'ALDI';
+  if (itemType === ITEM_TYPE.HOUSEHOLD) {
+    if (category === HOUSEHOLD_CATEGORY.BATHROOM) {
+      if (
+        name.includes('toothpaste') ||
+        name.includes('mouthwash') ||
+        name.includes('deodorant') ||
+        name.includes('soap bar')
+      ) {
+        return {
+          store: 'ALDI',
+          detail:
+            'Toiletries basics — ALDI keeps toothpaste, deodorant, and soap competitively priced.',
+        };
+      }
+      if (matchesWoolworthsColes(name)) {
+        return HOUSEHOLD_CATEGORY_DEFAULTS[HOUSEHOLD_CATEGORY.BATHROOM];
+      }
+    }
+
+    if (HOUSEHOLD_CATEGORY_DEFAULTS[category]) {
+      return HOUSEHOLD_CATEGORY_DEFAULTS[category];
+    }
+
+    return {
+      store: matchesAldi(name) ? 'ALDI' : 'Woolworths/Coles',
+      detail: HOUSEHOLD_FALLBACK.detail,
+    };
   }
 
-  if (itemType === 'Household') {
-    return 'ALDI';
+  if (FOOD_CATEGORY_DEFAULTS[category]) {
+    const base = FOOD_CATEGORY_DEFAULTS[category];
+    if (matchesWoolworthsColes(name) && base.store === 'ALDI') {
+      return {
+        store: 'Woolworths/Coles',
+        detail:
+          'This looks like a specialty or branded item — Woolworths or Coles will have better range than ALDI.',
+      };
+    }
+    return base;
   }
 
-  return 'ALDI';
+  return {
+    store: matchesWoolworthsColes(name) ? 'Woolworths/Coles' : matchesAldi(name) ? 'ALDI' : FOOD_FALLBACK.store,
+    detail: FOOD_FALLBACK.detail,
+  };
+}
+
+/**
+ * @param {{ name: string, category: string, itemType?: string }} item
+ * @returns {ShoppingSuggestion}
+ */
+export function getShoppingSuggestionForItem(item) {
+  return getShoppingSuggestion(item.name, item.category, item.itemType);
+}
+
+/**
+ * Short store label for compact UI (badge).
+ * @param {string} itemName
+ * @param {string} category
+ * @param {string} [itemType]
+ * @returns {string}
+ */
+export function getSuggestedStore(itemName, category, itemType = ITEM_TYPE.FOOD) {
+  return getShoppingSuggestion(itemName, category, itemType).store;
 }

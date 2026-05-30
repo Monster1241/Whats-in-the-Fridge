@@ -15,7 +15,7 @@ import {
   ITEM_TYPE,
   STATUS,
 } from './inventory/constants.js';
-import { getSuggestedStore } from './inventory/getSuggestedStore.js';
+import { getShoppingSuggestionForItem } from './inventory/getSuggestedStore.js';
 import { normalizeName } from './inventory/itemUtils.js';
 import {
   Bookmark,
@@ -770,7 +770,7 @@ function ItemEditorSheet({ item, onSave, onClose }) {
 
 function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
   const catMeta = getCategoryMeta(item.category, item.itemType);
-  const store = getSuggestedStore(item.name, item.category, item.itemType);
+  const { store, detail } = getShoppingSuggestionForItem(item);
 
   return (
     <li className="surface-row px-3 py-3">
@@ -785,21 +785,33 @@ function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
           <CircleCheck className="h-5 w-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-heading flex flex-wrap items-center gap-2 text-sm font-medium">
-            {item.name}
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-slate-200/80 bg-slate-100/90 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-400"
-              title="Suggested store"
-            >
-              <MapPin className="h-3 w-3 opacity-70" aria-hidden />
-              {store}
-            </span>
-          </p>
+          <p className="text-heading text-sm font-medium">{item.name}</p>
           {catMeta && (
             <p className="mt-0.5 text-xs text-slate-500">
               {item.itemType === ITEM_TYPE.HOUSEHOLD ? '🏠' : '🍽️'} {catMeta.emoji} {catMeta.label}
             </p>
           )}
+          <div
+            className={`mt-2.5 rounded-xl border px-3 py-2.5 ${SHOPPING_ACCENT.borderSoft} ${SHOPPING_ACCENT.bgMuted}`}
+          >
+            <div className="flex items-start gap-2">
+              <MapPin
+                className={`mt-0.5 h-4 w-4 shrink-0 ${SHOPPING_ACCENT.text}`}
+                aria-hidden
+              />
+              <div className="min-w-0">
+                <p className={`text-xs font-bold ${SHOPPING_ACCENT.textLabel}`}>
+                  Where to buy
+                  <span className="ml-1.5 inline-flex rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-sky-800 ring-1 ring-sky-200/80 dark:bg-slate-900/60 dark:text-sky-200 dark:ring-sky-700">
+                    {store}
+                  </span>
+                </p>
+                <p className={`mt-1 text-xs leading-relaxed ${SHOPPING_ACCENT.text}`}>
+                  {detail}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
         <StatusBadge status={STATUS.OUT} onOpenPicker={() => onOpenEditor(item)} />
         <button
@@ -1273,7 +1285,7 @@ function InventoryView({ items, updateItems, onboarding }) {
           </form>
 
           <p className="text-muted mb-3 text-xs leading-relaxed">
-            Store badges suggest ALDI or Woolworths/Coles based on the item.
+            Each item includes a store pick and a short shopping tip — food and household.
           </p>
 
           <InventorySection
