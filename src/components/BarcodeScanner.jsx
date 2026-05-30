@@ -1,5 +1,10 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Camera, X } from 'lucide-react';
+
+const READER_ID = 'barcode-scanner-reader';
+
+/** @type {Promise<void>|null} */
+let cameraReleasePromise = null;
 
 /**
  * Extract EAN/UPC-style numeric code from decoded barcode text.
@@ -12,43 +17,107 @@ export function normalizeBarcodeScan(raw) {
 }
 
 /**
- * Prefer rear / environment camera when multiple devices exist.
- * @param {import('html5-qrcode').CameraDevice[]} cameras
+ * @param {HTMLElement} el
+ * @param {number} [timeoutMs]
  */
-function pickRearCameraId(cameras) {
-  if (!cameras?.length) return null;
-  const back = cameras.find((c) =>
-    /back|rear|environment|trás|arrière/i.test(c.label || ''),
-  );
-  if (back) return back.id;
-  if (cameras.length === 1) return cameras[0].id;
-  return cameras[cameras.length - 1].id;
+async function waitForElementSize(el, timeoutMs = 4000) {
+  const started = performance.now();
+  while (performance.now() - started < timeoutMs) {
+    if (el.clientWidth >= 120 && el.clientHeight >= 120) return true;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  return el.clientWidth > 0 && el.clientHeight > 0;
+}
+
+/**
+ * @param {import('html5-qrcode').Html5Qrcode} scanner
+ */
+async function stopScanner(scanner) {
+  try {
+    const { Html5QrcodeScannerState } = await import('html5-qrcode');
+    const state = scanner.getState();
+    if (
+      state === Html5QrcodeScannerState.SCANNING
+      || state === Html5QrcodeScannerState.PAUSED
+    ) {
+      await scanner.stop();
+    }
+  } catch {
+    try {
+      await scanner.stop();
+    } catch {
+      // already stopped
+    }
+  }
+  try {
+    scanner.clear();
+  } catch {
+    // ignore
+  }
 }
 
 export function BarcodeScanner({ open, onClose, onScan }) {
-  const regionId = useId().replace(/:/g, '');
+  const containerRef = useRef(null);
   const scannerRef = useRef(null);
+  const runIdRef = useRef(0);
   const handledRef = useRef(false);
   const onScanRef = useRef(onScan);
   const onCloseRef = useRef(onClose);
   const [status, setStatus] = useState('idle');
+
   onScanRef.current = onScan;
   onCloseRef.current = onClose;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) {
       setStatus('idle');
       return undefined;
     }
 
     handledRef.current = false;
-    let cancelled = false;
+    const runId = ++runIdRef.current;
+    const container = containerRef.current;
+    if (!container) return undefined;
+
+    container.id = READER_ID;
+    let active = true;
+
+    const teardown = async (scanner) => {
+      if (!scanner) return;
+      scannerRef.current = null;
+      const release = stopScanner(scanner);
+      cameraReleasePromise = release;
+      await release;
+      if (cameraReleasePromise === release) {
+        cameraReleasePromise = null;
+      }
+    };
 
     (async () => {
       setStatus('starting');
-      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
 
-      if (cancelled) return;
+      if (cameraReleasePromise) {
+        try {
+          await cameraReleasePromise;
+        } catch {
+          // ignore
+        }
+      }
+
+      const sized = await waitForElementSize(container);
+      if (!active || runId !== runIdRef.current) return;
+      if (!sized) {
+        setStatus('error');
+        return;
+      }
+
+      const {
+        Html5Qrcode,
+        Html5QrcodeSupportedFormats,
+        Html5QrcodeScannerState,
+      } = await import('html5-qrcode');
+
+      if (!active || runId !== runIdRef.current) return;
 
       const formatsToSupport = [
         Html5QrcodeSupportedFormats.EAN_13,
@@ -58,68 +127,88 @@ export function BarcodeScanner({ open, onClose, onScan }) {
         Html5QrcodeSupportedFormats.CODE_128,
       ];
 
-      const scanner = new Html5Qrcode(regionId, { verbose: false });
+      const scanner = new Html5Qrcode(READER_ID, { verbose: false });
       scannerRef.current = scanner;
 
       const scanConfig = {
-        fps: 12,
+        fps: 10,
         qrbox: (viewfinderWidth, viewfinderHeight) => {
-          const width = Math.floor(Math.min(viewfinderWidth * 0.92, 360));
-          const height = Math.floor(Math.min(viewfinderHeight * 0.38, 130));
-          return { width: Math.max(width, 220), height: Math.max(height, 80) };
+          const maxW = Math.max(160, Math.floor(viewfinderWidth * 0.88));
+          const maxH = Math.max(56, Math.floor(viewfinderHeight * 0.32));
+          return {
+            width: Math.min(maxW, 320),
+            height: Math.min(maxH, 130),
+          };
         },
-        aspectRatio: 1.7777778,
         formatsToSupport,
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true,
-        },
       };
 
       const onDecoded = (decodedText) => {
-        if (handledRef.current || cancelled) return;
+        if (handledRef.current || runId !== runIdRef.current) return;
         handledRef.current = true;
         const code = normalizeBarcodeScan(decodedText);
-        scanner
-          .stop()
-          .catch(() => {})
-          .finally(() => {
-            scanner.clear().catch(() => {});
-            scannerRef.current = null;
-            onScanRef.current(code);
-            onCloseRef.current();
-          });
+        teardown(scanner).finally(() => {
+          onScanRef.current(code);
+          onCloseRef.current();
+        });
       };
 
       try {
-        let cameraIdOrConfig = { facingMode: { ideal: 'environment' } };
-        try {
-          const cameras = await Html5Qrcode.getCameras();
-          const rearId = pickRearCameraId(cameras);
-          if (rearId) cameraIdOrConfig = rearId;
-        } catch {
-          // use facingMode fallback
+        await scanner.start(
+          { facingMode: 'environment' },
+          scanConfig,
+          onDecoded,
+          () => {},
+        );
+
+        if (!active || runId !== runIdRef.current) {
+          await teardown(scanner);
+          return;
         }
 
-        await scanner.start(cameraIdOrConfig, scanConfig, onDecoded, () => {});
-        if (!cancelled) setStatus('scanning');
-      } catch (err) {
-        console.error('Barcode scanner start failed', err);
-        if (!cancelled) setStatus('error');
+        if (scanner.getState() === Html5QrcodeScannerState.SCANNING) {
+          setStatus('scanning');
+        }
+      } catch (firstErr) {
+        if (!active || runId !== runIdRef.current) {
+          await teardown(scanner);
+          return;
+        }
+
+        try {
+          const cameras = await Html5Qrcode.getCameras();
+          const rear = cameras?.length
+            ? cameras.find((c) => /back|rear|environment/i.test(c.label || ''))
+              ?? cameras[cameras.length - 1]
+            : null;
+
+          if (!rear?.id) throw firstErr;
+
+          await scanner.start(rear.id, scanConfig, onDecoded, () => {});
+
+          if (!active || runId !== runIdRef.current) {
+            await teardown(scanner);
+            return;
+          }
+
+          setStatus('scanning');
+        } catch (err) {
+          console.error('Barcode scanner start failed', err);
+          await teardown(scanner);
+          if (active && runId === runIdRef.current) setStatus('error');
+        }
       }
     })();
 
     return () => {
-      cancelled = true;
+      active = false;
+      runIdRef.current += 1;
       const scanner = scannerRef.current;
-      scannerRef.current = null;
       if (scanner) {
-        scanner
-          .stop()
-          .catch(() => {})
-          .finally(() => scanner.clear().catch(() => {}));
+        teardown(scanner);
       }
     };
-  }, [open, regionId]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -150,14 +239,15 @@ export function BarcodeScanner({ open, onClose, onScan }) {
       <p className="shrink-0 px-4 py-2 text-center text-xs text-slate-400">
         {status === 'starting' && 'Starting rear camera…'}
         {status === 'error' && 'Could not open camera. Check permissions and try again.'}
-        {status === 'scanning' && 'Align the barcode inside the frame'}
+        {status === 'scanning' && 'Align the barcode inside the green frame'}
         {status === 'idle' && 'Point at the product barcode'}
       </p>
 
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="flex min-h-0 flex-1 flex-col px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div
-          id={regionId}
-          className="barcode-scanner-view w-full max-w-lg [&_video]:!h-full [&_video]:!w-full [&_video]:object-cover"
+          ref={containerRef}
+          className="barcode-scanner-view mx-auto w-full max-w-lg flex-1"
+          aria-hidden={status === 'error'}
         />
       </div>
     </div>
