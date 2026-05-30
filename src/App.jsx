@@ -768,59 +768,85 @@ function ItemEditorSheet({ item, onSave, onClose }) {
   );
 }
 
+function ShoppingListBoughtButton({ itemName, onBought }) {
+  return (
+    <button
+      type="button"
+      onClick={onBought}
+      className="group flex w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3.5 pl-4 pr-5 text-sm font-bold text-white shadow-lg shadow-emerald-900/25 transition hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] dark:shadow-emerald-950/40"
+      aria-label={`Mark ${itemName} as bought and return to inventory`}
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 ring-2 ring-white/30 transition group-active:scale-95">
+        <CircleCheck className="h-5 w-5" strokeWidth={2.5} aria-hidden />
+      </span>
+      <span className="flex flex-col items-start text-left leading-tight">
+        <span>Bought it</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-100/90">
+          Back in stock
+        </span>
+      </span>
+    </button>
+  );
+}
+
 function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
   const catMeta = getCategoryMeta(item.category, item.itemType);
   const { store, detail } = getShoppingSuggestionForItem(item);
 
   return (
-    <li className="surface-row px-3 py-3">
-      <div className="flex items-start gap-2">
-        <button
-          type="button"
-          onClick={() => onGotIt(item.id)}
-          className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 text-sky-700 transition active:scale-95 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-300"
-          aria-label={`Mark ${item.name} as bought`}
-          title="Got it — back in stock"
-        >
-          <CircleCheck className="h-5 w-5" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="text-heading text-sm font-medium">{item.name}</p>
-          {catMeta && (
-            <p className="mt-0.5 text-xs text-slate-500">
-              {item.itemType === ITEM_TYPE.HOUSEHOLD ? '🏠' : '🍽️'} {catMeta.emoji} {catMeta.label}
-            </p>
-          )}
-          <div
-            className={`mt-2.5 rounded-xl border px-3 py-2.5 ${SHOPPING_ACCENT.borderSoft} ${SHOPPING_ACCENT.bgMuted}`}
+    <li className="surface-row overflow-hidden px-3 py-3">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-heading text-sm font-semibold">{item.name}</p>
+            {catMeta && (
+              <p className="mt-0.5 text-xs text-slate-500">
+                {item.itemType === ITEM_TYPE.HOUSEHOLD ? '🏠' : '🍽️'} {catMeta.emoji}{' '}
+                {catMeta.label}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => onDelete(item.id)}
+            className={`shrink-0 rounded-lg p-2 text-slate-500 transition ${SHOPPING_ACCENT.hover}`}
+            aria-label={`Remove ${item.name} from shopping list`}
           >
-            <div className="flex items-start gap-2">
-              <MapPin
-                className={`mt-0.5 h-4 w-4 shrink-0 ${SHOPPING_ACCENT.text}`}
-                aria-hidden
-              />
-              <div className="min-w-0">
-                <p className={`text-xs font-bold ${SHOPPING_ACCENT.textLabel}`}>
-                  Where to buy
-                  <span className="ml-1.5 inline-flex rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-sky-800 ring-1 ring-sky-200/80 dark:bg-slate-900/60 dark:text-sky-200 dark:ring-sky-700">
-                    {store}
-                  </span>
-                </p>
-                <p className={`mt-1 text-xs leading-relaxed ${SHOPPING_ACCENT.text}`}>
-                  {detail}
-                </p>
-              </div>
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div
+          className={`rounded-xl border px-3 py-2.5 ${SHOPPING_ACCENT.borderSoft} ${SHOPPING_ACCENT.bgMuted}`}
+        >
+          <div className="flex items-start gap-2">
+            <MapPin
+              className={`mt-0.5 h-4 w-4 shrink-0 ${SHOPPING_ACCENT.text}`}
+              aria-hidden
+            />
+            <div className="min-w-0">
+              <p className={`text-xs font-bold ${SHOPPING_ACCENT.textLabel}`}>
+                Where to buy
+                <span className="ml-1.5 inline-flex rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-sky-800 ring-1 ring-sky-200/80 dark:bg-slate-900/60 dark:text-sky-200 dark:ring-sky-700">
+                  {store}
+                </span>
+              </p>
+              <p className={`mt-1 text-xs leading-relaxed ${SHOPPING_ACCENT.text}`}>{detail}</p>
             </div>
           </div>
         </div>
-        <StatusBadge status={STATUS.OUT} onOpenPicker={() => onOpenEditor(item)} />
+
+        <ShoppingListBoughtButton
+          itemName={item.name}
+          onBought={() => onGotIt(item.id)}
+        />
+
         <button
           type="button"
-          onClick={() => onDelete(item.id)}
-          className={`rounded-lg p-2 text-slate-500 transition ${SHOPPING_ACCENT.hover}`}
-          aria-label={`Remove ${item.name}`}
+          onClick={() => onOpenEditor(item)}
+          className="text-muted w-full text-center text-xs font-semibold underline-offset-2 hover:text-sky-700 hover:underline dark:hover:text-sky-300"
         >
-          <Trash2 className="h-4 w-4" />
+          Edit item details
         </button>
       </div>
     </li>
