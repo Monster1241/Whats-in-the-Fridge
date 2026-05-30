@@ -221,10 +221,10 @@ const KEYWORD_RULES = [
       'Nappies: compare unit price on Woolworths/Coles multibuy. ALDI nappies are budget-friendly if your store stocks your size.',
   },
   {
-    keywords: ['baby wipe', 'water wipe', 'wipes'],
-    store: 'ALDI',
+    keywords: ['baby formula', 'infant formula', 'puree', 'purees', 'baby food', 'rusk', 'rusks', 'infant cereal'],
+    store: 'Woolworths/Coles',
     detail:
-      'Baby wipes — ALDI and home-brand packs are great value. Woolworths/Coles for sensitive-skin or fragrance-free ranges.',
+      'Baby food and formula — widest range at Woolworths or Coles baby aisle. ALDI for some pouches and snacks when in stock.',
   },
   {
     keywords: ['baby tissue', 'nappy rash', 'baby powder', 'infant'],
@@ -260,9 +260,10 @@ const BABY_CATEGORY_DEFAULTS = {
     detail:
       'Diapers: check multibuy at Woolworths or Coles. ALDI nappies work well for many families if your size is in stock.',
   },
-  [BABY_CATEGORY.WIPES]: {
-    store: 'ALDI',
-    detail: 'Baby wipes — bulk packs at ALDI; major supermarkets for premium or sensitive-skin brands.',
+  [BABY_CATEGORY.FOOD]: {
+    store: 'Woolworths/Coles',
+    detail:
+      'Baby food, formula, and pouches — best selection at Woolworths or Coles. Check pharmacy aisle for specialty formulas.',
   },
   [BABY_CATEGORY.ESSENTIALS]: {
     store: 'Woolworths/Coles',
@@ -332,7 +333,7 @@ export function getShoppingSuggestion(itemName, category, itemType = ITEM_TYPE.F
     return {
       store: matchesWoolworthsColes(name) ? 'Woolworths/Coles' : 'ALDI',
       detail:
-        'Baby care: ALDI for wipes and basics; Woolworths or Coles for diapers, creams, and specialty sizes.',
+        'Baby care: Woolworths or Coles for food and formula; ALDI for some basics; compare diaper unit prices.',
     };
   }
 

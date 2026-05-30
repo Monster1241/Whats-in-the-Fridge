@@ -30,16 +30,17 @@ export const HOUSEHOLD_CATEGORY_OPTIONS = [
 
 export const BABY_CATEGORY = {
   DIAPERS: 'Diapers',
-  WIPES: 'Wipes',
+  FOOD: 'Baby Food',
   ESSENTIALS: 'Baby Essentials',
 };
 
 /** @deprecated migrated on load */
 export const LEGACY_BABY_CATEGORY_TISSUES = 'Baby Tissues';
+export const LEGACY_BABY_CATEGORY_WIPES = 'Wipes';
 
 export const BABY_CATEGORY_OPTIONS = [
   BABY_CATEGORY.DIAPERS,
-  BABY_CATEGORY.WIPES,
+  BABY_CATEGORY.FOOD,
   BABY_CATEGORY.ESSENTIALS,
 ];
 
@@ -96,18 +97,18 @@ export const HOUSEHOLD_CATEGORY_META = {
 
 export const BABY_CATEGORY_META = {
   [BABY_CATEGORY.DIAPERS]: {
-    emoji: '🍼',
+    emoji: '📦',
     label: 'Diapers',
     subtitle: 'Nappies & changing',
     tabActive: 'bg-rose-500 text-white',
     tabIdle: 'text-rose-700 hover:bg-rose-50',
   },
-  [BABY_CATEGORY.WIPES]: {
-    emoji: '🧻',
-    label: 'Wipes',
-    subtitle: 'Baby wipes',
-    tabActive: 'bg-pink-600 text-white',
-    tabIdle: 'text-pink-700 hover:bg-pink-50',
+  [BABY_CATEGORY.FOOD]: {
+    emoji: '🥣',
+    label: 'Baby Food',
+    subtitle: 'Purees, formula & snacks',
+    tabActive: 'bg-orange-500 text-white',
+    tabIdle: 'text-orange-700 hover:bg-orange-50',
   },
   [BABY_CATEGORY.ESSENTIALS]: {
     emoji: '🧸',
@@ -146,6 +147,7 @@ export function getCategoryMeta(category, itemType = ITEM_TYPE.FOOD) {
 export function inferItemTypeFromCategory(category) {
   if (
     category === LEGACY_BABY_CATEGORY_TISSUES ||
+    category === LEGACY_BABY_CATEGORY_WIPES ||
     BABY_CATEGORY_OPTIONS.includes(category)
   ) {
     return ITEM_TYPE.BABY;

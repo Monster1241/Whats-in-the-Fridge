@@ -6,6 +6,7 @@ import {
   inferItemTypeFromCategory,
   ITEM_TYPE,
   LEGACY_BABY_CATEGORY_TISSUES,
+  LEGACY_BABY_CATEGORY_WIPES,
   STATUS,
 } from './constants.js';
 
@@ -27,6 +28,9 @@ export function migrateItem(item) {
   let category = item.category;
   if (category === LEGACY_BABY_CATEGORY_TISSUES) {
     category = BABY_CATEGORY.ESSENTIALS;
+  }
+  if (category === LEGACY_BABY_CATEGORY_WIPES) {
+    category = BABY_CATEGORY.FOOD;
   }
   const categoryOptions = getCategoriesForItemType(itemType);
   const resolvedCategory = categoryOptions.includes(category)
