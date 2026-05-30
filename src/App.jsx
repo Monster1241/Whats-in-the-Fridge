@@ -1814,6 +1814,15 @@ function SettingsView({
   const [memberActionError, setMemberActionError] = useState('');
   const [modulesBusy, setModulesBusy] = useState(false);
   const [modulesError, setModulesError] = useState('');
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+
+  const enabledModulesSummary = useMemo(
+    () =>
+      getEnabledModuleList(enabledModules)
+        .map((mod) => mod.label)
+        .join(' · '),
+    [enabledModules],
+  );
 
   const loadMembers = useCallback(async () => {
     setMembersLoading(true);
@@ -1994,57 +2003,80 @@ function SettingsView({
         </div>
       </section>
 
-      <section className="surface-card mb-5 p-4">
-        <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">
-          Customize Dashboard
-        </h2>
-        <p className="text-muted mb-4 text-sm">
-          Choose what your household tracks. Changes sync for everyone in your household when the
-          app refreshes.
-        </p>
-        <div className="space-y-2">
-          {MODULE_DEFINITIONS.map((mod) => {
-            const checked = normalizeEnabledModules(enabledModules)[mod.key];
-            const onlyOneLeft = checked && countEnabledModules(enabledModules) === 1;
-            return (
-              <label
-                key={mod.key}
-                className={`surface-inset flex cursor-pointer items-start gap-3 rounded-xl p-3 transition ${
-                  modulesBusy ? 'pointer-events-none opacity-60' : ''
-                } ${checked ? 'ring-1 ring-emerald-400/60 dark:ring-emerald-600/50' : ''}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={modulesBusy || onlyOneLeft}
-                  onChange={(e) => handleModuleToggle(mod.key, e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-heading text-sm font-semibold">
-                    <span className="mr-1.5" aria-hidden>
-                      {mod.emoji}
-                    </span>
-                    {mod.label}
-                  </p>
-                  <p className="text-muted mt-0.5 text-xs leading-relaxed">{mod.description}</p>
-                  {onlyOneLeft && (
-                    <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                      At least one module must stay on
-                    </p>
-                  )}
-                </div>
-              </label>
-            );
-          })}
-        </div>
-        {modulesBusy && (
-          <p className="text-muted mt-3 text-xs font-medium">Saving for your household…</p>
-        )}
-        {modulesError && (
-          <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
-            {modulesError}
-          </p>
+      <section className="surface-card mb-5 overflow-hidden p-4">
+        <button
+          type="button"
+          onClick={() => setCustomizeOpen((open) => !open)}
+          className="flex w-full items-center justify-between gap-3 text-left active:scale-[0.99]"
+          aria-expanded={customizeOpen}
+        >
+          <div className="min-w-0 flex-1">
+            <h2 className="text-heading text-sm font-bold uppercase tracking-wide">
+              Customize Dashboard
+            </h2>
+            {!customizeOpen && (
+              <p className="text-muted mt-1 truncate text-xs leading-relaxed">
+                {enabledModulesSummary || 'Choose modules'}
+              </p>
+            )}
+          </div>
+          {customizeOpen ? (
+            <ChevronUp className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+          ) : (
+            <ChevronDown className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+          )}
+        </button>
+
+        {customizeOpen && (
+          <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-600">
+            <p className="text-muted mb-4 text-sm">
+              Choose what your household tracks. Changes sync for everyone when the app refreshes.
+            </p>
+            <div className="space-y-2">
+              {MODULE_DEFINITIONS.map((mod) => {
+                const checked = normalizeEnabledModules(enabledModules)[mod.key];
+                const onlyOneLeft = checked && countEnabledModules(enabledModules) === 1;
+                return (
+                  <label
+                    key={mod.key}
+                    className={`surface-inset flex cursor-pointer items-start gap-3 rounded-xl p-3 transition ${
+                      modulesBusy ? 'pointer-events-none opacity-60' : ''
+                    } ${checked ? 'ring-1 ring-emerald-400/60 dark:ring-emerald-600/50' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={modulesBusy || onlyOneLeft}
+                      onChange={(e) => handleModuleToggle(mod.key, e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-heading text-sm font-semibold">
+                        <span className="mr-1.5" aria-hidden>
+                          {mod.emoji}
+                        </span>
+                        {mod.label}
+                      </p>
+                      <p className="text-muted mt-0.5 text-xs leading-relaxed">{mod.description}</p>
+                      {onlyOneLeft && (
+                        <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                          At least one module must stay on
+                        </p>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            {modulesBusy && (
+              <p className="text-muted mt-3 text-xs font-medium">Saving for your household…</p>
+            )}
+            {modulesError && (
+              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+                {modulesError}
+              </p>
+            )}
+          </div>
         )}
       </section>
 

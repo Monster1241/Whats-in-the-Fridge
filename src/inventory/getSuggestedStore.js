@@ -264,10 +264,10 @@ const BABY_CATEGORY_DEFAULTS = {
     store: 'ALDI',
     detail: 'Baby wipes — bulk packs at ALDI; major supermarkets for premium or sensitive-skin brands.',
   },
-  [BABY_CATEGORY.NURSERY]: {
+  [BABY_CATEGORY.ESSENTIALS]: {
     store: 'Woolworths/Coles',
     detail:
-      'Baby tissues, creams, and nursery goods — pharmacy aisle at Woolworths/Coles or Chemist Warehouse.',
+      'Baby essentials — creams, lotion, and nursery goods at Woolworths/Coles pharmacy or Chemist Warehouse.',
   },
 };
 

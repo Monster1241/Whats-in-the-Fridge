@@ -38,7 +38,7 @@ export const MODULE_DEFINITIONS = [
     itemType: ITEM_TYPE.BABY,
     emoji: '👶',
     label: 'Baby Care',
-    description: 'Diapers, wipes, and baby tissues',
+    description: 'Diapers, wipes, and baby essentials',
   },
 ];
 

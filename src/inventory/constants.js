@@ -31,13 +31,16 @@ export const HOUSEHOLD_CATEGORY_OPTIONS = [
 export const BABY_CATEGORY = {
   DIAPERS: 'Diapers',
   WIPES: 'Wipes',
-  NURSERY: 'Baby Tissues',
+  ESSENTIALS: 'Baby Essentials',
 };
+
+/** @deprecated migrated on load */
+export const LEGACY_BABY_CATEGORY_TISSUES = 'Baby Tissues';
 
 export const BABY_CATEGORY_OPTIONS = [
   BABY_CATEGORY.DIAPERS,
   BABY_CATEGORY.WIPES,
-  BABY_CATEGORY.NURSERY,
+  BABY_CATEGORY.ESSENTIALS,
 ];
 
 /** @deprecated use FOOD_CATEGORY — kept for gradual refactors */
@@ -106,10 +109,10 @@ export const BABY_CATEGORY_META = {
     tabActive: 'bg-pink-600 text-white',
     tabIdle: 'text-pink-700 hover:bg-pink-50',
   },
-  [BABY_CATEGORY.NURSERY]: {
-    emoji: '👶',
-    label: 'Baby Tissues',
-    subtitle: 'Creams & soft goods',
+  [BABY_CATEGORY.ESSENTIALS]: {
+    emoji: '🧸',
+    label: 'Baby Essentials',
+    subtitle: 'Creams, lotion & more',
     tabActive: 'bg-fuchsia-600 text-white',
     tabIdle: 'text-fuchsia-700 hover:bg-fuchsia-50',
   },
@@ -141,7 +144,12 @@ export function getCategoryMeta(category, itemType = ITEM_TYPE.FOOD) {
 }
 
 export function inferItemTypeFromCategory(category) {
-  if (BABY_CATEGORY_OPTIONS.includes(category)) return ITEM_TYPE.BABY;
+  if (
+    category === LEGACY_BABY_CATEGORY_TISSUES ||
+    BABY_CATEGORY_OPTIONS.includes(category)
+  ) {
+    return ITEM_TYPE.BABY;
+  }
   if (HOUSEHOLD_CATEGORY_OPTIONS.includes(category)) return ITEM_TYPE.HOUSEHOLD;
   return ITEM_TYPE.FOOD;
 }

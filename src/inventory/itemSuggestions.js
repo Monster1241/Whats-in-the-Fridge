@@ -76,9 +76,9 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Nappies Size 3', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
   { name: 'Baby Wipes', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.WIPES },
   { name: 'Water Wipes', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.WIPES },
-  { name: 'Baby Tissues', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.NURSERY },
-  { name: 'Nappy Rash Cream', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.NURSERY },
-  { name: 'Baby Powder', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.NURSERY },
+  { name: 'Baby Lotion', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
+  { name: 'Nappy Rash Cream', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
+  { name: 'Baby Powder', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
 ];
 
 export function filterItemSuggestions(query, enabledModules, limit = 8) {

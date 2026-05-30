@@ -1,9 +1,11 @@
 import {
+  BABY_CATEGORY,
   defaultCategoryForItemType,
   FOOD_CATEGORY_OPTIONS,
   getCategoriesForItemType,
   inferItemTypeFromCategory,
   ITEM_TYPE,
+  LEGACY_BABY_CATEGORY_TISSUES,
   STATUS,
 } from './constants.js';
 
@@ -22,16 +24,20 @@ export function migrateItem(item) {
   else if (!item.itemType) {
     itemType = inferItemTypeFromCategory(item.category);
   }
+  let category = item.category;
+  if (category === LEGACY_BABY_CATEGORY_TISSUES) {
+    category = BABY_CATEGORY.ESSENTIALS;
+  }
   const categoryOptions = getCategoriesForItemType(itemType);
-  const category = categoryOptions.includes(item.category)
-    ? item.category
+  const resolvedCategory = categoryOptions.includes(category)
+    ? category
     : defaultCategoryForItemType(itemType);
   const status = item.status === STATUS.OUT ? STATUS.OUT : STATUS.FRESH;
 
   return {
     ...item,
     itemType,
-    category,
+    category: resolvedCategory,
     status,
     expiryDate: item.expiryDate ?? null,
   };
