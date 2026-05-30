@@ -385,11 +385,28 @@ export function getShoppingSuggestion(itemName, category, itemType = ITEM_TYPE.F
 }
 
 /**
- * @param {{ name: string, category: string, itemType?: string }} item
- * @returns {ShoppingSuggestion}
+ * @param {{ name: string, category: string, itemType?: string, preferredStore?: string|null }} item
+ * @returns {ShoppingSuggestion & { isCustomStore: boolean }}
  */
 export function getShoppingSuggestionForItem(item) {
-  return getShoppingSuggestion(item.name, item.category, item.itemType);
+  const suggested = getShoppingSuggestion(item.name, item.category, item.itemType);
+  if (item.preferredStore) {
+    return {
+      store: item.preferredStore,
+      detail: `Your household shops for this at ${item.preferredStore}.`,
+      isCustomStore: true,
+    };
+  }
+  return { ...suggested, isCustomStore: false };
+}
+
+/**
+ * @param {{ preferredStore?: string|null, name: string, category: string, itemType?: string }} item
+ * @returns {string}
+ */
+export function getStoreForItem(item) {
+  if (item.preferredStore) return item.preferredStore;
+  return getShoppingSuggestion(item.name, item.category, item.itemType).store;
 }
 
 /**

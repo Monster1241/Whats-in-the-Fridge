@@ -533,6 +533,7 @@ export async function replaceInventoryForHousehold(householdId, items) {
     category: item.category,
     status: item.status,
     expiryDate: item.expiryDate ?? null,
+    preferredStore: item.preferredStore ?? null,
     household_id: scopedId,
     updated_at: new Date(),
   }));

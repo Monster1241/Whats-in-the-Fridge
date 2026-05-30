@@ -5,6 +5,7 @@ import { useAuth } from './hooks/useAuth.js';
 import { fetchHouseholdMembers, removeHouseholdMember } from './api.js';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
+import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
 import {
   defaultCategoryForItemType,
   getCategoriesForItemType,
@@ -818,7 +819,7 @@ function ShoppingListBoughtButton({ itemName, onBought }) {
   );
 }
 
-function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
+function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt, onPreferredStoreChange }) {
   const catMeta = getCategoryMeta(item.category, item.itemType);
   const { store, detail } = getShoppingSuggestionForItem(item);
 
@@ -854,11 +855,12 @@ function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
               aria-hidden
             />
             <div className="min-w-0">
-              <p className={`text-xs font-bold ${SHOPPING_ACCENT.textLabel}`}>
-                Where to buy
-                <span className="ml-1.5 inline-flex rounded-md bg-white/70 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-sky-800 ring-1 ring-sky-200/80 dark:bg-slate-900/60 dark:text-sky-200 dark:ring-sky-700">
-                  {store}
-                </span>
+              <p className={`flex flex-wrap items-center gap-x-1 text-xs font-bold ${SHOPPING_ACCENT.textLabel}`}>
+                <span>Where to buy</span>
+                <StoreBadgeSelector
+                  store={store}
+                  onSelect={(nextStore) => onPreferredStoreChange(item.id, nextStore)}
+                />
               </p>
               <p className={`mt-1 text-xs leading-relaxed ${SHOPPING_ACCENT.text}`}>{detail}</p>
             </div>
@@ -1244,6 +1246,12 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
     );
   };
 
+  const updatePreferredStore = (id, store) => {
+    updateItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, preferredStore: store } : item)),
+    );
+  };
+
   const buildShoppingMessage = () => {
     const missing = shoppingList.map((i) => i.name);
     if (missing.length === 0) {
@@ -1369,7 +1377,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
           </form>
 
           <p className="text-muted mb-3 text-xs leading-relaxed">
-            Each item includes a store pick and a short shopping tip — food and household.
+            Tap a store badge to set where you buy each item — saved for your household.
           </p>
 
           <InventorySection
@@ -1386,6 +1394,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
                 onOpenEditor={setEditingItem}
                 onDelete={deleteItem}
                 onGotIt={markItemStocked}
+                onPreferredStoreChange={updatePreferredStore}
               />
             ))}
           </InventorySection>

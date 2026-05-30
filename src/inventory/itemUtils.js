@@ -9,6 +9,7 @@ import {
   LEGACY_BABY_CATEGORY_WIPES,
   STATUS,
 } from './constants.js';
+import { normalizePreferredStore } from './storeOptions.js';
 
 export function normalizeName(value) {
   return String(value || '')
@@ -44,6 +45,7 @@ export function migrateItem(item) {
     category: resolvedCategory,
     status,
     expiryDate: item.expiryDate ?? null,
+    preferredStore: normalizePreferredStore(item.preferredStore),
   };
 }
 

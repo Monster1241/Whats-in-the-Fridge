@@ -402,6 +402,10 @@ function sanitizeInventoryItems(items) {
     category: item?.category,
     status: item?.status,
     expiryDate: item?.expiryDate ?? null,
+    preferredStore:
+      item?.preferredStore === null || item?.preferredStore === undefined
+        ? null
+        : String(item.preferredStore).trim() || null,
   }));
 }
 
