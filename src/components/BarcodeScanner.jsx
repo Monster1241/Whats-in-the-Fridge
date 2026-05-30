@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Camera, X } from 'lucide-react';
 
 /**
@@ -11,26 +11,42 @@ export function normalizeBarcodeScan(raw) {
   return digits.length >= 8 ? digits : trimmed;
 }
 
+/**
+ * Prefer rear / environment camera when multiple devices exist.
+ * @param {import('html5-qrcode').CameraDevice[]} cameras
+ */
+function pickRearCameraId(cameras) {
+  if (!cameras?.length) return null;
+  const back = cameras.find((c) =>
+    /back|rear|environment|trás|arrière/i.test(c.label || ''),
+  );
+  if (back) return back.id;
+  if (cameras.length === 1) return cameras[0].id;
+  return cameras[cameras.length - 1].id;
+}
+
 export function BarcodeScanner({ open, onClose, onScan }) {
   const regionId = useId().replace(/:/g, '');
   const scannerRef = useRef(null);
   const handledRef = useRef(false);
   const onScanRef = useRef(onScan);
   const onCloseRef = useRef(onClose);
+  const [status, setStatus] = useState('idle');
   onScanRef.current = onScan;
   onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) {
+      setStatus('idle');
+      return undefined;
+    }
 
     handledRef.current = false;
     let cancelled = false;
 
     (async () => {
-      const {
-        Html5QrcodeScanner,
-        Html5QrcodeSupportedFormats,
-      } = await import('html5-qrcode');
+      setStatus('starting');
+      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
 
       if (cancelled) return;
 
@@ -42,33 +58,54 @@ export function BarcodeScanner({ open, onClose, onScan }) {
         Html5QrcodeSupportedFormats.CODE_128,
       ];
 
-      const config = {
-        fps: 10,
-        qrbox: (viewfinderWidth, viewfinderHeight) => {
-          const width = Math.floor(Math.min(viewfinderWidth * 0.88, 320));
-          const height = Math.floor(Math.min(viewfinderHeight * 0.32, 110));
-          return { width: Math.max(width, 200), height: Math.max(height, 72) };
-        },
-        aspectRatio: 1.7777778,
-        rememberLastUsedCamera: true,
-        formatsToSupport,
-      };
-
-      const scanner = new Html5QrcodeScanner(regionId, config, false);
+      const scanner = new Html5Qrcode(regionId, { verbose: false });
       scannerRef.current = scanner;
 
-      scanner.render(
-        (decodedText) => {
-          if (handledRef.current || cancelled) return;
-          handledRef.current = true;
-          const code = normalizeBarcodeScan(decodedText);
-          onScanRef.current(code);
-          onCloseRef.current();
+      const scanConfig = {
+        fps: 12,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const width = Math.floor(Math.min(viewfinderWidth * 0.92, 360));
+          const height = Math.floor(Math.min(viewfinderHeight * 0.38, 130));
+          return { width: Math.max(width, 220), height: Math.max(height, 80) };
         },
-        () => {
-          // ignore per-frame scan misses
+        aspectRatio: 1.7777778,
+        formatsToSupport,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true,
         },
-      );
+      };
+
+      const onDecoded = (decodedText) => {
+        if (handledRef.current || cancelled) return;
+        handledRef.current = true;
+        const code = normalizeBarcodeScan(decodedText);
+        scanner
+          .stop()
+          .catch(() => {})
+          .finally(() => {
+            scanner.clear().catch(() => {});
+            scannerRef.current = null;
+            onScanRef.current(code);
+            onCloseRef.current();
+          });
+      };
+
+      try {
+        let cameraIdOrConfig = { facingMode: { ideal: 'environment' } };
+        try {
+          const cameras = await Html5Qrcode.getCameras();
+          const rearId = pickRearCameraId(cameras);
+          if (rearId) cameraIdOrConfig = rearId;
+        } catch {
+          // use facingMode fallback
+        }
+
+        await scanner.start(cameraIdOrConfig, scanConfig, onDecoded, () => {});
+        if (!cancelled) setStatus('scanning');
+      } catch (err) {
+        console.error('Barcode scanner start failed', err);
+        if (!cancelled) setStatus('error');
+      }
     })();
 
     return () => {
@@ -76,7 +113,10 @@ export function BarcodeScanner({ open, onClose, onScan }) {
       const scanner = scannerRef.current;
       scannerRef.current = null;
       if (scanner) {
-        scanner.clear().catch(() => {});
+        scanner
+          .stop()
+          .catch(() => {})
+          .finally(() => scanner.clear().catch(() => {}));
       }
     };
   }, [open, regionId]);
@@ -85,7 +125,7 @@ export function BarcodeScanner({ open, onClose, onScan }) {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-slate-950/95"
+      className="fixed inset-0 z-[60] flex flex-col bg-slate-950"
       role="dialog"
       aria-modal="true"
       aria-labelledby="barcode-scanner-title"
@@ -107,14 +147,17 @@ export function BarcodeScanner({ open, onClose, onScan }) {
         </button>
       </header>
 
-      <p className="text-muted shrink-0 px-4 py-2 text-center text-xs text-slate-400">
-        Point your camera at the product barcode. EAN / UPC codes work best.
+      <p className="shrink-0 px-4 py-2 text-center text-xs text-slate-400">
+        {status === 'starting' && 'Starting rear camera…'}
+        {status === 'error' && 'Could not open camera. Check permissions and try again.'}
+        {status === 'scanning' && 'Align the barcode inside the frame'}
+        {status === 'idle' && 'Point at the product barcode'}
       </p>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div
           id={regionId}
-          className="barcode-scanner-host w-full max-w-md overflow-hidden rounded-2xl border border-slate-700 bg-black shadow-2xl [&_video]:rounded-xl"
+          className="barcode-scanner-view w-full max-w-lg [&_video]:!h-full [&_video]:!w-full [&_video]:object-cover"
         />
       </div>
     </div>

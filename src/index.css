@@ -69,19 +69,23 @@ body {
   }
 }
 
-/* html5-qrcode scanner inside BarcodeScanner modal */
-.barcode-scanner-host #html5-qrcode-button-camera-permission,
-.barcode-scanner-host #html5-qrcode-button-camera-start,
-.barcode-scanner-host #html5-qrcode-button-camera-stop {
-  @apply rounded-lg border-0 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white;
+/* html5-qrcode — rear-camera viewfinder only */
+.barcode-scanner-view {
+  min-height: min(70vh, 520px);
+  border-radius: 1rem;
+  overflow: hidden;
+  background: #000;
 }
 
-.barcode-scanner-host #html5-qrcode-anchor-scan-type-change {
-  @apply text-xs text-slate-400;
+.barcode-scanner-view > div {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  border: none !important;
 }
 
-.barcode-scanner-host img[alt='Info icon'] {
-  filter: invert(1);
+.barcode-scanner-view #qr-shaded-region {
+  border-color: rgb(16 185 129 / 0.85) !important;
 }
 
 .dark input[type='date'] {
