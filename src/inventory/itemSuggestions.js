@@ -1,8 +1,10 @@
 import {
+  BABY_CATEGORY,
   FOOD_CATEGORY,
   HOUSEHOLD_CATEGORY,
   ITEM_TYPE,
 } from './constants.js';
+import { isItemTypeEnabled } from './modules.js';
 
 /** @typedef {{ name: string, itemType: 'Food'|'Household', category: string }} ItemSuggestion */
 
@@ -68,13 +70,23 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Frozen Berries', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FREEZER },
   { name: 'Ice Cream', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FREEZER },
   { name: 'Frozen Pizza', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FREEZER },
+  // Baby Care
+  { name: 'Nappies Size 1', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
+  { name: 'Nappies Size 2', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
+  { name: 'Nappies Size 3', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
+  { name: 'Baby Wipes', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.WIPES },
+  { name: 'Water Wipes', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.WIPES },
+  { name: 'Baby Tissues', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.NURSERY },
+  { name: 'Nappy Rash Cream', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.NURSERY },
+  { name: 'Baby Powder', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.NURSERY },
 ];
 
-export function filterItemSuggestions(query, limit = 8) {
+export function filterItemSuggestions(query, enabledModules, limit = 8) {
   const needle = String(query || '').trim().toLowerCase();
   if (!needle) return [];
-  return ITEM_SUGGESTIONS.filter((entry) => entry.name.toLowerCase().includes(needle)).slice(
-    0,
-    limit,
-  );
+  return ITEM_SUGGESTIONS.filter(
+    (entry) =>
+      entry.name.toLowerCase().includes(needle) &&
+      isItemTypeEnabled(enabledModules, entry.itemType),
+  ).slice(0, limit);
 }

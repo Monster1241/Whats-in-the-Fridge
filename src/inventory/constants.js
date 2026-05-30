@@ -1,6 +1,7 @@
 export const ITEM_TYPE = {
   FOOD: 'Food',
   HOUSEHOLD: 'Household',
+  BABY: 'Baby',
 };
 
 export const FOOD_CATEGORY = {
@@ -25,6 +26,18 @@ export const HOUSEHOLD_CATEGORY_OPTIONS = [
   HOUSEHOLD_CATEGORY.CLEANING,
   HOUSEHOLD_CATEGORY.LAUNDRY,
   HOUSEHOLD_CATEGORY.BATHROOM,
+];
+
+export const BABY_CATEGORY = {
+  DIAPERS: 'Diapers',
+  WIPES: 'Wipes',
+  NURSERY: 'Baby Tissues',
+};
+
+export const BABY_CATEGORY_OPTIONS = [
+  BABY_CATEGORY.DIAPERS,
+  BABY_CATEGORY.WIPES,
+  BABY_CATEGORY.NURSERY,
 ];
 
 /** @deprecated use FOOD_CATEGORY — kept for gradual refactors */
@@ -78,9 +91,34 @@ export const HOUSEHOLD_CATEGORY_META = {
   },
 };
 
+export const BABY_CATEGORY_META = {
+  [BABY_CATEGORY.DIAPERS]: {
+    emoji: '🍼',
+    label: 'Diapers',
+    subtitle: 'Nappies & changing',
+    tabActive: 'bg-rose-500 text-white',
+    tabIdle: 'text-rose-700 hover:bg-rose-50',
+  },
+  [BABY_CATEGORY.WIPES]: {
+    emoji: '🧻',
+    label: 'Wipes',
+    subtitle: 'Baby wipes',
+    tabActive: 'bg-pink-600 text-white',
+    tabIdle: 'text-pink-700 hover:bg-pink-50',
+  },
+  [BABY_CATEGORY.NURSERY]: {
+    emoji: '👶',
+    label: 'Baby Tissues',
+    subtitle: 'Creams & soft goods',
+    tabActive: 'bg-fuchsia-600 text-white',
+    tabIdle: 'text-fuchsia-700 hover:bg-fuchsia-50',
+  },
+};
+
 export const INVENTORY_VIEW = {
   ...FOOD_CATEGORY,
   ...HOUSEHOLD_CATEGORY,
+  ...BABY_CATEGORY,
   SHOPPING: 'shopping',
 };
 
@@ -91,17 +129,19 @@ export const STATUS = {
 };
 
 export function getCategoriesForItemType(itemType) {
-  return itemType === ITEM_TYPE.HOUSEHOLD ? HOUSEHOLD_CATEGORY_OPTIONS : FOOD_CATEGORY_OPTIONS;
+  if (itemType === ITEM_TYPE.HOUSEHOLD) return HOUSEHOLD_CATEGORY_OPTIONS;
+  if (itemType === ITEM_TYPE.BABY) return BABY_CATEGORY_OPTIONS;
+  return FOOD_CATEGORY_OPTIONS;
 }
 
 export function getCategoryMeta(category, itemType = ITEM_TYPE.FOOD) {
-  if (itemType === ITEM_TYPE.HOUSEHOLD) {
-    return HOUSEHOLD_CATEGORY_META[category] ?? null;
-  }
+  if (itemType === ITEM_TYPE.BABY) return BABY_CATEGORY_META[category] ?? null;
+  if (itemType === ITEM_TYPE.HOUSEHOLD) return HOUSEHOLD_CATEGORY_META[category] ?? null;
   return FOOD_CATEGORY_META[category] ?? null;
 }
 
 export function inferItemTypeFromCategory(category) {
+  if (BABY_CATEGORY_OPTIONS.includes(category)) return ITEM_TYPE.BABY;
   if (HOUSEHOLD_CATEGORY_OPTIONS.includes(category)) return ITEM_TYPE.HOUSEHOLD;
   return ITEM_TYPE.FOOD;
 }
@@ -111,7 +151,7 @@ export function isShoppingView(view) {
 }
 
 export function defaultCategoryForItemType(itemType) {
-  return itemType === ITEM_TYPE.HOUSEHOLD
-    ? HOUSEHOLD_CATEGORY.CLEANING
-    : FOOD_CATEGORY.FRESH;
+  if (itemType === ITEM_TYPE.BABY) return BABY_CATEGORY.DIAPERS;
+  if (itemType === ITEM_TYPE.HOUSEHOLD) return HOUSEHOLD_CATEGORY.CLEANING;
+  return FOOD_CATEGORY.FRESH;
 }

@@ -287,7 +287,12 @@ function sanitizeInventoryItems(items) {
   return items.map((item) => ({
     id: item?.id,
     name: item?.name,
-    itemType: item?.itemType === 'Household' ? 'Household' : 'Food',
+    itemType:
+      item?.itemType === 'Household'
+        ? 'Household'
+        : item?.itemType === 'Baby'
+          ? 'Baby'
+          : 'Food',
     category: item?.category,
     status: item?.status,
     expiryDate: item?.expiryDate ?? null,
@@ -310,7 +315,7 @@ export async function handlePutState(req, res) {
   if (!requireHouseholdSession(auth, res)) return;
 
   const householdId = getScopedHouseholdId(auth);
-  const { items, settings, savedRecipeIds, onboarding } = req.body ?? {};
+  const { items, settings, enabledModules, savedRecipeIds, onboarding } = req.body ?? {};
   const partial = {};
 
   if (items !== undefined) {
@@ -321,6 +326,13 @@ export async function handlePutState(req, res) {
     partial.items = sanitizeInventoryItems(items);
   }
   if (settings !== undefined) partial.settings = settings;
+  if (enabledModules !== undefined) {
+    if (typeof enabledModules !== 'object' || enabledModules === null) {
+      res.status(400).json({ error: 'enabledModules must be an object' });
+      return;
+    }
+    partial.enabledModules = enabledModules;
+  }
   if (savedRecipeIds !== undefined) {
     if (!Array.isArray(savedRecipeIds)) {
       res.status(400).json({ error: 'savedRecipeIds must be an array' });

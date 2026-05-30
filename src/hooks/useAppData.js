@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchAppState, saveAppState } from '../api.js';
 import { migrateItems } from '../inventory/itemUtils.js';
+import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules } from '../inventory/modules.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'light',
@@ -15,6 +16,7 @@ export function useAppData(enabled) {
   const [saveError, setSaveError] = useState(null);
   const [items, setItems] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [enabledModules, setEnabledModules] = useState({ ...DEFAULT_ENABLED_MODULES });
   const [savedIds, setSavedIds] = useState([]);
   const [onboarding, setOnboarding] = useState({ dismissed: [] });
   const [householdCode, setHouseholdCode] = useState('');
@@ -28,6 +30,7 @@ export function useAppData(enabled) {
   const applyState = useCallback((state) => {
     setItems(migrateItems(state.items));
     setSettings({ ...DEFAULT_SETTINGS, ...state.settings });
+    setEnabledModules(normalizeEnabledModules(state.enabledModules));
     setSavedIds(Array.isArray(state.savedRecipeIds) ? state.savedRecipeIds : []);
     setOnboarding(
       state.onboarding?.dismissed ? state.onboarding : { dismissed: [] },
@@ -136,6 +139,24 @@ export function useAppData(enabled) {
     setSettings((prev) => (typeof updater === 'function' ? updater(prev) : updater));
   }, []);
 
+  const updateEnabledModules = useCallback(
+    async (patch) => {
+      const next = normalizeEnabledModules({ ...enabledModules, ...patch });
+      setEnabledModules(next);
+      setSaveError(null);
+      try {
+        const state = await saveAppState({ enabledModules: next });
+        skipSaveRef.current = true;
+        applyState(state);
+      } catch (err) {
+        setSaveError(err.message || 'Could not save dashboard settings.');
+        await reload();
+        throw err;
+      }
+    },
+    [enabledModules, applyState, reload],
+  );
+
   const isDismissed = useCallback(
     (id) => onboarding.dismissed.includes(id),
     [onboarding.dismissed],
@@ -174,6 +195,8 @@ export function useAppData(enabled) {
     updateItems,
     settings,
     updateSettings,
+    enabledModules,
+    updateEnabledModules,
     householdCode,
     savedRecipes: { savedIds, isSaved, toggleSave },
     onboarding: { isDismissed, dismiss: dismissOnboarding, resetOnboarding },

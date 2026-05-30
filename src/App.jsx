@@ -7,7 +7,6 @@ import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import {
   defaultCategoryForItemType,
-  FOOD_CATEGORY,
   getCategoriesForItemType,
   getCategoryMeta,
   INVENTORY_VIEW,
@@ -16,6 +15,21 @@ import {
   STATUS,
 } from './inventory/constants.js';
 import { getShoppingSuggestionForItem } from './inventory/getSuggestedStore.js';
+import {
+  countEnabledModules,
+  getDefaultModuleKey,
+  getEnabledItemTypes,
+  getEnabledModuleList,
+  getInitialCategoryForModule,
+  getItemTypeForModule,
+  getModuleGridClass,
+  isItemTypeEnabled,
+  isModuleEnabled,
+  MODULE_DEFINITIONS,
+  MODULE_KEYS,
+  normalizeEnabledModules,
+  resolveModuleKey,
+} from './inventory/modules.js';
 import { normalizeName } from './inventory/itemUtils.js';
 import {
   Bookmark,
@@ -552,16 +566,6 @@ function groupByCategory(items, category, itemType) {
   return { expiring, plentiful };
 }
 
-function groupShoppingList(items) {
-  return items
-    .filter((item) => item.status === STATUS.OUT)
-    .sort((a, b) => {
-      const cat = a.category.localeCompare(b.category);
-      if (cat !== 0) return cat;
-      return a.name.localeCompare(b.name);
-    });
-}
-
 function formatExpiryDate(iso) {
   if (!iso) return null;
   const d = new Date(`${iso}T12:00:00`);
@@ -592,8 +596,27 @@ function findInventoryMatch(ingredientName, items) {
   const needle = normalizeName(ingredientName);
   return items.find(
     (item) =>
-      item.itemType !== ITEM_TYPE.HOUSEHOLD && normalizeName(item.name) === needle,
+      item.itemType === ITEM_TYPE.FOOD && normalizeName(item.name) === needle,
   );
+}
+
+function itemTypeLabelEmoji(itemType) {
+  if (itemType === ITEM_TYPE.BABY) return '👶';
+  if (itemType === ITEM_TYPE.HOUSEHOLD) return '🕯️';
+  return '🍏';
+}
+
+function groupShoppingList(items, enabledModules) {
+  return items
+    .filter(
+      (item) =>
+        item.status === STATUS.OUT && isItemTypeEnabled(enabledModules, item.itemType),
+    )
+    .sort((a, b) => {
+      const cat = a.category.localeCompare(b.category);
+      if (cat !== 0) return cat;
+      return a.name.localeCompare(b.name);
+    });
 }
 
 function analyzeRecipe(recipe, items) {
@@ -626,9 +649,13 @@ function StatusBadge({ status, onOpenPicker }) {
   );
 }
 
-function ItemEditorSheet({ item, onSave, onClose }) {
+function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
   const [needToBuy, setNeedToBuy] = useState(item.status === STATUS.OUT);
-  const [itemType, setItemType] = useState(item.itemType ?? ITEM_TYPE.FOOD);
+  const enabledTypes = getEnabledItemTypes(enabledModules);
+  const initialType = enabledTypes.includes(item.itemType)
+    ? item.itemType
+    : enabledTypes[0] ?? ITEM_TYPE.FOOD;
+  const [itemType, setItemType] = useState(initialType);
   const [category, setCategory] = useState(item.category);
   const [hasExpiry, setHasExpiry] = useState(Boolean(item.expiryDate));
   const [expiryDate, setExpiryDate] = useState(item.expiryDate ?? '');
@@ -686,19 +713,21 @@ function ItemEditorSheet({ item, onSave, onClose }) {
         <p className="text-muted mb-2 text-xs font-semibold uppercase tracking-wide">
           Item type
         </p>
-        <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900">
-          {[ITEM_TYPE.FOOD, ITEM_TYPE.HOUSEHOLD].map((type) => (
+        <div
+          className={`mb-3 grid gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900 ${getModuleGridClass(getEnabledModuleList(enabledModules).length)}`}
+        >
+          {getEnabledModuleList(enabledModules).map((mod) => (
             <button
-              key={type}
+              key={mod.key}
               type="button"
-              onClick={() => handleItemTypeChange(type)}
-              className={`rounded-lg py-2 text-xs font-bold transition active:scale-95 ${
-                itemType === type
+              onClick={() => handleItemTypeChange(mod.itemType)}
+              className={`rounded-lg px-1 py-2 text-xs font-bold transition active:scale-95 ${
+                itemType === mod.itemType
                   ? 'bg-emerald-600 text-white'
                   : 'text-slate-600 hover:bg-slate-200/80 dark:text-slate-400 dark:hover:bg-slate-700'
               }`}
             >
-              {type === ITEM_TYPE.FOOD ? '🍽️ Food' : '🏠 Household'}
+              {mod.emoji} {mod.label.split(' ')[0]}
             </button>
           ))}
         </div>
@@ -801,7 +830,7 @@ function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt }) {
             <p className="text-heading text-sm font-semibold">{item.name}</p>
             {catMeta && (
               <p className="mt-0.5 text-xs text-slate-500">
-                {item.itemType === ITEM_TYPE.HOUSEHOLD ? '🏠' : '🍽️'} {catMeta.emoji}{' '}
+                {itemTypeLabelEmoji(item.itemType)} {catMeta.emoji}{' '}
                 {catMeta.label}
               </p>
             )}
@@ -978,38 +1007,44 @@ function ShareFallbackModal({ message, onClose }) {
 }
 
 function StorageLocationTabs({
+  enabledModules,
   inventoryScope,
   onScopeChange,
   activeView,
   onChange,
   shoppingCount,
 }) {
-  const categoryOptions = getCategoriesForItemType(inventoryScope);
+  const modules = getEnabledModuleList(enabledModules);
+  const scopeItemType = getItemTypeForModule(inventoryScope);
+  const categoryOptions = getCategoriesForItemType(scopeItemType);
 
   return (
     <div className="mb-5 space-y-2">
-      <div className="grid grid-cols-2 gap-2">
-        {[ITEM_TYPE.FOOD, ITEM_TYPE.HOUSEHOLD].map((type) => {
-          const active = inventoryScope === type;
+      <div className={`grid gap-2 ${getModuleGridClass(modules.length)}`}>
+        {modules.map((mod) => {
+          const active = inventoryScope === mod.key;
           return (
             <button
-              key={type}
+              key={mod.key}
               type="button"
-              onClick={() => onScopeChange(type)}
-              className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition active:scale-[0.98] ${
+              onClick={() => onScopeChange(mod.key)}
+              className={`rounded-xl border px-2 py-2.5 text-center text-sm font-bold transition active:scale-[0.98] ${
                 active
                   ? 'border-emerald-300 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500 dark:border-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-200 dark:ring-emerald-500'
                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400'
               }`}
             >
-              {type === ITEM_TYPE.FOOD ? '🍽️ Food' : '🏠 Household'}
+              <span className="block text-base" aria-hidden>
+                {mod.emoji}
+              </span>
+              <span className="text-heading mt-0.5 block text-[11px] leading-tight">{mod.label}</span>
             </button>
           );
         })}
       </div>
       <div className="grid grid-cols-3 gap-2">
         {categoryOptions.map((cat) => {
-          const meta = getCategoryMeta(cat, inventoryScope);
+          const meta = getCategoryMeta(cat, scopeItemType);
           const active = activeView === cat;
           return (
             <button
@@ -1054,47 +1089,67 @@ function StorageLocationTabs({
   );
 }
 
-function InventoryView({ items, updateItems, onboarding }) {
+function InventoryView({ items, updateItems, onboarding, enabledModules }) {
   const { isDismissed, dismiss } = onboarding;
-  const [inventoryScope, setInventoryScope] = useState(ITEM_TYPE.FOOD);
+  const defaultModuleKey = getDefaultModuleKey(enabledModules);
+  const [inventoryScope, setInventoryScope] = useState(defaultModuleKey);
   const [draft, setDraft] = useState('');
-  const [addItemType, setAddItemType] = useState(ITEM_TYPE.FOOD);
-  const [addCategory, setAddCategory] = useState(FOOD_CATEGORY.FRESH);
+  const [addItemType, setAddItemType] = useState(getItemTypeForModule(defaultModuleKey));
+  const [addCategory, setAddCategory] = useState(getInitialCategoryForModule(defaultModuleKey));
   const [addExpiry, setAddExpiry] = useState(false);
   const [addExpiryDate, setAddExpiryDate] = useState('');
   const [shopDraft, setShopDraft] = useState('');
-  const [shopItemType, setShopItemType] = useState(ITEM_TYPE.FOOD);
-  const [shopCategory, setShopCategory] = useState(FOOD_CATEGORY.FRESH);
-  const [activeView, setActiveView] = useState(FOOD_CATEGORY.FRESH);
+  const [shopItemType, setShopItemType] = useState(getItemTypeForModule(defaultModuleKey));
+  const [shopCategory, setShopCategory] = useState(getInitialCategoryForModule(defaultModuleKey));
+  const [activeView, setActiveView] = useState(getInitialCategoryForModule(defaultModuleKey));
   const [editingItem, setEditingItem] = useState(null);
   const [shareMessage, setShareMessage] = useState(null);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
 
-  const shoppingList = useMemo(() => groupShoppingList(items), [items]);
+  const scopeItemType = getItemTypeForModule(inventoryScope);
+
+  const shoppingList = useMemo(
+    () => groupShoppingList(items, enabledModules),
+    [items, enabledModules],
+  );
 
   const categoryGrouped = useMemo(() => {
     if (isShoppingView(activeView)) return null;
-    return groupByCategory(items, activeView, inventoryScope);
-  }, [items, activeView, inventoryScope]);
+    return groupByCategory(items, activeView, scopeItemType);
+  }, [items, activeView, scopeItemType]);
 
-  const handleScopeChange = (nextScope) => {
-    setInventoryScope(nextScope);
-    if (!isShoppingView(activeView)) {
-      const options = getCategoriesForItemType(nextScope);
-      if (!options.includes(activeView)) {
-        setActiveView(defaultCategoryForItemType(nextScope));
+  useEffect(() => {
+    const resolved = resolveModuleKey(enabledModules, inventoryScope);
+    if (resolved !== inventoryScope) {
+      setInventoryScope(resolved);
+      const type = getItemTypeForModule(resolved);
+      setAddItemType(type);
+      setAddCategory(defaultCategoryForItemType(type));
+      if (!isShoppingView(activeView)) {
+        setActiveView(defaultCategoryForItemType(type));
       }
     }
-    setAddItemType(nextScope);
-    setAddCategory(defaultCategoryForItemType(nextScope));
+  }, [enabledModules, inventoryScope, activeView]);
+
+  const handleScopeChange = (nextModuleKey) => {
+    setInventoryScope(nextModuleKey);
+    const nextType = getItemTypeForModule(nextModuleKey);
+    if (!isShoppingView(activeView)) {
+      const options = getCategoriesForItemType(nextType);
+      if (!options.includes(activeView)) {
+        setActiveView(defaultCategoryForItemType(nextType));
+      }
+    }
+    setAddItemType(nextType);
+    setAddCategory(defaultCategoryForItemType(nextType));
   };
 
   const applySuggestion = (entry, target) => {
     if (target === 'add') {
       setAddItemType(entry.itemType);
       setAddCategory(entry.category);
-      if (entry.itemType === ITEM_TYPE.HOUSEHOLD) {
+      if (entry.itemType !== ITEM_TYPE.FOOD) {
         setAddExpiry(false);
         setAddExpiryDate('');
       }
@@ -1106,8 +1161,8 @@ function InventoryView({ items, updateItems, onboarding }) {
 
   const resetAddForm = () => {
     setDraft('');
-    setAddItemType(inventoryScope);
-    setAddCategory(defaultCategoryForItemType(inventoryScope));
+    setAddItemType(scopeItemType);
+    setAddCategory(defaultCategoryForItemType(scopeItemType));
     setAddExpiry(false);
     setAddExpiryDate('');
   };
@@ -1136,7 +1191,8 @@ function InventoryView({ items, updateItems, onboarding }) {
     resetAddForm();
     if (!isShoppingView(activeView)) {
       setActiveView(addCategory);
-      setInventoryScope(addItemType);
+      const mod = MODULE_DEFINITIONS.find((m) => m.itemType === addItemType);
+      if (mod) setInventoryScope(mod.key);
     }
   };
 
@@ -1246,6 +1302,7 @@ function InventoryView({ items, updateItems, onboarding }) {
       )}
 
       <StorageLocationTabs
+        enabledModules={enabledModules}
         inventoryScope={inventoryScope}
         onScopeChange={handleScopeChange}
         activeView={activeView}
@@ -1277,6 +1334,7 @@ function InventoryView({ items, updateItems, onboarding }) {
                 value={shopDraft}
                 onChange={setShopDraft}
                 onPick={(entry) => applySuggestion(entry, 'shop')}
+                enabledModules={enabledModules}
                 placeholder='What do you need? (e.g. "Milk")'
                 inputClassName={`input-field min-w-0 flex-1 ${SHOPPING_ACCENT.focus}`}
                 id="shop-item-input"
@@ -1350,6 +1408,7 @@ function InventoryView({ items, updateItems, onboarding }) {
                   value={draft}
                   onChange={setDraft}
                   onPick={(entry) => applySuggestion(entry, 'add')}
+                  enabledModules={enabledModules}
                   placeholder='Item name (e.g. "Chorizo")'
                   id="quick-add-input"
                 />
@@ -1384,22 +1443,28 @@ function InventoryView({ items, updateItems, onboarding }) {
                     <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
                       Item type
                     </p>
-                    <div className="grid grid-cols-2 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900">
-                      {[ITEM_TYPE.FOOD, ITEM_TYPE.HOUSEHOLD].map((type) => (
+                    <div
+                      className={`grid gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900 ${getModuleGridClass(getEnabledModuleList(enabledModules).length)}`}
+                    >
+                      {getEnabledModuleList(enabledModules).map((mod) => (
                         <button
-                          key={type}
+                          key={mod.key}
                           type="button"
                           onClick={() => {
-                            setAddItemType(type);
-                            setAddCategory(defaultCategoryForItemType(type));
+                            setAddItemType(mod.itemType);
+                            setAddCategory(defaultCategoryForItemType(mod.itemType));
+                            if (mod.itemType !== ITEM_TYPE.FOOD) {
+                              setAddExpiry(false);
+                              setAddExpiryDate('');
+                            }
                           }}
                           className={`rounded-lg py-2 text-xs font-bold ${
-                            addItemType === type
+                            addItemType === mod.itemType
                               ? 'bg-emerald-600 text-white'
                               : 'text-slate-600 dark:text-slate-400'
                           }`}
                         >
-                          {type === ITEM_TYPE.FOOD ? '🍽️ Food' : '🏠 Household'}
+                          {mod.emoji} {mod.label.split('&')[0].trim()}
                         </button>
                       ))}
                     </div>
@@ -1429,11 +1494,11 @@ function InventoryView({ items, updateItems, onboarding }) {
             </form>
 
             <p className="text-muted mb-4 text-sm">
-              {getCategoryMeta(activeView, inventoryScope)?.emoji}{' '}
+              {getCategoryMeta(activeView, scopeItemType)?.emoji}{' '}
               <span className="font-semibold text-slate-800 dark:text-slate-200">
-                {getCategoryMeta(activeView, inventoryScope)?.label}
+                {getCategoryMeta(activeView, scopeItemType)?.label}
               </span>{' '}
-              — {getCategoryMeta(activeView, inventoryScope)?.subtitle}
+              — {getCategoryMeta(activeView, scopeItemType)?.subtitle}
             </p>
 
             <InventorySection
@@ -1480,6 +1545,7 @@ function InventoryView({ items, updateItems, onboarding }) {
       {editingItem && (
         <ItemEditorSheet
           item={editingItem}
+          enabledModules={enabledModules}
           onSave={(updates) => saveItemEdits(editingItem.id, updates)}
           onClose={() => setEditingItem(null)}
         />
@@ -1719,6 +1785,8 @@ function SettingsView({
   updateItems,
   onboarding,
   householdCode,
+  enabledModules,
+  onUpdateEnabledModules,
   accountEmail,
   onLogout,
   onDeleteAccount,
@@ -1744,6 +1812,8 @@ function SettingsView({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [leaveBusy, setLeaveBusy] = useState(false);
   const [memberActionError, setMemberActionError] = useState('');
+  const [modulesBusy, setModulesBusy] = useState(false);
+  const [modulesError, setModulesError] = useState('');
 
   const loadMembers = useCallback(async () => {
     setMembersLoading(true);
@@ -1779,6 +1849,25 @@ function SettingsView({
 
   const setTheme = (theme) => {
     updateSettings((prev) => ({ ...prev, theme }));
+  };
+
+  const handleModuleToggle = async (moduleKey, checked) => {
+    setModulesError('');
+    const current = normalizeEnabledModules(enabledModules);
+    const next = { ...current, [moduleKey]: checked };
+    const enabledCount = [next.food, next.homeEssentials, next.babyCare].filter(Boolean).length;
+    if (enabledCount === 0) {
+      setModulesError('Keep at least one module enabled on your dashboard.');
+      return;
+    }
+    setModulesBusy(true);
+    try {
+      await onUpdateEnabledModules({ [moduleKey]: checked });
+    } catch (err) {
+      setModulesError(err.message || 'Could not update modules.');
+    } finally {
+      setModulesBusy(false);
+    }
   };
 
   const inviteMessage = householdCode
@@ -1903,6 +1992,60 @@ function SettingsView({
             Dark
           </button>
         </div>
+      </section>
+
+      <section className="surface-card mb-5 p-4">
+        <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">
+          Customize Dashboard
+        </h2>
+        <p className="text-muted mb-4 text-sm">
+          Choose what your household tracks. Changes sync for everyone in your household when the
+          app refreshes.
+        </p>
+        <div className="space-y-2">
+          {MODULE_DEFINITIONS.map((mod) => {
+            const checked = normalizeEnabledModules(enabledModules)[mod.key];
+            const onlyOneLeft = checked && countEnabledModules(enabledModules) === 1;
+            return (
+              <label
+                key={mod.key}
+                className={`surface-inset flex cursor-pointer items-start gap-3 rounded-xl p-3 transition ${
+                  modulesBusy ? 'pointer-events-none opacity-60' : ''
+                } ${checked ? 'ring-1 ring-emerald-400/60 dark:ring-emerald-600/50' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={modulesBusy || onlyOneLeft}
+                  onChange={(e) => handleModuleToggle(mod.key, e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-heading text-sm font-semibold">
+                    <span className="mr-1.5" aria-hidden>
+                      {mod.emoji}
+                    </span>
+                    {mod.label}
+                  </p>
+                  <p className="text-muted mt-0.5 text-xs leading-relaxed">{mod.description}</p>
+                  {onlyOneLeft && (
+                    <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                      At least one module must stay on
+                    </p>
+                  )}
+                </div>
+              </label>
+            );
+          })}
+        </div>
+        {modulesBusy && (
+          <p className="text-muted mt-3 text-xs font-medium">Saving for your household…</p>
+        )}
+        {modulesError && (
+          <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+            {modulesError}
+          </p>
+        )}
       </section>
 
       <section className="surface-card mb-5 p-4">
@@ -2321,12 +2464,6 @@ function SettingsView({
   );
 }
 
-const TABS = [
-  { id: 'inventory', label: 'Fridge', icon: Refrigerator },
-  { id: 'recipes', label: 'Recipes', icon: ChefHat },
-  { id: 'settings', label: 'Settings', icon: Settings },
-];
-
 function LoadingScreen({ message }) {
   return (
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col items-center justify-center px-6">
@@ -2392,10 +2529,27 @@ export default function App() {
     updateItems,
     settings,
     updateSettings,
+    enabledModules,
+    updateEnabledModules,
     householdCode,
     savedRecipes,
     onboarding,
   } = useAppData(appReady);
+
+  const navTabs = useMemo(() => {
+    const tabs = [{ id: 'inventory', label: 'Home', icon: Refrigerator }];
+    if (isModuleEnabled(enabledModules, MODULE_KEYS.FOOD)) {
+      tabs.push({ id: 'recipes', label: 'Recipes', icon: ChefHat });
+    }
+    tabs.push({ id: 'settings', label: 'Settings', icon: Settings });
+    return tabs;
+  }, [enabledModules]);
+
+  useEffect(() => {
+    if (activeTab === 'recipes' && !isModuleEnabled(enabledModules, MODULE_KEYS.FOOD)) {
+      setActiveTab('inventory');
+    }
+  }, [activeTab, enabledModules]);
 
   if (auth.booting) {
     return <LoadingScreen message="Checking session…" />;
@@ -2455,7 +2609,12 @@ export default function App() {
           </div>
         )}
         {activeTab === 'inventory' && (
-          <InventoryView items={items} updateItems={updateItems} onboarding={onboarding} />
+          <InventoryView
+            items={items}
+            updateItems={updateItems}
+            onboarding={onboarding}
+            enabledModules={enabledModules}
+          />
         )}
         {activeTab === 'recipes' && (
           <RecipesView items={items} updateItems={updateItems} savedRecipes={savedRecipes} />
@@ -2467,6 +2626,8 @@ export default function App() {
             updateItems={updateItems}
             onboarding={onboarding}
             householdCode={householdCode}
+            enabledModules={enabledModules}
+            onUpdateEnabledModules={updateEnabledModules}
             accountEmail={auth.user?.email}
             onLogout={auth.logout}
             onDeleteAccount={auth.deleteAccount}
@@ -2480,7 +2641,7 @@ export default function App() {
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="mx-auto flex max-w-lg">
-          {TABS.map(({ id, label, icon: Icon }) => {
+          {navTabs.map(({ id, label, icon: Icon }) => {
             const active = activeTab === id;
             return (
               <button

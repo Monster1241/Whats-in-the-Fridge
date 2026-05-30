@@ -1,4 +1,5 @@
 import { MongoClient, ObjectId } from 'mongodb';
+import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules, validateEnabledModules } from './enabledModules.js';
 
 const DB_NAME = 'whats-in-the-fridge';
 
@@ -368,6 +369,7 @@ export async function createHousehold(ownerUserId) {
     owner_id: new ObjectId(ownerUserId),
     created_at: new Date(),
     settings: { ...DEFAULT_SETTINGS },
+    enabledModules: { ...DEFAULT_ENABLED_MODULES },
     savedRecipeIds: [],
     onboarding: { dismissed: [] },
   };
@@ -401,6 +403,7 @@ export async function getHouseholdMeta(householdId) {
     id: doc._id.toString(),
     invite_code: doc.invite_code,
     settings: { ...DEFAULT_SETTINGS, ...doc.settings },
+    enabledModules: normalizeEnabledModules(doc.enabledModules),
     savedRecipeIds: doc.savedRecipeIds ?? [],
     onboarding: doc.onboarding ?? { dismissed: [] },
   };
@@ -428,6 +431,7 @@ export async function getHouseholdAppState(householdId) {
   return {
     items,
     settings: meta.settings,
+    enabledModules: meta.enabledModules,
     savedRecipeIds: meta.savedRecipeIds,
     onboarding: meta.onboarding,
     householdCode: meta.invite_code,
@@ -448,6 +452,9 @@ export async function updateHouseholdAppState(householdId, partial) {
 
   const householdUpdate = { updated_at: new Date() };
   if (partial.settings !== undefined) householdUpdate.settings = partial.settings;
+  if (partial.enabledModules !== undefined) {
+    householdUpdate.enabledModules = validateEnabledModules(partial.enabledModules);
+  }
   if (partial.savedRecipeIds !== undefined) householdUpdate.savedRecipeIds = partial.savedRecipeIds;
   if (partial.onboarding !== undefined) householdUpdate.onboarding = partial.onboarding;
 
@@ -471,7 +478,12 @@ export async function replaceInventoryForHousehold(householdId, items) {
   const docs = items.map((item) => ({
     id: item.id,
     name: item.name,
-    itemType: item.itemType === 'Household' ? 'Household' : 'Food',
+    itemType:
+      item.itemType === 'Household'
+        ? 'Household'
+        : item.itemType === 'Baby'
+          ? 'Baby'
+          : 'Food',
     category: item.category,
     status: item.status,
     expiryDate: item.expiryDate ?? null,

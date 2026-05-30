@@ -1,4 +1,5 @@
 import {
+  BABY_CATEGORY,
   FOOD_CATEGORY,
   HOUSEHOLD_CATEGORY,
   ITEM_TYPE,
@@ -213,6 +214,24 @@ const KEYWORD_RULES = [
     detail:
       'ALDI frozen section — strong value. Costco or Woolworths for larger packs and premium ingredients.',
   },
+  {
+    keywords: ['napp', 'diaper', 'diapers', 'huggies', 'pampers'],
+    store: 'Woolworths/Coles',
+    detail:
+      'Nappies: compare unit price on Woolworths/Coles multibuy. ALDI nappies are budget-friendly if your store stocks your size.',
+  },
+  {
+    keywords: ['baby wipe', 'water wipe', 'wipes'],
+    store: 'ALDI',
+    detail:
+      'Baby wipes — ALDI and home-brand packs are great value. Woolworths/Coles for sensitive-skin or fragrance-free ranges.',
+  },
+  {
+    keywords: ['baby tissue', 'nappy rash', 'baby powder', 'infant'],
+    store: 'Woolworths/Coles',
+    detail:
+      'Baby toiletries and creams — better range at Woolworths or Coles pharmacy aisle. Chemist Warehouse for specialist items.',
+  },
 ];
 
 /** @type {Record<string, ShoppingSuggestion>} */
@@ -231,6 +250,24 @@ const FOOD_CATEGORY_DEFAULTS = {
     store: 'ALDI',
     detail:
       'Frozen: ALDI or Costco for bulk value. Woolworths for wider brand choice on pizza, berries, and meals.',
+  },
+};
+
+/** @type {Record<string, ShoppingSuggestion>} */
+const BABY_CATEGORY_DEFAULTS = {
+  [BABY_CATEGORY.DIAPERS]: {
+    store: 'Woolworths/Coles',
+    detail:
+      'Diapers: check multibuy at Woolworths or Coles. ALDI nappies work well for many families if your size is in stock.',
+  },
+  [BABY_CATEGORY.WIPES]: {
+    store: 'ALDI',
+    detail: 'Baby wipes — bulk packs at ALDI; major supermarkets for premium or sensitive-skin brands.',
+  },
+  [BABY_CATEGORY.NURSERY]: {
+    store: 'Woolworths/Coles',
+    detail:
+      'Baby tissues, creams, and nursery goods — pharmacy aisle at Woolworths/Coles or Chemist Warehouse.',
   },
 };
 
@@ -286,6 +323,17 @@ export function getShoppingSuggestion(itemName, category, itemType = ITEM_TYPE.F
     if (rule.keywords.some((kw) => name.includes(kw))) {
       return { store: rule.store, detail: rule.detail };
     }
+  }
+
+  if (itemType === ITEM_TYPE.BABY) {
+    if (BABY_CATEGORY_DEFAULTS[category]) {
+      return BABY_CATEGORY_DEFAULTS[category];
+    }
+    return {
+      store: matchesWoolworthsColes(name) ? 'Woolworths/Coles' : 'ALDI',
+      detail:
+        'Baby care: ALDI for wipes and basics; Woolworths or Coles for diapers, creams, and specialty sizes.',
+    };
   }
 
   if (itemType === ITEM_TYPE.HOUSEHOLD) {

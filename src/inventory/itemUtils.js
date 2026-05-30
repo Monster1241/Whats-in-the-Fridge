@@ -16,9 +16,10 @@ export function normalizeName(value) {
 }
 
 export function migrateItem(item) {
-  let itemType =
-    item.itemType === ITEM_TYPE.HOUSEHOLD ? ITEM_TYPE.HOUSEHOLD : ITEM_TYPE.FOOD;
-  if (!item.itemType) {
+  let itemType = ITEM_TYPE.FOOD;
+  if (item.itemType === ITEM_TYPE.HOUSEHOLD) itemType = ITEM_TYPE.HOUSEHOLD;
+  else if (item.itemType === ITEM_TYPE.BABY) itemType = ITEM_TYPE.BABY;
+  else if (!item.itemType) {
     itemType = inferItemTypeFromCategory(item.category);
   }
   const categoryOptions = getCategoriesForItemType(itemType);

@@ -6,6 +6,7 @@ export function ItemTypeahead({
   value,
   onChange,
   onPick,
+  enabledModules,
   placeholder,
   inputClassName = 'input-field min-w-0 flex-1',
   id: idProp,
@@ -17,7 +18,10 @@ export function ItemTypeahead({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
 
-  const matches = useMemo(() => filterItemSuggestions(value), [value]);
+  const matches = useMemo(
+    () => filterItemSuggestions(value, enabledModules),
+    [value, enabledModules],
+  );
 
   useEffect(() => {
     setHighlight(0);
