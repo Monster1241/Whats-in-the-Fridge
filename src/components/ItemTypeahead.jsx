@@ -2,12 +2,19 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { filterItemSuggestions } from '../inventory/itemSuggestions.js';
 import { getCategoryMeta } from '../inventory/constants.js';
+import {
+  BARCODE_LOOKUP_LOADING_TEXT,
+  BARCODE_UNKNOWN_PLACEHOLDER,
+  lookupBarcode,
+  vibrateBarcodeUnknown,
+} from '../inventory/barcodeLookup.js';
 import { BarcodeScanner } from './BarcodeScanner.jsx';
 
 export function ItemTypeahead({
   value,
   onChange,
   onPick,
+  onBarcodeResolved,
   enabledModules,
   placeholder,
   inputClassName = 'input-field min-w-0 flex-1',
@@ -18,14 +25,20 @@ export function ItemTypeahead({
   const inputId = idProp || `item-typeahead-${autoId}`;
   const listId = `${inputId}-listbox`;
   const rootRef = useRef(null);
+  const lookupAbortRef = useRef(0);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [barcodeLookingUp, setBarcodeLookingUp] = useState(false);
+  const [barcodeUnknown, setBarcodeUnknown] = useState(false);
 
   const matches = useMemo(
     () => filterItemSuggestions(value, enabledModules),
     [value, enabledModules],
   );
+
+  const inputPlaceholder = barcodeUnknown ? BARCODE_UNKNOWN_PLACEHOLDER : placeholder;
+  const inputValue = barcodeLookingUp ? BARCODE_LOOKUP_LOADING_TEXT : value;
 
   useEffect(() => {
     setHighlight(0);
@@ -42,17 +55,49 @@ export function ItemTypeahead({
   }, []);
 
   const pick = (entry) => {
+    setBarcodeUnknown(false);
     onChange(entry.name);
     onPick?.(entry);
     setOpen(false);
   };
 
-  const handleBarcodeScan = (code) => {
-    onChange(code);
-    setOpen(true);
+  const handleBarcodeScan = async (code) => {
+    const lookupId = lookupAbortRef.current + 1;
+    lookupAbortRef.current = lookupId;
+    setBarcodeUnknown(false);
+    setBarcodeLookingUp(true);
+    onChange(BARCODE_LOOKUP_LOADING_TEXT);
+    setOpen(false);
+
+    try {
+      const result = await lookupBarcode(code);
+      if (lookupAbortRef.current !== lookupId) return;
+
+      if (result) {
+        onChange(result.name);
+        onBarcodeResolved?.(result);
+        setOpen(true);
+      } else {
+        onChange('');
+        setBarcodeUnknown(true);
+        vibrateBarcodeUnknown();
+        onBarcodeResolved?.(null);
+      }
+    } catch {
+      if (lookupAbortRef.current !== lookupId) return;
+      onChange('');
+      setBarcodeUnknown(true);
+      vibrateBarcodeUnknown();
+      onBarcodeResolved?.(null);
+    } finally {
+      if (lookupAbortRef.current === lookupId) {
+        setBarcodeLookingUp(false);
+      }
+    }
   };
 
-  const showMenu = open && value.trim().length > 0 && matches.length > 0;
+  const showMenu =
+    !barcodeLookingUp && open && value.trim().length > 0 && matches.length > 0;
 
   return (
     <>
@@ -61,13 +106,18 @@ export function ItemTypeahead({
           <input
             id={inputId}
             type="text"
-            inputMode={enableBarcodeScan ? 'numeric' : 'text'}
-            value={value}
+            inputMode="text"
+            value={inputValue}
+            readOnly={barcodeLookingUp}
             onChange={(e) => {
+              if (barcodeLookingUp) return;
+              setBarcodeUnknown(false);
               onChange(e.target.value);
               setOpen(true);
             }}
-            onFocus={() => setOpen(true)}
+            onFocus={() => {
+              if (!barcodeLookingUp) setOpen(true);
+            }}
             onKeyDown={(e) => {
               if (!showMenu) return;
               if (e.key === 'ArrowDown') {
@@ -83,12 +133,13 @@ export function ItemTypeahead({
                 setOpen(false);
               }
             }}
-            placeholder={placeholder}
-            className={inputClassName}
+            placeholder={inputPlaceholder}
+            className={`${inputClassName}${barcodeLookingUp ? ' text-slate-400 italic' : ''}`}
             role="combobox"
             aria-expanded={showMenu}
             aria-controls={showMenu ? listId : undefined}
             aria-autocomplete="list"
+            aria-busy={barcodeLookingUp}
             autoComplete="off"
           />
 
@@ -131,8 +182,9 @@ export function ItemTypeahead({
         {enableBarcodeScan && (
           <button
             type="button"
+            disabled={barcodeLookingUp}
             onClick={() => setScannerOpen(true)}
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-emerald-700 shadow-sm transition active:scale-95 hover:border-emerald-300 hover:bg-emerald-50 dark:border-slate-600 dark:bg-slate-900 dark:text-emerald-400 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/40"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-emerald-700 shadow-sm transition active:scale-95 hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-emerald-400 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/40"
             aria-label="Scan barcode"
             title="Scan barcode"
           >

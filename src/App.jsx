@@ -31,6 +31,7 @@ import {
   normalizeEnabledModules,
   resolveModuleKey,
 } from './inventory/modules.js';
+import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
 import { normalizeName } from './inventory/itemUtils.js';
 import {
   Bookmark,
@@ -1161,6 +1162,27 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
     }
   };
 
+  const handleBarcodeResolved = (result) => {
+    if (!result) return;
+    applySuggestion(
+      {
+        name: result.name,
+        itemType: result.itemType,
+        category: result.category,
+      },
+      'add',
+    );
+    const mod = getEnabledModuleList(enabledModules).find(
+      (m) => m.itemType === result.itemType,
+    );
+    if (mod) {
+      setInventoryScope(mod.key);
+      if (!isShoppingView(activeView)) {
+        setActiveView(result.category);
+      }
+    }
+  };
+
   const resetAddForm = () => {
     setDraft('');
     setAddItemType(scopeItemType);
@@ -1172,7 +1194,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
   const addItem = (e) => {
     e.preventDefault();
     const name = draft.trim();
-    if (!name) return;
+    if (!name || name === BARCODE_LOOKUP_LOADING_TEXT) return;
     const existing = items.find((i) => normalizeName(i.name) === normalizeName(name));
     if (existing) {
       resetAddForm();
@@ -1417,9 +1439,10 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
                   value={draft}
                   onChange={setDraft}
                   onPick={(entry) => applySuggestion(entry, 'add')}
+                  onBarcodeResolved={handleBarcodeResolved}
                   enabledModules={enabledModules}
                   enableBarcodeScan
-                  placeholder='Item name or scan barcode'
+                  placeholder="Item name or scan barcode"
                   id="quick-add-input"
                 />
                 <button

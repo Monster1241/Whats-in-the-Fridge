@@ -62,7 +62,6 @@ export function BarcodeScanner({ open, onClose, onScan }) {
           if (handledRef.current || cancelled) return;
           handledRef.current = true;
           const code = normalizeBarcodeScan(decodedText);
-          console.log('Scanned barcode:', code);
           onScanRef.current(code);
           onCloseRef.current();
         },
