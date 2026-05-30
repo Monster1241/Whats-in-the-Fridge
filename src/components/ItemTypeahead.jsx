@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Camera } from 'lucide-react';
 import { filterItemSuggestions } from '../inventory/itemSuggestions.js';
 import { getCategoryMeta } from '../inventory/constants.js';
+import { BarcodeScanner } from './BarcodeScanner.jsx';
 
 export function ItemTypeahead({
   value,
@@ -10,6 +12,7 @@ export function ItemTypeahead({
   placeholder,
   inputClassName = 'input-field min-w-0 flex-1',
   id: idProp,
+  enableBarcodeScan = false,
 }) {
   const autoId = useId();
   const inputId = idProp || `item-typeahead-${autoId}`;
@@ -17,6 +20,7 @@ export function ItemTypeahead({
   const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   const matches = useMemo(
     () => filterItemSuggestions(value, enabledModules),
@@ -43,76 +47,107 @@ export function ItemTypeahead({
     setOpen(false);
   };
 
+  const handleBarcodeScan = (code) => {
+    onChange(code);
+    setOpen(true);
+  };
+
   const showMenu = open && value.trim().length > 0 && matches.length > 0;
 
   return (
-    <div ref={rootRef} className="relative min-w-0 flex-1">
-      <input
-        id={inputId}
-        type="text"
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-        onKeyDown={(e) => {
-          if (!showMenu) return;
-          if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            setHighlight((i) => (i + 1) % matches.length);
-          } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            setHighlight((i) => (i - 1 + matches.length) % matches.length);
-          } else if (e.key === 'Enter' && matches[highlight]) {
-            e.preventDefault();
-            pick(matches[highlight]);
-          } else if (e.key === 'Escape') {
-            setOpen(false);
-          }
-        }}
-        placeholder={placeholder}
-        className={inputClassName}
-        role="combobox"
-        aria-expanded={showMenu}
-        aria-controls={showMenu ? listId : undefined}
-        aria-autocomplete="list"
-        autoComplete="off"
-      />
+    <>
+      <div className="relative flex min-w-0 flex-1 items-stretch gap-1.5">
+        <div ref={rootRef} className="relative min-w-0 flex-1">
+          <input
+            id={inputId}
+            type="text"
+            inputMode={enableBarcodeScan ? 'numeric' : 'text'}
+            value={value}
+            onChange={(e) => {
+              onChange(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => {
+              if (!showMenu) return;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlight((i) => (i + 1) % matches.length);
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlight((i) => (i - 1 + matches.length) % matches.length);
+              } else if (e.key === 'Enter' && matches[highlight]) {
+                e.preventDefault();
+                pick(matches[highlight]);
+              } else if (e.key === 'Escape') {
+                setOpen(false);
+              }
+            }}
+            placeholder={placeholder}
+            className={inputClassName}
+            role="combobox"
+            aria-expanded={showMenu}
+            aria-controls={showMenu ? listId : undefined}
+            aria-autocomplete="list"
+            autoComplete="off"
+          />
 
-      {showMenu && (
-        <ul
-          id={listId}
-          role="listbox"
-          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-900"
-        >
-          {matches.map((entry, index) => {
-            const meta = getCategoryMeta(entry.category, entry.itemType);
-            const active = index === highlight;
-            return (
-              <li key={`${entry.name}-${entry.category}`} role="presentation">
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  onMouseEnter={() => setHighlight(index)}
-                  onClick={() => pick(entry)}
-                  className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition ${
-                    active
-                      ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100'
-                      : 'text-slate-800 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <span className="font-medium">{entry.name}</span>
-                  <span className="text-muted shrink-0 text-[10px] font-semibold uppercase tracking-wide">
-                    {entry.itemType === 'Household' ? '🏠' : '🍽️'} {meta?.label ?? entry.category}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+          {showMenu && (
+            <ul
+              id={listId}
+              role="listbox"
+              className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-900"
+            >
+              {matches.map((entry, index) => {
+                const meta = getCategoryMeta(entry.category, entry.itemType);
+                const active = index === highlight;
+                return (
+                  <li key={`${entry.name}-${entry.category}`} role="presentation">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      onMouseEnter={() => setHighlight(index)}
+                      onClick={() => pick(entry)}
+                      className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition ${
+                        active
+                          ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-100'
+                          : 'text-slate-800 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <span className="font-medium">{entry.name}</span>
+                      <span className="text-muted shrink-0 text-[10px] font-semibold uppercase tracking-wide">
+                        {entry.itemType === 'Household' ? '🏠' : entry.itemType === 'Baby' ? '👶' : '🍽️'}{' '}
+                        {meta?.label ?? entry.category}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {enableBarcodeScan && (
+          <button
+            type="button"
+            onClick={() => setScannerOpen(true)}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-emerald-700 shadow-sm transition active:scale-95 hover:border-emerald-300 hover:bg-emerald-50 dark:border-slate-600 dark:bg-slate-900 dark:text-emerald-400 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/40"
+            aria-label="Scan barcode"
+            title="Scan barcode"
+          >
+            <Camera className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+
+      {enableBarcodeScan && (
+        <BarcodeScanner
+          open={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScan={handleBarcodeScan}
+        />
       )}
-    </div>
+    </>
   );
 }

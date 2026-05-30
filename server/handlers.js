@@ -1,6 +1,14 @@
 import { ensureDb } from './ensureDb.js';
 import { getEnvDiagnostics, getMongoUri } from './env.js';
-import { getBearerUser, hashPassword, signToken, verifyPassword } from './auth.js';
+import {
+  getBearerUser,
+  hashPassword,
+  hashSecurityAnswer,
+  signToken,
+  verifyPassword,
+  verifySecurityAnswer,
+} from './auth.js';
+import { isAllowedSecurityQuestion } from './securityQuestions.js';
 import { toFriendlyError } from './errors.js';
 import {
   createHousehold,
@@ -19,6 +27,9 @@ import {
   updateHouseholdAppState,
   verifyUserEmail,
   deleteUserAccount,
+  getPasswordRecoveryQuestion,
+  findUserSecurityCredentials,
+  updateUserPassword,
 } from './db.js';
 
 async function authPayload(user) {
@@ -136,7 +147,7 @@ export async function handleHealth(_req, res) {
 }
 
 export async function handleSignup(req, res) {
-  const { email, password } = req.body ?? {};
+  const { email, password, securityQuestion, securityAnswer } = req.body ?? {};
   if (!email?.trim() || !password) {
     res.status(400).json({ error: 'Email and password are required.' });
     return;
@@ -145,14 +156,109 @@ export async function handleSignup(req, res) {
     res.status(400).json({ error: 'Password must be at least 8 characters.' });
     return;
   }
+  if (!securityQuestion?.trim() || !String(securityAnswer || '').trim()) {
+    res.status(400).json({ error: 'Security question and answer are required.' });
+    return;
+  }
+  if (!isAllowedSecurityQuestion(securityQuestion)) {
+    res.status(400).json({ error: 'Please choose a security question from the list.' });
+    return;
+  }
+  if (String(securityAnswer).trim().length < 2) {
+    res.status(400).json({ error: 'Security answer must be at least 2 characters.' });
+    return;
+  }
 
   try {
     await ensureDb();
     const user = await createUser({
       email,
       passwordHash: await hashPassword(password),
+      securityQuestion: securityQuestion.trim(),
+      securityAnswerHash: await hashSecurityAnswer(securityAnswer),
     });
     res.status(201).json(await authPayload(user));
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handlePasswordRecoveryQuestion(req, res) {
+  const { email } = req.body ?? {};
+  if (!email?.trim()) {
+    res.status(400).json({ error: 'Email is required.' });
+    return;
+  }
+
+  try {
+    await ensureDb();
+    const recovery = await getPasswordRecoveryQuestion(email);
+    if (!recovery) {
+      res.status(404).json({
+        error:
+          'No account found with password recovery set up for this email. Sign up again or use an account that has a security question.',
+      });
+      return;
+    }
+    res.status(200).json(recovery);
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handlePasswordRecoveryVerify(req, res) {
+  const { email, securityAnswer } = req.body ?? {};
+  if (!email?.trim() || !String(securityAnswer || '').trim()) {
+    res.status(400).json({ error: 'Email and security answer are required.' });
+    return;
+  }
+
+  try {
+    await ensureDb();
+    const creds = await findUserSecurityCredentials(email);
+    if (!creds) {
+      res.status(404).json({ error: 'Password recovery is not available for this account.' });
+      return;
+    }
+    const valid = await verifySecurityAnswer(securityAnswer, creds.securityAnswerHash);
+    if (!valid) {
+      res.status(401).json({ error: 'Incorrect security answer.' });
+      return;
+    }
+    res.status(200).json({ ok: true });
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handlePasswordRecoveryReset(req, res) {
+  const { email, securityAnswer, newPassword } = req.body ?? {};
+  if (!email?.trim() || !String(securityAnswer || '').trim() || !newPassword) {
+    res.status(400).json({ error: 'Email, security answer, and new password are required.' });
+    return;
+  }
+  if (String(newPassword).length < 8) {
+    res.status(400).json({ error: 'New password must be at least 8 characters.' });
+    return;
+  }
+
+  try {
+    await ensureDb();
+    const creds = await findUserSecurityCredentials(email);
+    if (!creds) {
+      res.status(404).json({ error: 'Password recovery is not available for this account.' });
+      return;
+    }
+    const valid = await verifySecurityAnswer(securityAnswer, creds.securityAnswerHash);
+    if (!valid) {
+      res.status(401).json({ error: 'Incorrect security answer.' });
+      return;
+    }
+    await updateUserPassword(creds.id, await hashPassword(newPassword));
+    res.status(200).json({ ok: true, message: 'Password updated. You can log in now.' });
   } catch (err) {
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });

@@ -18,6 +18,9 @@ import {
   handleSignup,
   handleVerifyEmail,
   handleDeleteAccount,
+  handlePasswordRecoveryQuestion,
+  handlePasswordRecoveryVerify,
+  handlePasswordRecoveryReset,
 } from './handlers.js';
 
 const PORT = Number(process.env.PORT) || 3001;
@@ -75,6 +78,33 @@ app.post('/api/auth/verify', async (req, res) => {
   } catch (err) {
     console.error('POST /api/auth/verify', err);
     res.status(err.status || 500).json({ error: err.message || 'Verification failed' });
+  }
+});
+
+app.post('/api/auth/password-recovery/question', async (req, res) => {
+  try {
+    await handlePasswordRecoveryQuestion(req, res);
+  } catch (err) {
+    console.error('POST /api/auth/password-recovery/question', err);
+    res.status(err.status || 500).json({ error: err.message || 'Could not load security question' });
+  }
+});
+
+app.post('/api/auth/password-recovery/verify', async (req, res) => {
+  try {
+    await handlePasswordRecoveryVerify(req, res);
+  } catch (err) {
+    console.error('POST /api/auth/password-recovery/verify', err);
+    res.status(err.status || 500).json({ error: err.message || 'Could not verify answer' });
+  }
+});
+
+app.post('/api/auth/password-recovery/reset', async (req, res) => {
+  try {
+    await handlePasswordRecoveryReset(req, res);
+  } catch (err) {
+    console.error('POST /api/auth/password-recovery/reset', err);
+    res.status(err.status || 500).json({ error: err.message || 'Could not reset password' });
   }
 });
 

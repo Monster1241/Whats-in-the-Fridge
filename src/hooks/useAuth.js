@@ -59,12 +59,15 @@ export function useAuth() {
     };
   }, [applySession]);
 
-  const handleSignup = useCallback(async (email, password) => {
-    setError(null);
-    const data = await signup(email, password);
-    applySession(data);
-    return data;
-  }, [applySession]);
+  const handleSignup = useCallback(
+    async (email, password, securityQuestion, securityAnswer) => {
+      setError(null);
+      const data = await signup(email, password, securityQuestion, securityAnswer);
+      applySession(data);
+      return data;
+    },
+    [applySession],
+  );
 
   const handleLogin = useCallback(async (email, password) => {
     setError(null);

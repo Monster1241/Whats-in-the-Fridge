@@ -1409,7 +1409,8 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
                   onChange={setDraft}
                   onPick={(entry) => applySuggestion(entry, 'add')}
                   enabledModules={enabledModules}
-                  placeholder='Item name (e.g. "Chorizo")'
+                  enableBarcodeScan
+                  placeholder='Item name or scan barcode'
                   id="quick-add-input"
                 />
                 <button

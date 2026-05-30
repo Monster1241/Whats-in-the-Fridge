@@ -1,5 +1,11 @@
 import { useState } from 'react';
 import { ChefHat, Copy, Home, LogIn, Refrigerator, Share2, UserPlus, Users } from 'lucide-react';
+import { SECURITY_QUESTIONS } from '../constants/securityQuestions.js';
+import {
+  fetchPasswordRecoveryQuestion,
+  resetPasswordWithSecurityAnswer,
+  verifyPasswordRecoveryAnswer,
+} from '../api.js';
 
 export function AuthScreen({
   needsHousehold,
@@ -12,8 +18,14 @@ export function AuthScreen({
   onFinishHouseholdSetup,
 }) {
   const [mode, setMode] = useState('login');
+  const [recoverStep, setRecoverStep] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [securityQuestion, setSecurityQuestion] = useState(SECURITY_QUESTIONS[0]);
+  const [securityAnswer, setSecurityAnswer] = useState('');
+  const [recoveryQuestion, setRecoveryQuestion] = useState('');
+  const [recoveryAnswer, setRecoveryAnswer] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [householdMode, setHouseholdMode] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -75,6 +87,21 @@ export function AuthScreen({
     if (!createdSession) return;
     onFinishHouseholdSetup(createdSession);
     setCreatedSession(null);
+  };
+
+  const resetRecovery = () => {
+    setRecoverStep(null);
+    setRecoveryQuestion('');
+    setRecoveryAnswer('');
+    setNewPassword('');
+    setError(null);
+  };
+
+  const startRecovery = () => {
+    setError(null);
+    setRecoveryAnswer('');
+    setNewPassword('');
+    setRecoverStep('email');
   };
 
   if (needsHousehold && createdSession) {
@@ -247,113 +274,336 @@ export function AuthScreen({
         <p className="text-muted mt-2 text-sm">Track food, plan meals, and share with your household.</p>
       </header>
 
-      <div className="mb-5 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setMode('login');
-            setError(null);
-          }}
-          className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold ${
-            mode === 'login'
-              ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
-              : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
-          }`}
-        >
-          <LogIn className="h-4 w-4" />
-          Log in
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode('signup');
-            setError(null);
-          }}
-          className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold ${
-            mode === 'signup'
-              ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
-              : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
-          }`}
-        >
-          <UserPlus className="h-4 w-4" />
-          Sign up
-        </button>
-      </div>
+      {!recoverStep ? (
+        <>
+          <div className="mb-5 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setMode('login');
+                setError(null);
+              }}
+              className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold ${
+                mode === 'login'
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                  : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
+              }`}
+            >
+              <LogIn className="h-4 w-4" />
+              Log in
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('signup');
+                setError(null);
+              }}
+              className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold ${
+                mode === 'signup'
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                  : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
+              }`}
+            >
+              <UserPlus className="h-4 w-4" />
+              Sign up
+            </button>
+          </div>
 
-      <form
-        className="surface-card space-y-4 p-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          run(async () => {
-            if (mode === 'signup') {
-              await onSignup(email, password);
-            } else {
-              await onLogin(email, password);
-            }
-          });
-        }}
-      >
-        {error && (
-          <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
-            {error}
-          </p>
-        )}
+          <form
+            className="surface-card space-y-4 p-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              run(async () => {
+                if (mode === 'signup') {
+                  await onSignup(email, password, securityQuestion, securityAnswer);
+                } else {
+                  await onLogin(email, password);
+                }
+              });
+            }}
+          >
+            {error && (
+              <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+                {error}
+              </p>
+            )}
 
-        <div>
-          <label htmlFor="auth-email" className="text-muted mb-1 block text-xs font-semibold uppercase">
-            Email
-          </label>
-          <input
-            id="auth-email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input-field"
-            placeholder="you@example.com"
-          />
+            <div>
+              <label htmlFor="auth-email" className="text-muted mb-1 block text-xs font-semibold uppercase">
+                Email
+              </label>
+              <input
+                id="auth-email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input-field"
+                placeholder="you@example.com"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="auth-password" className="text-muted mb-1 block text-xs font-semibold uppercase">
+                Password
+              </label>
+              <input
+                id="auth-password"
+                type="password"
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input-field"
+                placeholder="At least 8 characters"
+              />
+            </div>
+
+            {mode === 'signup' && (
+              <>
+                <div>
+                  <label
+                    htmlFor="auth-security-question"
+                    className="text-muted mb-1 block text-xs font-semibold uppercase"
+                  >
+                    Security question
+                  </label>
+                  <select
+                    id="auth-security-question"
+                    required
+                    value={securityQuestion}
+                    onChange={(e) => setSecurityQuestion(e.target.value)}
+                    className="input-field"
+                  >
+                    {SECURITY_QUESTIONS.map((q) => (
+                      <option key={q} value={q}>
+                        {q}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-muted mt-1.5 text-xs leading-relaxed">
+                    Used to reset your password if you forget it. Answers are not case-sensitive.
+                  </p>
+                </div>
+                <div>
+                  <label
+                    htmlFor="auth-security-answer"
+                    className="text-muted mb-1 block text-xs font-semibold uppercase"
+                  >
+                    Your answer
+                  </label>
+                  <input
+                    id="auth-security-answer"
+                    type="text"
+                    autoComplete="off"
+                    required
+                    minLength={2}
+                    value={securityAnswer}
+                    onChange={(e) => setSecurityAnswer(e.target.value)}
+                    className="input-field"
+                    placeholder="Your answer (remember this!)"
+                  />
+                </div>
+              </>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
+            >
+              <ChefHat className="h-4 w-4" />
+              {busy ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Log in'}
+            </button>
+
+            {mode === 'login' && (
+              <button
+                type="button"
+                onClick={startRecovery}
+                className="text-muted w-full text-center text-sm font-semibold underline-offset-2 hover:text-emerald-700 hover:underline dark:hover:text-emerald-400"
+              >
+                Forgot password?
+              </button>
+            )}
+          </form>
+
+          <div
+            className="mt-4 rounded-xl border border-slate-200/70 bg-slate-50/60 px-3.5 py-3 text-center dark:border-slate-700/60 dark:bg-slate-900/40"
+            role="note"
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
+              Beta privacy note
+            </p>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500/90 dark:text-slate-500">
+              Your email is used for sign-in. Security answers are stored encrypted and only used for
+              password recovery. Household data stays private to your household.
+            </p>
+          </div>
+        </>
+      ) : (
+        <div className="surface-card space-y-4 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-heading text-lg font-bold">Reset password</h2>
+              <p className="text-muted mt-1 text-sm">
+                {recoverStep === 'email' && 'Enter the email on your account.'}
+                {recoverStep === 'answer' && 'Answer your security question.'}
+                {recoverStep === 'password' && 'Choose a new password.'}
+                {recoverStep === 'done' && 'You can log in with your new password.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={resetRecovery}
+              className="text-muted shrink-0 text-xs font-semibold underline-offset-2 hover:underline"
+            >
+              Back to log in
+            </button>
+          </div>
+
+          {error && (
+            <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+              {error}
+            </p>
+          )}
+
+          {recoverStep === 'email' && (
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                run(async () => {
+                  const data = await fetchPasswordRecoveryQuestion(email);
+                  setRecoveryQuestion(data.securityQuestion);
+                  setRecoverStep('answer');
+                });
+              }}
+            >
+              <div>
+                <label htmlFor="recover-email" className="text-muted mb-1 block text-xs font-semibold uppercase">
+                  Email
+                </label>
+                <input
+                  id="recover-email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="input-field"
+                  placeholder="you@example.com"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+              >
+                {busy ? 'Looking up…' : 'Continue'}
+              </button>
+            </form>
+          )}
+
+          {recoverStep === 'answer' && (
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                run(async () => {
+                  await verifyPasswordRecoveryAnswer(email, recoveryAnswer);
+                  setRecoverStep('password');
+                });
+              }}
+            >
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-900/50">
+                <p className="text-muted text-xs font-semibold uppercase">Your security question</p>
+                <p className="text-heading mt-1 text-sm font-medium">{recoveryQuestion}</p>
+              </div>
+              <div>
+                <label htmlFor="recover-answer" className="text-muted mb-1 block text-xs font-semibold uppercase">
+                  Your answer
+                </label>
+                <input
+                  id="recover-answer"
+                  type="text"
+                  autoComplete="off"
+                  required
+                  value={recoveryAnswer}
+                  onChange={(e) => setRecoveryAnswer(e.target.value)}
+                  className="input-field"
+                  placeholder="Same answer you chose at sign-up"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+              >
+                {busy ? 'Checking…' : 'Verify answer'}
+              </button>
+            </form>
+          )}
+
+          {recoverStep === 'password' && (
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                run(async () => {
+                  await resetPasswordWithSecurityAnswer(email, recoveryAnswer, newPassword);
+                  setRecoverStep('done');
+                  setLocalMessage('Password updated successfully.');
+                });
+              }}
+            >
+              <div>
+                <label htmlFor="recover-password" className="text-muted mb-1 block text-xs font-semibold uppercase">
+                  New password
+                </label>
+                <input
+                  id="recover-password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="input-field"
+                  placeholder="At least 8 characters"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+              >
+                {busy ? 'Saving…' : 'Update password'}
+              </button>
+            </form>
+          )}
+
+          {recoverStep === 'done' && (
+            <div className="space-y-4 text-center">
+              <p className="text-muted text-sm leading-relaxed">
+                {localMessage || 'Your password has been updated.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  resetRecovery();
+                  setMode('login');
+                  setPassword('');
+                }}
+                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
+              >
+                Back to log in
+              </button>
+            </div>
+          )}
         </div>
-
-        <div>
-          <label htmlFor="auth-password" className="text-muted mb-1 block text-xs font-semibold uppercase">
-            Password
-          </label>
-          <input
-            id="auth-password"
-            type="password"
-            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input-field"
-            placeholder="At least 8 characters"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={busy}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
-        >
-          <ChefHat className="h-4 w-4" />
-          {busy ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Log in'}
-        </button>
-      </form>
-
-      <div
-        className="mt-4 rounded-xl border border-slate-200/70 bg-slate-50/60 px-3.5 py-3 text-center dark:border-slate-700/60 dark:bg-slate-900/40"
-        role="note"
-      >
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-500">
-          Beta privacy note
-        </p>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500/90 dark:text-slate-500">
-          Your email is only used for account sign-in and verification codes. Fridge inventory and
-          settings stay isolated to your household — other households cannot see your data.
-        </p>
-      </div>
+      )}
     </div>
   );
 }

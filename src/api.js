@@ -45,15 +45,42 @@ async function parseJson(res) {
   return body;
 }
 
-export async function signup(email, password) {
+export async function signup(email, password, securityQuestion, securityAnswer) {
   const res = await fetch(`${API_BASE}/auth/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, securityQuestion, securityAnswer }),
   });
   const data = await parseJson(res);
   if (data.token) setAuthToken(data.token);
   return data;
+}
+
+export async function fetchPasswordRecoveryQuestion(email) {
+  const res = await fetch(`${API_BASE}/auth/password-recovery/question`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  return parseJson(res);
+}
+
+export async function verifyPasswordRecoveryAnswer(email, securityAnswer) {
+  const res = await fetch(`${API_BASE}/auth/password-recovery/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, securityAnswer }),
+  });
+  return parseJson(res);
+}
+
+export async function resetPasswordWithSecurityAnswer(email, securityAnswer, newPassword) {
+  const res = await fetch(`${API_BASE}/auth/password-recovery/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, securityAnswer, newPassword }),
+  });
+  return parseJson(res);
 }
 
 export async function login(email, password) {

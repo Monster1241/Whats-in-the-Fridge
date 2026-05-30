@@ -69,6 +69,21 @@ body {
   }
 }
 
+/* html5-qrcode scanner inside BarcodeScanner modal */
+.barcode-scanner-host #html5-qrcode-button-camera-permission,
+.barcode-scanner-host #html5-qrcode-button-camera-start,
+.barcode-scanner-host #html5-qrcode-button-camera-stop {
+  @apply rounded-lg border-0 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white;
+}
+
+.barcode-scanner-host #html5-qrcode-anchor-scan-type-change {
+  @apply text-xs text-slate-400;
+}
+
+.barcode-scanner-host img[alt='Info icon'] {
+  filter: invert(1);
+}
+
 .dark input[type='date'] {
   color-scheme: dark;
 }

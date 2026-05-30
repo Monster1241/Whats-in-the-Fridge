@@ -150,7 +150,12 @@ function getDb() {
   return db;
 }
 
-export async function createUser({ email, passwordHash }) {
+export async function createUser({
+  email,
+  passwordHash,
+  securityQuestion,
+  securityAnswerHash,
+}) {
   const users = getDb().collection('users');
   const normalizedEmail = email.trim().toLowerCase();
   const existing = await users.findOne({ email: normalizedEmail });
@@ -163,12 +168,53 @@ export async function createUser({ email, passwordHash }) {
   const doc = {
     email: normalizedEmail,
     password_hash: passwordHash,
+    securityQuestion,
+    securityAnswerHash,
     household_id: null,
     isVerified: true,
     created_at: new Date(),
   };
   const result = await users.insertOne(doc);
   return mapUserDoc({ ...doc, _id: result.insertedId });
+}
+
+export async function getPasswordRecoveryQuestion(email) {
+  const users = getDb().collection('users');
+  const doc = await users.findOne(
+    { email: email.trim().toLowerCase() },
+    { projection: { securityQuestion: 1, securityAnswerHash: 1 } },
+  );
+  if (!doc?.securityQuestion || !doc?.securityAnswerHash) {
+    return null;
+  }
+  return { securityQuestion: doc.securityQuestion };
+}
+
+export async function findUserSecurityCredentials(email) {
+  const users = getDb().collection('users');
+  const doc = await users.findOne(
+    { email: email.trim().toLowerCase() },
+    { projection: { securityAnswerHash: 1, email: 1 } },
+  );
+  if (!doc?.securityAnswerHash) return null;
+  return {
+    id: doc._id.toString(),
+    email: doc.email,
+    securityAnswerHash: doc.securityAnswerHash,
+  };
+}
+
+export async function updateUserPassword(userId, passwordHash) {
+  const users = getDb().collection('users');
+  const result = await users.updateOne(
+    { _id: new ObjectId(userId) },
+    { $set: { password_hash: passwordHash, updated_at: new Date() } },
+  );
+  if (result.matchedCount === 0) {
+    const err = new Error('User not found.');
+    err.status = 404;
+    throw err;
+  }
 }
 
 export async function findUserByEmail(email) {
