@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { getStoreBadgeClassName, PREFERRED_STORE_OPTIONS } from '../inventory/storeOptions.js';
 
-const MENU_MAX_HEIGHT = 224;
+const MENU_MAX_HEIGHT = 280;
 
 function getMenuPosition(anchor) {
   const rect = anchor.getBoundingClientRect();

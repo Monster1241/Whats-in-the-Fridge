@@ -13,6 +13,7 @@ import {
   getCategoryMeta,
   INVENTORY_VIEW,
   isShoppingView,
+  FOOD_CATEGORY,
   ITEM_TYPE,
   STATUS,
 } from './inventory/constants.js';
@@ -53,6 +54,7 @@ import {
   Refrigerator,
   Settings,
   Share2,
+  ShoppingCart,
   Sun,
   Trash2,
   User,
@@ -65,6 +67,12 @@ const RECIPE_VIEW = {
   MATCHED: 'matched',
   SAVED: 'saved',
 };
+
+/** Minimum in-stock ingredients (Fresh / Expiring) to show a matched recipe. */
+const MIN_STOCKED_INGREDIENTS_FOR_RECIPE = 3;
+
+const MAIN_INGREDIENT_PATTERN =
+  /chicken|beef|salmon|chorizo|egg|pork|mince|tofu|lentil|potato|noodle|shrimp|fish|turkey|lamb|sausage|bacon/i;
 
 const COLOR_LEGEND = [
   { swatch: 'bg-emerald-600', label: 'Emerald', desc: 'In stock · plentiful · primary actions' },
@@ -604,6 +612,30 @@ function findInventoryMatch(ingredientName, items) {
   );
 }
 
+function findStockedFoodMatch(ingredientName, items) {
+  const exact = findInventoryMatch(ingredientName, items);
+  if (exact && exact.status !== STATUS.OUT) return exact;
+
+  const needle = normalizeName(ingredientName);
+  if (!needle) return null;
+
+  return items.find((item) => {
+    if (item.itemType !== ITEM_TYPE.FOOD || item.status === STATUS.OUT) return false;
+    const itemName = normalizeName(item.name);
+    return itemName.includes(needle) || needle.includes(itemName);
+  });
+}
+
+function getRecipeMainIngredient(recipe) {
+  if (recipe.mainIngredient) return recipe.mainIngredient;
+  const protein = recipe.ingredients.find((ing) => MAIN_INGREDIENT_PATTERN.test(ing));
+  return protein ?? recipe.ingredients[0];
+}
+
+function isStockedIngredient(ingredientName, items) {
+  return Boolean(findStockedFoodMatch(ingredientName, items));
+}
+
 function itemTypeLabelEmoji(itemType) {
   if (itemType === ITEM_TYPE.BABY) return '👶';
   if (itemType === ITEM_TYPE.HOUSEHOLD) return '🕯️';
@@ -636,7 +668,27 @@ function analyzeRecipe(recipe, items) {
     }
   }
 
-  return { have, need, canCook: need.length === 0 };
+  const stockedCount = have.filter(
+    (entry) => entry.status === STATUS.FRESH || entry.status === STATUS.EXPIRING,
+  ).length;
+  const mainIngredient = getRecipeMainIngredient(recipe);
+  const hasMainIngredient = isStockedIngredient(mainIngredient, items);
+  const qualifiesForMatch =
+    hasMainIngredient && stockedCount >= MIN_STOCKED_INGREDIENTS_FOR_RECIPE;
+
+  return {
+    have,
+    need,
+    canCook: need.length === 0,
+    mainIngredient,
+    hasMainIngredient,
+    stockedCount,
+    qualifiesForMatch,
+  };
+}
+
+function recipeMatchesInventory(analysis) {
+  return analysis.qualifiesForMatch;
 }
 
 function StatusBadge({ status, onOpenPicker }) {
@@ -1626,7 +1678,9 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
   );
 }
 
-function RecipeCard({ recipe, analysis, isSaved, onToggleSave, onMarkCooked }) {
+function RecipeCard({ recipe, analysis, isSaved, onToggleSave, onMarkCooked, onAddNeedToShoppingList }) {
+  const [showAddConfirm, setShowAddConfirm] = useState(false);
+
   return (
     <li className="surface-card p-4 shadow-lg">
       <div className="mb-3 flex items-start justify-between gap-2">
@@ -1689,7 +1743,7 @@ function RecipeCard({ recipe, analysis, isSaved, onToggleSave, onMarkCooked }) {
           <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
             What you need
           </p>
-          <ul className="flex flex-wrap gap-1.5">
+          <ul className="mb-3 flex flex-wrap gap-1.5">
             {analysis.need.map((name) => (
               <li
                 key={name}
@@ -1699,6 +1753,44 @@ function RecipeCard({ recipe, analysis, isSaved, onToggleSave, onMarkCooked }) {
               </li>
             ))}
           </ul>
+          {showAddConfirm ? (
+            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950/40">
+              <p className="text-heading text-sm font-semibold">Add to shopping list?</p>
+              <p className="text-muted mt-1 text-xs leading-relaxed">
+                Add {analysis.need.length} missing ingredient
+                {analysis.need.length === 1 ? '' : 's'} from &ldquo;{recipe.title}&rdquo; to your
+                household shopping list.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddConfirm(false)}
+                  className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAddNeedToShoppingList(analysis.need);
+                    setShowAddConfirm(false);
+                  }}
+                  className="flex-1 rounded-lg bg-sky-600 py-2.5 text-xs font-semibold text-white active:scale-[0.98]"
+                >
+                  Add all
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAddConfirm(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 py-2.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 active:scale-[0.98] dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-950"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Add all to shopping list
+            </button>
+          )}
         </div>
       )}
 
@@ -1737,12 +1829,9 @@ function RecipesView({ items, updateItems, savedRecipes }) {
   const cookableRecipes = useMemo(() => {
     return RECIPES.map((recipe) => {
       const analysis = analyzeRecipe(recipe, items);
-      const usableCount = analysis.have.filter(
-        (h) => h.status === STATUS.FRESH || h.status === STATUS.EXPIRING,
-      ).length;
-      return { recipe, analysis, score: usableCount };
+      return { recipe, analysis, score: analysis.stockedCount };
     })
-      .filter(({ analysis }) => analysis.have.length > 0)
+      .filter(({ analysis }) => recipeMatchesInventory(analysis))
       .sort((a, b) => b.score - a.score);
   }, [items]);
 
@@ -1772,6 +1861,30 @@ function RecipesView({ items, updateItems, savedRecipes }) {
     });
   };
 
+  const addNeededToShoppingList = (neededIngredients) => {
+    updateItems((prev) => {
+      let next = [...prev];
+      for (const name of neededIngredients) {
+        const needle = normalizeName(name);
+        const idx = next.findIndex((item) => normalizeName(item.name) === needle);
+        if (idx >= 0) {
+          next[idx] = { ...next[idx], status: STATUS.OUT };
+          continue;
+        }
+        const classified = classifyItem(name);
+        next.push({
+          id: crypto.randomUUID(),
+          name,
+          itemType: ITEM_TYPE.FOOD,
+          status: STATUS.OUT,
+          category: classified?.category ?? FOOD_CATEGORY.AMBIENT,
+          expiryDate: null,
+        });
+      }
+      return next;
+    });
+  };
+
   const list =
     recipeView === RECIPE_VIEW.SAVED ? savedRecipeCards : cookableRecipes;
 
@@ -1782,7 +1895,7 @@ function RecipesView({ items, updateItems, savedRecipes }) {
         <p className="text-muted mt-1.5 text-sm">
           {recipeView === RECIPE_VIEW.SAVED
             ? 'Your bookmarked recipes — always available here'
-            : 'Matched from Fresh & Expiring Soon items in your fridge'}
+            : `Shows recipes when you have the main ingredient plus at least ${MIN_STOCKED_INGREDIENTS_FOR_RECIPE} items in stock`}
         </p>
       </header>
 
@@ -1830,7 +1943,7 @@ function RecipesView({ items, updateItems, savedRecipes }) {
           description={
             recipeView === RECIPE_VIEW.SAVED
               ? 'Tap the bookmark on any recipe in “Matched” to save favourites for quick access.'
-              : 'Add ingredients marked Fresh or Expiring Soon in your Fridge tabs — we’ll match meals you can cook.'
+              : `Stock the main ingredient for a recipe plus at least ${MIN_STOCKED_INGREDIENTS_FOR_RECIPE} of its items (Fresh or Expiring Soon) to see matches here.`
           }
         />
       ) : (
@@ -1843,6 +1956,7 @@ function RecipesView({ items, updateItems, savedRecipes }) {
               isSaved={isSaved(recipe.id)}
               onToggleSave={toggleSave}
               onMarkCooked={markCooked}
+              onAddNeedToShoppingList={addNeededToShoppingList}
             />
           ))}
         </ul>

@@ -46,6 +46,21 @@ const WOOLWORTHS_COLES_KEYWORDS = [
   'neutrogena',
 ];
 
+/** Bulk packs and warehouse sizes — Costco */
+const COSTCO_KEYWORDS = [
+  'bulk',
+  'kirkland',
+  'warehouse',
+  'large pack',
+  'multipack',
+  'multi pack',
+  'family pack',
+  'jumbo',
+  'case of',
+  '24 pack',
+  '48 pack',
+];
+
 /** Staples & value basics — default ALDI */
 const ALDI_KEYWORDS = [
   'dishwashing tablet',
@@ -122,7 +137,13 @@ const KEYWORD_RULES = [
     keywords: ['garbage bag', 'bin bag', 'rubbish bag', 'paper towel', 'toilet paper'],
     store: 'ALDI',
     detail:
-      'Bulk packs at ALDI are usually cheapest. Compare unit price on the shelf — bigger rolls often win at Woolworths/Coles on special.',
+      'Bulk packs: Costco or ALDI for big rolls; compare unit price — Woolworths/Coles specials can win on smaller packs.',
+  },
+  {
+    keywords: COSTCO_KEYWORDS,
+    store: 'Costco',
+    detail:
+      "Bulk and family sizes are Costco's strength — membership pays off on pantry, cleaning, and frozen multipacks.",
   },
   {
     keywords: ['face mask', 'sheet mask', 'serum', 'retinol', 'moisturiser', 'moisturizer', 'sunscreen', 'spf'],
@@ -212,7 +233,7 @@ const KEYWORD_RULES = [
     keywords: ['ice cream', 'frozen', 'pizza', 'peas', 'chips'],
     store: 'ALDI',
     detail:
-      'ALDI frozen section — strong value. Costco or Woolworths for larger packs and premium ingredients.',
+      'ALDI frozen — strong value. Costco for bulk packs; Woolworths or Coles for wider brands and premium lines.',
   },
   {
     keywords: ['napp', 'diaper', 'diapers', 'huggies', 'pampers'],
@@ -311,6 +332,10 @@ function matchesAldi(name) {
   return ALDI_KEYWORDS.some((kw) => name.includes(kw));
 }
 
+function matchesCostco(name) {
+  return COSTCO_KEYWORDS.some((kw) => name.includes(kw));
+}
+
 /**
  * @param {string} itemName
  * @param {string} category
@@ -376,6 +401,14 @@ export function getShoppingSuggestion(itemName, category, itemType = ITEM_TYPE.F
       };
     }
     return base;
+  }
+
+  if (matchesCostco(name)) {
+    return {
+      store: 'Costco',
+      detail:
+        'Looks like a bulk buy — Costco often wins on unit price for large packs and Kirkland staples.',
+    };
   }
 
   return {
