@@ -85,6 +85,19 @@ export async function sendPasswordResetEmail(email) {
   await firebaseSendPasswordReset(email);
 }
 
+/**
+ * Persist this browser's FCM device token for the signed-in user.
+ * @param {string} token
+ */
+export async function saveFcmToken(token) {
+  const res = await fetch(`${API_BASE}/auth/save-token`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ token }),
+  });
+  return parseJson(res);
+}
+
 export async function fetchSession() {
   const {
     waitForFirebaseAuth,

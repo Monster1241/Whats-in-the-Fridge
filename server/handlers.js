@@ -10,6 +10,7 @@ import { toFriendlyError } from './errors.js';
 import { verifyFirebaseIdToken } from './firebaseAdmin.js';
 import {
   createHousehold,
+  addFcmTokenToUser,
   createUser,
   findHouseholdByInviteCode,
   findUserByEmail,
@@ -241,6 +242,29 @@ export async function handleMe(req, res) {
     const auth = await requireAuth(req, res);
     if (!auth) return;
     res.status(200).json(await authPayload(auth.user));
+  } catch (err) {
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleSaveFcmToken(req, res) {
+  const auth = await requireAuth(req, res);
+  if (!auth) return;
+
+  const token = String(req.body?.token ?? '').trim();
+  if (!token) {
+    res.status(400).json({ error: 'FCM token is required.' });
+    return;
+  }
+  if (token.length > 512) {
+    res.status(400).json({ error: 'Invalid FCM token.' });
+    return;
+  }
+
+  try {
+    await addFcmTokenToUser(auth.user.id, token);
+    res.status(200).json({ ok: true });
   } catch (err) {
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });

@@ -175,6 +175,7 @@ export async function createUser({
     email: normalizedEmail,
     household_id: null,
     isVerified: Boolean(isVerified),
+    fcmTokens: [],
     created_at: new Date(),
   };
   if (passwordHash) doc.password_hash = passwordHash;
@@ -215,6 +216,24 @@ export async function findUserByEmail(email) {
   const users = getDb().collection('users');
   const doc = await users.findOne({ email: email.trim().toLowerCase() });
   return mapUserDoc(doc);
+}
+
+/**
+ * Appends a Web Push FCM token for the user (deduplicated).
+ * @param {string} userId
+ * @param {string} token
+ */
+export async function addFcmTokenToUser(userId, token) {
+  const users = getDb().collection('users');
+  const result = await users.updateOne(
+    { _id: new ObjectId(userId) },
+    { $addToSet: { fcmTokens: token } },
+  );
+  if (result.matchedCount === 0) {
+    const err = new Error('User not found.');
+    err.status = 404;
+    throw err;
+  }
 }
 
 export async function findUserById(userId) {

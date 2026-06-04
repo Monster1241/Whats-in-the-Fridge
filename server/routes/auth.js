@@ -4,6 +4,7 @@ import {
   handleFirebaseSession,
   handleLogin,
   handleMe,
+  handleSaveFcmToken,
   handleSignup,
   handleVerifyEmail,
 } from '../handlers.js';
@@ -24,6 +25,10 @@ authRouter.post(
   asyncRoute(handleLogin, 'POST /api/auth/login', 'Login failed'),
 );
 authRouter.get('/me', asyncRoute(handleMe, 'GET /api/auth/me', 'Session check failed'));
+authRouter.post(
+  '/save-token',
+  asyncRoute(handleSaveFcmToken, 'POST /api/auth/save-token', 'Could not save push token'),
+);
 authRouter.post(
   '/verify',
   asyncRoute(handleVerifyEmail, 'POST /api/auth/verify', 'Verification failed'),

@@ -3,6 +3,10 @@ import { AuthScreen } from './components/AuthScreen.jsx';
 import { VerifyEmailScreen } from './components/VerifyEmailScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
 import { useAuth } from './hooks/useAuth.js';
+import {
+  PushNotificationProvider,
+  usePushNotifications,
+} from './context/PushNotificationContext.jsx';
 import { fetchHouseholdMembers, removeHouseholdMember } from './api.js';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
@@ -37,6 +41,7 @@ import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
 import { classifyItem } from './inventory/classifyItem.js';
 import { normalizeName } from './inventory/itemUtils.js';
 import {
+  Bell,
   Bookmark,
   Calendar,
   Check,
@@ -1965,6 +1970,57 @@ function RecipesView({ items, updateItems, savedRecipes }) {
   );
 }
 
+function PushNotificationsSettings() {
+  const { status, error, enablePush, permission, vapidConfigured } = usePushNotifications();
+  const [busy, setBusy] = useState(false);
+
+  const handleEnable = async () => {
+    setBusy(true);
+    try {
+      await enablePush();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  let statusLabel = 'Not enabled';
+  if (status === 'enabled') statusLabel = 'Enabled on this device';
+  else if (status === 'loading' || busy) statusLabel = 'Setting up…';
+  else if (status === 'denied' || permission === 'denied') {
+    statusLabel = 'Blocked in browser settings';
+  } else if (status === 'unsupported') statusLabel = 'Not supported in this browser';
+  else if (!vapidConfigured) statusLabel = 'Server key not configured';
+
+  return (
+    <section className="surface-card mb-5 p-4">
+      <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
+        <Bell className="h-4 w-4 text-emerald-600" aria-hidden />
+        Push notifications
+      </h2>
+      <p className="text-muted mb-3 text-sm">
+        Get alerts for household updates. Works when the app is open (banner) or in the
+        background (system notification).
+      </p>
+      <p className="text-muted mb-3 text-xs">
+        Status: <span className="font-semibold text-slate-700 dark:text-slate-300">{statusLabel}</span>
+      </p>
+      {error && (
+        <p className="mb-3 text-xs text-rose-600 dark:text-rose-400" role="alert">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        onClick={handleEnable}
+        disabled={busy || status === 'loading' || status === 'unsupported' || !vapidConfigured}
+        className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+      >
+        {status === 'enabled' ? 'Refresh push registration' : 'Enable notifications'}
+      </button>
+    </section>
+  );
+}
+
 function SettingsView({
   settings,
   updateSettings,
@@ -2188,6 +2244,8 @@ function SettingsView({
           </button>
         </div>
       </section>
+
+      <PushNotificationsSettings />
 
       <section className="surface-card mb-5 overflow-hidden p-4">
         <button
@@ -2825,6 +2883,7 @@ export default function App() {
   }
 
   return (
+    <PushNotificationProvider enabled={auth.canUseApp}>
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
       <main className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
         {saveError && (
@@ -2896,5 +2955,6 @@ export default function App() {
         </div>
       </nav>
     </div>
+    </PushNotificationProvider>
   );
 }
