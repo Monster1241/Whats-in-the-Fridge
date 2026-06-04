@@ -1,32 +1,5 @@
 import admin from 'firebase-admin';
-
-let initialized = false;
-
-function ensureAdmin() {
-  if (initialized) return;
-
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
-  if (json) {
-    const serviceAccount = JSON.parse(json);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    initialized = true;
-    return;
-  }
-
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-    });
-    initialized = true;
-    return;
-  }
-
-  throw new Error(
-    'Firebase Admin is not configured. Set FIREBASE_SERVICE_ACCOUNT_JSON in .env and Vercel.',
-  );
-}
+import { initFirebaseAdmin } from './firebaseAdmin.js';
 
 /**
  * @param {string[]} tokens
@@ -39,7 +12,7 @@ export async function sendPushToTokens(tokens, message) {
     return { successCount: 0, failureCount: 0, invalidTokens: [] };
   }
 
-  ensureAdmin();
+  initFirebaseAdmin();
   const messaging = admin.messaging();
   const data = Object.fromEntries(
     Object.entries(message.data ?? {}).map(([k, v]) => [k, String(v)]),
