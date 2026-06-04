@@ -10,17 +10,19 @@ import {
 } from './auth.js';
 import { isAllowedSecurityQuestion } from './securityQuestions.js';
 import { toFriendlyError } from './errors.js';
+import { verifyFirebaseIdToken } from './firebaseAdmin.js';
 import {
   createHousehold,
   createUser,
   findHouseholdByInviteCode,
   findUserByEmail,
+  findUserByFirebaseUid,
   findUserById,
+  linkUserFirebaseAccount,
   getHouseholdAppState,
   getHouseholdMembers,
   isHouseholdOwner as checkIsHouseholdOwner,
   leaveHousehold,
-  markUserVerified,
   normalizeInviteCode,
   removeHouseholdMember,
   setUserHousehold,
@@ -70,13 +72,10 @@ async function requireAuth(req, res) {
     res.status(friendly.status || 503).json({ error: friendly.message });
     return null;
   }
-  let user = await findUserById(session.userId);
+  const user = await findUserById(session.userId);
   if (!user) {
     res.status(401).json({ error: 'Session expired. Please log in again.' });
     return null;
-  }
-  if (!user.isVerified) {
-    user = await markUserVerified(session.userId);
   }
   return { session, user };
 }
@@ -143,6 +142,74 @@ export async function handleHealth(_req, res) {
       source: resolved.source,
       diagnostics,
     });
+  }
+}
+
+export async function handleFirebaseSession(req, res) {
+  const { idToken, securityQuestion, securityAnswer } = req.body ?? {};
+  if (!idToken?.trim()) {
+    res.status(400).json({ error: 'Firebase session token is required.' });
+    return;
+  }
+
+  try {
+    const decoded = await verifyFirebaseIdToken(idToken.trim());
+    const email = decoded.email?.trim().toLowerCase();
+    const firebaseUid = decoded.uid;
+    const emailVerified = Boolean(decoded.email_verified);
+
+    if (!email) {
+      res.status(400).json({ error: 'Firebase account must include an email address.' });
+      return;
+    }
+
+    await ensureDb();
+
+    let user = await findUserByFirebaseUid(firebaseUid);
+    if (!user) {
+      user = await findUserByEmail(email);
+    }
+
+    if (!user) {
+      if (!securityQuestion?.trim() || !String(securityAnswer || '').trim()) {
+        res.status(400).json({
+          error: 'Security question and answer are required when creating a new account.',
+        });
+        return;
+      }
+      if (!isAllowedSecurityQuestion(securityQuestion)) {
+        res.status(400).json({ error: 'Please choose a security question from the list.' });
+        return;
+      }
+      if (String(securityAnswer).trim().length < 2) {
+        res.status(400).json({ error: 'Security answer must be at least 2 characters.' });
+        return;
+      }
+
+      user = await createUser({
+        email,
+        firebaseUid,
+        securityQuestion: securityQuestion.trim(),
+        securityAnswerHash: await hashSecurityAnswer(securityAnswer),
+        isVerified: emailVerified,
+      });
+    } else {
+      if (user.email !== email) {
+        res.status(409).json({ error: 'This Firebase account does not match our records.' });
+        return;
+      }
+      user = await linkUserFirebaseAccount(user.id, firebaseUid, emailVerified);
+    }
+
+    res.status(200).json(await authPayload(user));
+  } catch (err) {
+    console.error('POST /api/auth/session', err);
+    const friendly = toFriendlyError(err);
+    const message =
+      friendly.message?.includes('Firebase Admin')
+        ? 'Server auth is not configured. Contact support.'
+        : friendly.message || 'Could not sign in with Firebase.';
+    res.status(friendly.status || 401).json({ error: message });
   }
 }
 
@@ -275,12 +342,9 @@ export async function handleLogin(req, res) {
   try {
     await ensureDb();
     let user = await findUserByEmail(email);
-    if (!user || !(await verifyPassword(password, user.password_hash))) {
+    if (!user?.password_hash || !(await verifyPassword(password, user.password_hash))) {
       res.status(401).json({ error: 'Invalid email or password.' });
       return;
-    }
-    if (!user.isVerified) {
-      user = await markUserVerified(user.id);
     }
 
     res.status(200).json(await authPayload(user));

@@ -152,9 +152,11 @@ function getDb() {
 
 export async function createUser({
   email,
-  passwordHash,
+  passwordHash = null,
+  firebaseUid = null,
   securityQuestion,
   securityAnswerHash,
+  isVerified = true,
 }) {
   const users = getDb().collection('users');
   const normalizedEmail = email.trim().toLowerCase();
@@ -165,17 +167,52 @@ export async function createUser({
     throw err;
   }
 
+  if (!passwordHash && !firebaseUid) {
+    const err = new Error('Account credentials are missing.');
+    err.status = 400;
+    throw err;
+  }
+
   const doc = {
     email: normalizedEmail,
-    password_hash: passwordHash,
     securityQuestion,
     securityAnswerHash,
     household_id: null,
-    isVerified: true,
+    isVerified: Boolean(isVerified),
     created_at: new Date(),
   };
+  if (passwordHash) doc.password_hash = passwordHash;
+  if (firebaseUid) doc.firebase_uid = firebaseUid;
+
   const result = await users.insertOne(doc);
   return mapUserDoc({ ...doc, _id: result.insertedId });
+}
+
+export async function findUserByFirebaseUid(firebaseUid) {
+  if (!firebaseUid) return null;
+  const users = getDb().collection('users');
+  const doc = await users.findOne({ firebase_uid: firebaseUid });
+  return mapUserDoc(doc);
+}
+
+export async function linkUserFirebaseAccount(userId, firebaseUid, isVerified) {
+  const users = getDb().collection('users');
+  const result = await users.updateOne(
+    { _id: new ObjectId(userId) },
+    {
+      $set: {
+        firebase_uid: firebaseUid,
+        isVerified: Boolean(isVerified),
+        updated_at: new Date(),
+      },
+    },
+  );
+  if (result.matchedCount === 0) {
+    const err = new Error('User not found.');
+    err.status = 404;
+    throw err;
+  }
+  return findUserById(userId);
 }
 
 export async function getPasswordRecoveryQuestion(email) {

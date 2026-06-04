@@ -6,9 +6,10 @@ import {
   leaveHousehold as leaveHouseholdApi,
   login,
   deleteAccount,
-  logout as clearToken,
+  logout as clearSession,
+  refreshEmailVerificationSession,
+  resendVerificationEmail,
   signup,
-  verifyEmail,
 } from '../api.js';
 
 export function useAuth() {
@@ -76,12 +77,17 @@ export function useAuth() {
     return data;
   }, [applySession]);
 
-  const handleVerifyEmail = useCallback(async (code) => {
+  const handleCheckVerification = useCallback(async () => {
     setError(null);
-    const data = await verifyEmail(code);
+    const data = await refreshEmailVerificationSession();
     applySession(data);
     return data;
   }, [applySession]);
+
+  const handleResendVerification = useCallback(async () => {
+    setError(null);
+    await resendVerificationEmail();
+  }, []);
 
   const handleCreateHousehold = useCallback(async () => {
     setError(null);
@@ -102,8 +108,8 @@ export function useAuth() {
     return data;
   }, [applySession]);
 
-  const handleLogout = useCallback(() => {
-    clearToken();
+  const handleLogout = useCallback(async () => {
+    await clearSession();
     setUser(null);
     setNeedsVerification(false);
     setNeedsHousehold(false);
@@ -113,7 +119,6 @@ export function useAuth() {
   const handleDeleteAccount = useCallback(async () => {
     setError(null);
     await deleteAccount();
-    clearToken();
     setUser(null);
     setNeedsVerification(false);
     setNeedsHousehold(false);
@@ -143,7 +148,8 @@ export function useAuth() {
     refreshSession,
     signup: handleSignup,
     login: handleLogin,
-    verifyEmail: handleVerifyEmail,
+    checkVerification: handleCheckVerification,
+    resendVerificationEmail: handleResendVerification,
     createHousehold: handleCreateHousehold,
     finishHouseholdSetup,
     joinHousehold: handleJoinHousehold,

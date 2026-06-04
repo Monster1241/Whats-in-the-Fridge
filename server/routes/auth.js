@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   handleDeleteAccount,
+  handleFirebaseSession,
   handleLogin,
   handleMe,
   handlePasswordRecoveryQuestion,
@@ -13,6 +14,10 @@ import { asyncRoute } from '../routeUtils.js';
 
 export const authRouter = Router();
 
+authRouter.post(
+  '/session',
+  asyncRoute(handleFirebaseSession, 'POST /api/auth/session', 'Could not establish session'),
+);
 authRouter.post(
   '/signup',
   asyncRoute(handleSignup, 'POST /api/auth/signup', 'Signup failed'),

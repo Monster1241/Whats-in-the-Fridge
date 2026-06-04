@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AuthScreen } from './components/AuthScreen.jsx';
+import { VerifyEmailScreen } from './components/VerifyEmailScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
 import { useAuth } from './hooks/useAuth.js';
 import { fetchHouseholdMembers, removeHouseholdMember } from './api.js';
@@ -2631,6 +2632,19 @@ export default function App() {
         onCreateHousehold={auth.createHousehold}
         onJoinHousehold={auth.joinHousehold}
         onFinishHouseholdSetup={auth.finishHouseholdSetup}
+      />
+    );
+  }
+
+  if (auth.needsVerification) {
+    return (
+      <VerifyEmailScreen
+        email={auth.user?.email}
+        error={auth.error}
+        setError={auth.setError}
+        onCheckVerified={auth.checkVerification}
+        onResend={auth.resendVerificationEmail}
+        onLogout={auth.logout}
       />
     );
   }

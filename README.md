@@ -45,16 +45,23 @@ Recipe definitions remain in the app code — only household data is stored in t
 
 ## Auth flow
 
-1. **Sign up** or **Log in** with email + password.
-2. **Create a new household** (get an invite code) or **Join** with your partner's code.
-3. Session token is saved in `localStorage` so you stay logged in on your phone.
+1. **Sign up** or **Log in** with email + password (Firebase Authentication on the client).
+2. The app exchanges your Firebase ID token for a household API session (JWT in `localStorage`).
+3. **Create a new household** (get an invite code) or **Join** with your partner's code.
+4. Verify your email when prompted (Firebase sends the link).
+
+## Security
+
+- **Never commit** `.env`, Firebase service account JSON (`*-firebase-adminsdk*.json`), or API keys to git — they are listed in `.gitignore`.
+- Store **`FIREBASE_SERVICE_ACCOUNT_JSON`** (minified one-line JSON) and **`JWT_SECRET`** only in Vercel env vars and local `.env`.
+- If a service account key was exposed (chat, screenshot, or accidental commit), **revoke it** in [Firebase Console](https://console.firebase.google.com) → Project settings → Service accounts → manage keys, then generate a new key.
+- Enable **Email/Password** in Firebase Authentication and add your Vercel domain under **Authorized domains**.
 
 ## API routes
 
 | Route | Method | Auth |
 |-------|--------|------|
-| `/api/auth/signup` | POST | — |
-| `/api/auth/login` | POST | — |
+| `/api/auth/session` | POST | Firebase ID token → app JWT |
 | `/api/auth/me` | GET | Bearer token |
 | `/api/household/create` | POST | Bearer token |
 | `/api/household/join` | POST | Bearer token |
@@ -91,7 +98,8 @@ Without `RESEND_API_KEY`, the 6-digit code is printed in the server console only
 2. **Environment variables** (Settings → Environment Variables):
    - **`MONGODB_URI`** — MongoDB Atlas connection string (required)
    - **`JWT_SECRET`** — long random secret for session tokens (required)
-   - **`RESEND_API_KEY`** — for verification emails (required in production)
+   - **`FIREBASE_SERVICE_ACCOUNT_JSON`** — minified service account JSON (required for `/api/auth/session`)
+   - **`RESEND_API_KEY`** — optional legacy verification emails
    - **`RESEND_FROM_EMAIL`** — sender address (optional; defaults to `onboarding@resend.dev`)
    - Optional: **`CORS_ORIGIN`** — your production URL if needed
    - Do **not** set `VITE_API_URL` to `localhost` on Vercel.

@@ -2,4 +2,12 @@ node_modules
 dist
 .DS_Store
 *.local
+
+# Secrets — never commit
 .env
+.env.*
+!.env.example
+*-firebase-adminsdk*.json
+firebase-service-account.json
+service-account*.json
+*.pem

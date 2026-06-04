@@ -1,11 +1,7 @@
 import { useState } from 'react';
 import { ChefHat, Copy, Home, LogIn, Refrigerator, Share2, UserPlus, Users } from 'lucide-react';
 import { SECURITY_QUESTIONS } from '../constants/securityQuestions.js';
-import {
-  fetchPasswordRecoveryQuestion,
-  resetPasswordWithSecurityAnswer,
-  verifyPasswordRecoveryAnswer,
-} from '../api.js';
+import { sendPasswordResetEmail } from '../api.js';
 
 export function AuthScreen({
   needsHousehold,
@@ -23,9 +19,6 @@ export function AuthScreen({
   const [password, setPassword] = useState('');
   const [securityQuestion, setSecurityQuestion] = useState(SECURITY_QUESTIONS[0]);
   const [securityAnswer, setSecurityAnswer] = useState('');
-  const [recoveryQuestion, setRecoveryQuestion] = useState('');
-  const [recoveryAnswer, setRecoveryAnswer] = useState('');
-  const [newPassword, setNewPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [householdMode, setHouseholdMode] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -91,16 +84,13 @@ export function AuthScreen({
 
   const resetRecovery = () => {
     setRecoverStep(null);
-    setRecoveryQuestion('');
-    setRecoveryAnswer('');
-    setNewPassword('');
     setError(null);
+    setLocalMessage('');
   };
 
   const startRecovery = () => {
     setError(null);
-    setRecoveryAnswer('');
-    setNewPassword('');
+    setLocalMessage('');
     setRecoverStep('email');
   };
 
@@ -384,7 +374,8 @@ export function AuthScreen({
                     ))}
                   </select>
                   <p className="text-muted mt-1.5 text-xs leading-relaxed">
-                    Used to reset your password if you forget it. Answers are not case-sensitive.
+                    Stored securely for account recovery options. Password reset uses your email via
+                    Firebase.
                   </p>
                 </div>
                 <div>
@@ -437,8 +428,8 @@ export function AuthScreen({
               Beta privacy note
             </p>
             <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500/90 dark:text-slate-500">
-              Your email is used for sign-in. Security answers are stored encrypted and only used for
-              password recovery. Household data stays private to your household.
+              Sign-in is handled by Firebase Authentication. Household inventory data stays private to
+              your household.
             </p>
           </div>
         </>
@@ -449,9 +440,7 @@ export function AuthScreen({
               <h2 className="text-heading text-lg font-bold">Reset password</h2>
               <p className="text-muted mt-1 text-sm">
                 {recoverStep === 'email' && 'Enter the email on your account.'}
-                {recoverStep === 'answer' && 'Answer your security question.'}
-                {recoverStep === 'password' && 'Choose a new password.'}
-                {recoverStep === 'done' && 'You can log in with your new password.'}
+                {recoverStep === 'done' && 'Check your inbox for the reset link from Firebase.'}
               </p>
             </div>
             <button
@@ -475,9 +464,11 @@ export function AuthScreen({
               onSubmit={(e) => {
                 e.preventDefault();
                 run(async () => {
-                  const data = await fetchPasswordRecoveryQuestion(email);
-                  setRecoveryQuestion(data.securityQuestion);
-                  setRecoverStep('answer');
+                  await sendPasswordResetEmail(email);
+                  setRecoverStep('done');
+                  setLocalMessage(
+                    'If an account exists for this email, Firebase sent a password reset link.',
+                  );
                 });
               }}
             >
@@ -501,85 +492,7 @@ export function AuthScreen({
                 disabled={busy}
                 className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
               >
-                {busy ? 'Looking up…' : 'Continue'}
-              </button>
-            </form>
-          )}
-
-          {recoverStep === 'answer' && (
-            <form
-              className="space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                run(async () => {
-                  await verifyPasswordRecoveryAnswer(email, recoveryAnswer);
-                  setRecoverStep('password');
-                });
-              }}
-            >
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-600 dark:bg-slate-900/50">
-                <p className="text-muted text-xs font-semibold uppercase">Your security question</p>
-                <p className="text-heading mt-1 text-sm font-medium">{recoveryQuestion}</p>
-              </div>
-              <div>
-                <label htmlFor="recover-answer" className="text-muted mb-1 block text-xs font-semibold uppercase">
-                  Your answer
-                </label>
-                <input
-                  id="recover-answer"
-                  type="text"
-                  autoComplete="off"
-                  required
-                  value={recoveryAnswer}
-                  onChange={(e) => setRecoveryAnswer(e.target.value)}
-                  className="input-field"
-                  placeholder="Same answer you chose at sign-up"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
-              >
-                {busy ? 'Checking…' : 'Verify answer'}
-              </button>
-            </form>
-          )}
-
-          {recoverStep === 'password' && (
-            <form
-              className="space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                run(async () => {
-                  await resetPasswordWithSecurityAnswer(email, recoveryAnswer, newPassword);
-                  setRecoverStep('done');
-                  setLocalMessage('Password updated successfully.');
-                });
-              }}
-            >
-              <div>
-                <label htmlFor="recover-password" className="text-muted mb-1 block text-xs font-semibold uppercase">
-                  New password
-                </label>
-                <input
-                  id="recover-password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="input-field"
-                  placeholder="At least 8 characters"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
-              >
-                {busy ? 'Saving…' : 'Update password'}
+                {busy ? 'Sending…' : 'Send reset email'}
               </button>
             </form>
           )}
@@ -587,7 +500,7 @@ export function AuthScreen({
           {recoverStep === 'done' && (
             <div className="space-y-4 text-center">
               <p className="text-muted text-sm leading-relaxed">
-                {localMessage || 'Your password has been updated.'}
+                {localMessage || 'Check your email for the reset link.'}
               </p>
               <button
                 type="button"
