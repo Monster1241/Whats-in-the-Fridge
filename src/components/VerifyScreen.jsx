@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { Mail, Refrigerator } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import { AppLogoHero } from './AppLogo.jsx';
 
 export function VerifyScreen({ email, error, setError, onVerify, onLogout }) {
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
@@ -53,16 +54,16 @@ export function VerifyScreen({ email, error, setError, onVerify, onLogout }) {
 
   return (
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col justify-center px-5 py-8">
-      <header className="mb-8 text-center">
-        <Refrigerator className="mx-auto mb-3 h-12 w-12 text-emerald-600" aria-hidden />
-        <h1 className="text-heading text-2xl font-extrabold">Verify your account</h1>
-        <p className="text-muted mt-2 text-sm">
-          We sent a 6-digit code to <span className="font-semibold text-slate-800 dark:text-slate-200">{email}</span>
-        </p>
-        <p className="text-muted mt-2 text-xs">
-          Check your inbox and spam folder. The code expires after you verify.
-        </p>
-      </header>
+      <AppLogoHero
+        title="Verify your account"
+        tagline={
+          <>
+            We sent a 6-digit code to{' '}
+            <span className="font-semibold text-slate-800 dark:text-slate-200">{email}</span>. Check
+            your inbox and spam folder.
+          </>
+        }
+      />
 
       <form className="surface-card space-y-5 p-5" onSubmit={submit}>
         {error && (
