@@ -27,7 +27,10 @@ import {
   updateHouseholdAppState,
   verifyUserEmail,
   deleteUserAccount,
+  getHouseholdFcmTokens,
+  removeInvalidFcmTokens,
 } from './db.js';
+import { sendPushToTokens } from './fcm.js';
 
 async function authPayload(user) {
   const isVerified = Boolean(user.isVerified);
@@ -474,6 +477,98 @@ export async function handleLeaveHousehold(req, res) {
   } catch (err) {
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+function formatSenderLabel(email) {
+  const local = String(email || '').split('@')[0]?.trim();
+  if (!local) return 'Your household partner';
+  return local.charAt(0).toUpperCase() + local.slice(1);
+}
+
+function buildShoppingPingNotification(senderEmail, itemNames) {
+  const sender = formatSenderLabel(senderEmail);
+  if (itemNames.length === 0) {
+    return {
+      title: '🛒 Shopping list',
+      body: `${sender} is heading to the shops — your shared list is empty right now.`,
+    };
+  }
+  const joined = itemNames.join(', ');
+  const maxLen = 200;
+  const list =
+    joined.length > maxLen ? `${joined.slice(0, maxLen - 1)}…` : joined;
+  return {
+    title: '🛒 Time to shop!',
+    body: `${sender} is heading home or to the shops — can you grab: ${list}?`,
+  };
+}
+
+export async function handlePingShoppingList(req, res) {
+  try {
+    const auth = await requireVerified(req, res);
+    if (!auth) return;
+    if (!requireHouseholdSession(auth, res)) return;
+
+    const householdId = getScopedHouseholdId(auth);
+    const state = await getHouseholdAppState(householdId);
+    const shoppingItems = (state.items ?? [])
+      .filter((item) => item?.status === 'out')
+      .map((item) => String(item.name || '').trim())
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+
+    const tokens = await getHouseholdFcmTokens(householdId, auth.user.id);
+    const memberCount = (await getHouseholdMembers(householdId)).length;
+
+    if (memberCount < 2) {
+      res.status(400).json({
+        error: 'Invite a partner to your household first so they can receive shopping pings.',
+      });
+      return;
+    }
+
+    if (tokens.length === 0) {
+      res.status(200).json({
+        ok: true,
+        sent: 0,
+        message:
+          'No push tokens yet. Ask your partner to open Settings → Enable notifications in the app.',
+      });
+      return;
+    }
+
+    const { title, body } = buildShoppingPingNotification(auth.user.email, shoppingItems);
+    const { successCount, invalidTokens } = await sendPushToTokens(tokens, {
+      title,
+      body,
+      data: {
+        type: 'shopping_ping',
+        url: '/',
+      },
+    });
+
+    if (invalidTokens.length > 0) {
+      await removeInvalidFcmTokens(invalidTokens);
+    }
+
+    const sent = successCount;
+    res.status(200).json({
+      ok: true,
+      sent,
+      message:
+        sent > 0
+          ? `Sent a shopping reminder to ${sent} device${sent === 1 ? '' : 's'}.`
+          : 'Could not deliver notifications. Ask your partner to re-enable notifications in Settings.',
+    });
+  } catch (err) {
+    console.error('POST /api/household/ping-shopping', err);
+    const friendly = toFriendlyError(err);
+    const message =
+      friendly.message?.includes('Firebase Admin')
+        ? 'Push notifications are not configured on the server.'
+        : friendly.message || 'Could not send shopping ping.';
+    res.status(friendly.status || 500).json({ error: message });
   }
 }
 

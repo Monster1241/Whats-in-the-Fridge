@@ -171,6 +171,14 @@ export async function joinHousehold(inviteCode) {
   return data;
 }
 
+export async function pingShoppingList() {
+  const res = await fetch(`${API_BASE}/household/ping-shopping`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+  });
+  return parseJson(res);
+}
+
 export async function fetchHouseholdMembers() {
   const res = await fetch(`${API_BASE}/household/members`, {
     headers: authHeaders(),

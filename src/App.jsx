@@ -7,7 +7,7 @@ import {
   PushNotificationProvider,
   usePushNotifications,
 } from './context/PushNotificationContext.jsx';
-import { fetchHouseholdMembers, removeHouseholdMember } from './api.js';
+import { fetchHouseholdMembers, pingShoppingList, removeHouseholdMember } from './api.js';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
@@ -999,75 +999,6 @@ function InventorySection({ title, emoji, accent, itemCount, children, emptyText
   );
 }
 
-function ShareFallbackModal({ message, onClose }) {
-  const [copied, setCopied] = useState(false);
-
-  const copyMessage = async () => {
-    try {
-      await navigator.clipboard.writeText(message);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  useEffect(() => {
-    copyMessage();
-  }, []);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="share-modal-title"
-    >
-      <div className="surface-card w-full max-w-md p-5 shadow-2xl">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div>
-            <h3 id="share-modal-title" className="text-heading text-lg font-bold">
-              Share with your partner
-            </h3>
-            <p className="text-muted mt-1 text-sm">
-              Native sharing isn&apos;t available here — message copied to clipboard.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-700 dark:hover:text-slate-100"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <textarea
-          readOnly
-          value={message}
-          className="input-field h-32 resize-none"
-        />
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={copyMessage}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
-          >
-            <Copy className="h-4 w-4" />
-            {copied ? 'Copied!' : 'Copy again'}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 dark:border-slate-600 dark:text-slate-300"
-          >
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function StorageLocationTabs({
   enabledModules,
   inventoryScope,
@@ -1165,7 +1096,8 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
   const [shopCategory, setShopCategory] = useState(getInitialCategoryForModule(defaultModuleKey));
   const [activeView, setActiveView] = useState(getInitialCategoryForModule(defaultModuleKey));
   const [editingItem, setEditingItem] = useState(null);
-  const [shareMessage, setShareMessage] = useState(null);
+  const [pingBusy, setPingBusy] = useState(false);
+  const [pingFeedback, setPingFeedback] = useState(null);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
 
@@ -1370,25 +1302,23 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
     );
   };
 
-  const buildShoppingMessage = () => {
-    const missing = shoppingList.map((i) => i.name);
-    if (missing.length === 0) {
-      return 'Hey! Our fridge shopping list is empty right now — we\'re all stocked up!';
-    }
-    return `Hey! Heading home or near the shops? Can you grab these missing items for the fridge: ${missing.join(', ')}?`;
-  };
-
   const pingPartner = async () => {
-    const message = buildShoppingMessage();
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: 'Fridge Shopping List', text: message });
-        return;
-      } catch (err) {
-        if (err?.name === 'AbortError') return;
-      }
+    setPingBusy(true);
+    setPingFeedback(null);
+    try {
+      const result = await pingShoppingList();
+      setPingFeedback({
+        type: result.sent > 0 ? 'success' : 'info',
+        text: result.message || 'Notification sent to your household.',
+      });
+    } catch (err) {
+      setPingFeedback({
+        type: 'error',
+        text: err.message || 'Could not send notification.',
+      });
+    } finally {
+      setPingBusy(false);
     }
-    setShareMessage(message);
   };
 
   return (
@@ -1444,7 +1374,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
               accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
               onDismiss={() => dismiss('shopping-tip')}
             >
-              Add missing items, tap check when bought, or share the list with your partner.
+              Add missing items, tap check when bought, or ping your partner with an app notification.
             </TipBanner>
           )}
 
@@ -1520,11 +1450,26 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
           <button
             type="button"
             onClick={pingPartner}
-            className={`mt-2 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] ${SHOPPING_ACCENT.btn}`}
+            disabled={pingBusy}
+            className={`mt-2 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] disabled:opacity-60 ${SHOPPING_ACCENT.btn}`}
           >
-            <Share2 className="h-5 w-5" />
-            🚀 Ping Shopping List to Partner
+            <Bell className="h-5 w-5" />
+            {pingBusy ? 'Sending notification…' : '🚀 Ping partner to shop'}
           </button>
+          {pingFeedback && (
+            <p
+              role="status"
+              className={`mt-2 text-center text-xs font-medium ${
+                pingFeedback.type === 'error'
+                  ? 'text-rose-600 dark:text-rose-400'
+                  : pingFeedback.type === 'success'
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              {pingFeedback.text}
+            </p>
+          )}
         </>
       ) : (
         categoryGrouped && (
@@ -1665,10 +1610,6 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
             </InventorySection>
           </>
         )
-      )}
-
-      {shareMessage && (
-        <ShareFallbackModal message={shareMessage} onClose={() => setShareMessage(null)} />
       )}
 
       {editingItem && (

@@ -223,6 +223,41 @@ export async function findUserByEmail(email) {
  * @param {string} userId
  * @param {string} token
  */
+/**
+ * FCM tokens for household members other than excludeUserId.
+ * @param {string} householdId
+ * @param {string} excludeUserId
+ * @returns {Promise<string[]>}
+ */
+export async function getHouseholdFcmTokens(householdId, excludeUserId) {
+  const users = getDb().collection('users');
+  const docs = await users
+    .find({
+      household_id: new ObjectId(householdId),
+      _id: { $ne: new ObjectId(excludeUserId) },
+      fcmTokens: { $exists: true, $not: { $size: 0 } },
+    })
+    .project({ fcmTokens: 1 })
+    .toArray();
+
+  const tokens = new Set();
+  for (const doc of docs) {
+    for (const token of doc.fcmTokens ?? []) {
+      if (token) tokens.add(token);
+    }
+  }
+  return [...tokens];
+}
+
+export async function removeInvalidFcmTokens(tokens) {
+  if (!tokens?.length) return;
+  const users = getDb().collection('users');
+  await users.updateMany(
+    { fcmTokens: { $in: tokens } },
+    { $pullAll: { fcmTokens: tokens } },
+  );
+}
+
 export async function addFcmTokenToUser(userId, token) {
   const users = getDb().collection('users');
   const result = await users.updateOne(

@@ -4,6 +4,7 @@ import {
   handleGetHouseholdMembers,
   handleJoinHousehold,
   handleLeaveHousehold,
+  handlePingShoppingList,
   handleRemoveHouseholdMember,
 } from '../handlers.js';
 import { asyncRoute } from '../routeUtils.js';
@@ -29,6 +30,14 @@ householdRouter.get(
 householdRouter.post(
   '/leave',
   asyncRoute(handleLeaveHousehold, 'POST /api/household/leave', 'Could not leave household'),
+);
+householdRouter.post(
+  '/ping-shopping',
+  asyncRoute(
+    handlePingShoppingList,
+    'POST /api/household/ping-shopping',
+    'Could not send shopping notification',
+  ),
 );
 householdRouter.post(
   '/members/remove',

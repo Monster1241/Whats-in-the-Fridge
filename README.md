@@ -111,4 +111,4 @@ Without `RESEND_API_KEY`, the 6-digit code is printed in the server console only
 - **Fridge** — Ambient / Fresh / Freezer tabs, shopping list, expiry tracking
 - **Recipes** — Matched meals from inventory, saved bookmarks
 - **Settings** — Theme, profile, invite code, log out
-- **Ping partner** — Share shopping list via native share
+- **Ping partner** — Push notification to household members (FCM) with the shopping list
