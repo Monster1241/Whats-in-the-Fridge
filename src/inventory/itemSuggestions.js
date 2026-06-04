@@ -41,16 +41,43 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Face Masks', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.BATHROOM },
   { name: 'Moisturiser', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.BATHROOM },
   { name: 'Razors', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.BATHROOM },
-  // Food — Ambient
+  // Food — Ambient (pantry & spices)
   { name: 'Pasta', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Rice', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Bread', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Olive Oil', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Vegetable Oil', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Soy Sauce', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Tomato Sauce', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Pasta Sauce', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Garlic', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Onions', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Flour', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Sugar', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Honey', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Oats', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Cereal', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Baked Beans', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Tuna', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Biscuits', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Salt', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Sea Salt', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Black Pepper', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Ground Pepper', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Paprika', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Cumin', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Turmeric', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Oregano', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Cinnamon', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Chili Powder', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Chili Flakes', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Garlic Powder', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Onion Powder', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Curry Powder', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Mixed Herbs', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Italian Herbs', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Stock Cubes', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Baking Powder', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   // Food — Fresh
   { name: 'Milk', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
   { name: 'Eggs', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
@@ -83,12 +110,33 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Baby Powder', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
 ];
 
+function suggestionMatchesQuery(name, needle) {
+  const normalized = name.toLowerCase();
+  if (normalized.includes(needle)) return true;
+  return normalized.split(/\s+/).some(
+    (word) => word.startsWith(needle) || needle.startsWith(word),
+  );
+}
+
 export function filterItemSuggestions(query, enabledModules, limit = 8) {
   const needle = String(query || '').trim().toLowerCase();
-  if (!needle) return [];
-  return ITEM_SUGGESTIONS.filter(
+  if (!needle || needle.length < 1) return [];
+
+  const ranked = ITEM_SUGGESTIONS.filter(
     (entry) =>
-      entry.name.toLowerCase().includes(needle) &&
-      isItemTypeEnabled(enabledModules, entry.itemType),
-  ).slice(0, limit);
+      isItemTypeEnabled(enabledModules, entry.itemType) &&
+      suggestionMatchesQuery(entry.name, needle),
+  ).sort((a, b) => {
+    const aName = a.name.toLowerCase();
+    const bName = b.name.toLowerCase();
+    const aStarts = aName.startsWith(needle) ? 0 : 1;
+    const bStarts = bName.startsWith(needle) ? 0 : 1;
+    if (aStarts !== bStarts) return aStarts - bStarts;
+    const aWord = aName.split(/\s+/).some((w) => w.startsWith(needle)) ? 0 : 1;
+    const bWord = bName.split(/\s+/).some((w) => w.startsWith(needle)) ? 0 : 1;
+    if (aWord !== bWord) return aWord - bWord;
+    return aName.localeCompare(bName);
+  });
+
+  return ranked.slice(0, limit);
 }
