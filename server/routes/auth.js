@@ -4,9 +4,6 @@ import {
   handleFirebaseSession,
   handleLogin,
   handleMe,
-  handlePasswordRecoveryQuestion,
-  handlePasswordRecoveryReset,
-  handlePasswordRecoveryVerify,
   handleSignup,
   handleVerifyEmail,
 } from '../handlers.js';
@@ -30,30 +27,6 @@ authRouter.get('/me', asyncRoute(handleMe, 'GET /api/auth/me', 'Session check fa
 authRouter.post(
   '/verify',
   asyncRoute(handleVerifyEmail, 'POST /api/auth/verify', 'Verification failed'),
-);
-authRouter.post(
-  '/password-recovery/question',
-  asyncRoute(
-    handlePasswordRecoveryQuestion,
-    'POST /api/auth/password-recovery/question',
-    'Could not load security question',
-  ),
-);
-authRouter.post(
-  '/password-recovery/verify',
-  asyncRoute(
-    handlePasswordRecoveryVerify,
-    'POST /api/auth/password-recovery/verify',
-    'Could not verify answer',
-  ),
-);
-authRouter.post(
-  '/password-recovery/reset',
-  asyncRoute(
-    handlePasswordRecoveryReset,
-    'POST /api/auth/password-recovery/reset',
-    'Could not reset password',
-  ),
 );
 authRouter.delete(
   '/account',

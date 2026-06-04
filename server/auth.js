@@ -28,23 +28,8 @@ function fromBase64Url(value) {
   return Buffer.from(value, 'base64url').toString('utf8');
 }
 
-export function normalizeSecurityAnswer(answer) {
-  return String(answer || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
-}
-
 export async function hashPassword(password) {
   return bcrypt.hash(String(password), BCRYPT_ROUNDS);
-}
-
-export async function hashSecurityAnswer(answer) {
-  return hashPassword(normalizeSecurityAnswer(answer));
-}
-
-export async function verifySecurityAnswer(answer, storedHash) {
-  return verifyPassword(normalizeSecurityAnswer(answer), storedHash);
 }
 
 function verifyLegacyScrypt(password, stored) {

@@ -48,31 +48,26 @@ async function parseJson(res) {
 /**
  * Exchange a Firebase ID token for our household API session (JWT).
  * @param {string} idToken
- * @param {{ securityQuestion?: string, securityAnswer?: string }} [profile]
  */
-export async function syncFirebaseSession(idToken, profile = {}) {
+export async function syncFirebaseSession(idToken) {
   const res = await fetch(`${API_BASE}/auth/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      idToken,
-      securityQuestion: profile.securityQuestion,
-      securityAnswer: profile.securityAnswer,
-    }),
+    body: JSON.stringify({ idToken }),
   });
   const data = await parseJson(res);
   if (data.token) setAuthToken(data.token);
   return data;
 }
 
-export async function signup(email, password, securityQuestion, securityAnswer) {
+export async function signup(email, password) {
   const { firebaseSignUp, firebaseGetIdToken } = await import('./auth/firebaseAuth.js');
   await firebaseSignUp(email, password);
   const idToken = await firebaseGetIdToken(true);
   if (!idToken) {
     throw new Error('Could not complete sign up. Please try again.');
   }
-  return syncFirebaseSession(idToken, { securityQuestion, securityAnswer });
+  return syncFirebaseSession(idToken);
 }
 
 export async function login(email, password) {

@@ -33,6 +33,7 @@ import {
   resolveModuleKey,
 } from './inventory/modules.js';
 import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
+import { classifyItem } from './inventory/classifyItem.js';
 import { normalizeName } from './inventory/itemUtils.js';
 import {
   Bookmark,
@@ -1163,23 +1164,60 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
     }
   };
 
+  const applySmartClassification = useCallback(
+    (name, target) => {
+      const trimmed = String(name || '').trim();
+      if (!trimmed || trimmed === BARCODE_LOOKUP_LOADING_TEXT) return;
+
+      const hit = classifyItem(trimmed);
+      if (!hit) return;
+
+      if (target === 'add') {
+        setAddItemType(ITEM_TYPE.FOOD);
+        setAddCategory(hit.category);
+      } else {
+        setShopItemType(ITEM_TYPE.FOOD);
+        setShopCategory(hit.category);
+      }
+    },
+    [],
+  );
+
+  const handleDraftChange = useCallback(
+    (value) => {
+      setDraft(value);
+      applySmartClassification(value, 'add');
+    },
+    [applySmartClassification],
+  );
+
+  const handleShopDraftChange = useCallback(
+    (value) => {
+      setShopDraft(value);
+      applySmartClassification(value, 'shop');
+    },
+    [applySmartClassification],
+  );
+
   const handleBarcodeResolved = (result) => {
     if (!result) return;
-    applySuggestion(
-      {
-        name: result.name,
-        itemType: result.itemType,
-        category: result.category,
-      },
-      'add',
-    );
+
+    const classified = classifyItem(result.name);
+    const entry = {
+      name: result.name,
+      itemType: classified?.itemType ?? result.itemType,
+      category: classified?.category ?? result.category,
+    };
+
+    applySuggestion(entry, 'add');
+
     const mod = getEnabledModuleList(enabledModules).find(
-      (m) => m.itemType === result.itemType,
+      (m) => m.itemType === entry.itemType,
     );
     if (mod) {
       setInventoryScope(mod.key);
       if (!isShoppingView(activeView)) {
-        setActiveView(result.category);
+        setActiveView(entry.category);
       }
     }
   };
@@ -1363,7 +1401,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
             <div className="relative flex gap-2">
               <ItemTypeahead
                 value={shopDraft}
-                onChange={setShopDraft}
+                onChange={handleShopDraftChange}
                 onPick={(entry) => applySuggestion(entry, 'shop')}
                 enabledModules={enabledModules}
                 placeholder='What do you need? (e.g. "Milk")'
@@ -1438,7 +1476,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
               <div className="relative flex gap-2">
                 <ItemTypeahead
                   value={draft}
-                  onChange={setDraft}
+                  onChange={handleDraftChange}
                   onPick={(entry) => applySuggestion(entry, 'add')}
                   onBarcodeResolved={handleBarcodeResolved}
                   enabledModules={enabledModules}

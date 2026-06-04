@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ChefHat, Copy, Home, LogIn, Refrigerator, Share2, UserPlus, Users } from 'lucide-react';
-import { SECURITY_QUESTIONS } from '../constants/securityQuestions.js';
 import { sendPasswordResetEmail } from '../api.js';
 
 export function AuthScreen({
@@ -17,8 +16,6 @@ export function AuthScreen({
   const [recoverStep, setRecoverStep] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [securityQuestion, setSecurityQuestion] = useState(SECURITY_QUESTIONS[0]);
-  const [securityAnswer, setSecurityAnswer] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [householdMode, setHouseholdMode] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -305,7 +302,7 @@ export function AuthScreen({
               e.preventDefault();
               run(async () => {
                 if (mode === 'signup') {
-                  await onSignup(email, password, securityQuestion, securityAnswer);
+                  await onSignup(email, password);
                 } else {
                   await onLogin(email, password);
                 }
@@ -350,55 +347,6 @@ export function AuthScreen({
                 placeholder="At least 8 characters"
               />
             </div>
-
-            {mode === 'signup' && (
-              <>
-                <div>
-                  <label
-                    htmlFor="auth-security-question"
-                    className="text-muted mb-1 block text-xs font-semibold uppercase"
-                  >
-                    Security question
-                  </label>
-                  <select
-                    id="auth-security-question"
-                    required
-                    value={securityQuestion}
-                    onChange={(e) => setSecurityQuestion(e.target.value)}
-                    className="input-field"
-                  >
-                    {SECURITY_QUESTIONS.map((q) => (
-                      <option key={q} value={q}>
-                        {q}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-muted mt-1.5 text-xs leading-relaxed">
-                    Stored securely for account recovery options. Password reset uses your email via
-                    Firebase.
-                  </p>
-                </div>
-                <div>
-                  <label
-                    htmlFor="auth-security-answer"
-                    className="text-muted mb-1 block text-xs font-semibold uppercase"
-                  >
-                    Your answer
-                  </label>
-                  <input
-                    id="auth-security-answer"
-                    type="text"
-                    autoComplete="off"
-                    required
-                    minLength={2}
-                    value={securityAnswer}
-                    onChange={(e) => setSecurityAnswer(e.target.value)}
-                    className="input-field"
-                    placeholder="Your answer (remember this!)"
-                  />
-                </div>
-              </>
-            )}
 
             <button
               type="submit"

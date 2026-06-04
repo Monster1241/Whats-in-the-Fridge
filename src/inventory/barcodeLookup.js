@@ -1,4 +1,5 @@
 import { defaultCategoryForItemType, ITEM_TYPE } from './constants.js';
+import { resolveIntakeCategory } from './classifyItem.js';
 
 /** Required by Open Food Facts API terms of use. */
 export const OPEN_FACTS_USER_AGENT =
@@ -60,10 +61,14 @@ export async function lookupBarcode(barcode) {
   if (foodPayload?.status === 1 && foodPayload.product) {
     const name = extractProductName(foodPayload.product);
     if (name) {
-      return {
-        name,
+      const intake = resolveIntakeCategory(name, {
         itemType: ITEM_TYPE.FOOD,
         category: defaultCategoryForItemType(ITEM_TYPE.FOOD),
+      });
+      return {
+        name,
+        itemType: intake.itemType,
+        category: intake.category,
       };
     }
   }

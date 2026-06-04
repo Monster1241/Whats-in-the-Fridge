@@ -61,9 +61,9 @@ export function useAuth() {
   }, [applySession]);
 
   const handleSignup = useCallback(
-    async (email, password, securityQuestion, securityAnswer) => {
+    async (email, password) => {
       setError(null);
-      const data = await signup(email, password, securityQuestion, securityAnswer);
+      const data = await signup(email, password);
       applySession(data);
       return data;
     },
