@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Mail } from 'lucide-react';
-import { AppLogoHero } from './AppLogo.jsx';
+import { Mail, Refrigerator } from 'lucide-react';
 
 export function VerifyEmailScreen({
   email,
@@ -28,17 +27,15 @@ export function VerifyEmailScreen({
 
   return (
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col justify-center px-5 py-8">
-      <AppLogoHero
-        title="Verify your email"
-        tagline={
-          <>
-            We sent a confirmation link to{' '}
-            <span className="font-semibold text-slate-700 dark:text-slate-200">{email}</span>. Open
-            it on this device, then tap the button below.
-          </>
-        }
-        className="mb-6"
-      />
+      <header className="mb-6 text-center">
+        <Refrigerator className="mx-auto mb-3 h-10 w-10 text-emerald-600" aria-hidden />
+        <h1 className="text-heading text-2xl font-extrabold">Verify your email</h1>
+        <p className="text-muted mt-2 text-sm leading-relaxed">
+          We sent a confirmation link to{' '}
+          <span className="font-semibold text-slate-700 dark:text-slate-200">{email}</span>.
+          Open it on this device, then tap the button below.
+        </p>
+      </header>
 
       <div className="surface-card space-y-4 p-5">
         {error && (

@@ -4,8 +4,6 @@ import { VerifyEmailScreen } from './components/VerifyEmailScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
 import { useAuth } from './hooks/useAuth.js';
 import { fetchHouseholdMembers, removeHouseholdMember } from './api.js';
-import { AppHeader } from './components/AppHeader.jsx';
-import { AppLogo } from './components/AppLogo.jsx';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
@@ -1338,10 +1336,15 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
 
   return (
     <div className="pb-28">
-      <AppHeader
-        title="Home"
-        subtitle={`Food & household supplies · expiring soon within ${EXPIRING_SOON_DAYS} days (food)`}
-      />
+      <header className="mb-4">
+        <h1 className="text-heading flex items-center gap-2.5 text-2xl font-extrabold tracking-tight">
+          <Refrigerator className="h-7 w-7 shrink-0 text-emerald-600" aria-hidden />
+          What&apos;s in the Fridge?
+        </h1>
+        <p className="text-muted mt-1.5 text-sm leading-relaxed">
+          Food & household supplies · expiring soon within {EXPIRING_SOON_DAYS} days (food)
+        </p>
+      </header>
 
       {!isDismissed('welcome') && (
         <TipBanner
@@ -1774,14 +1777,14 @@ function RecipesView({ items, updateItems, savedRecipes }) {
 
   return (
     <div className="pb-28">
-      <AppHeader
-        title="What Can We Cook?"
-        subtitle={
-          recipeView === RECIPE_VIEW.SAVED
+      <header className="mb-4">
+        <h1 className="text-heading text-2xl font-extrabold">What Can We Cook?</h1>
+        <p className="text-muted mt-1.5 text-sm">
+          {recipeView === RECIPE_VIEW.SAVED
             ? 'Your bookmarked recipes — always available here'
-            : 'Matched from Fresh & Expiring Soon items in your fridge'
-        }
-      />
+            : 'Matched from Fresh & Expiring Soon items in your fridge'}
+        </p>
+      </header>
 
       <div className="mb-5 grid grid-cols-2 gap-2">
         <button
@@ -2031,10 +2034,13 @@ function SettingsView({
 
   return (
     <div className="pb-28">
-      <AppHeader
-        title="Settings"
-        subtitle="Appearance, account, and household"
-      />
+      <header className="mb-5">
+        <h1 className="text-heading flex items-center gap-2.5 text-2xl font-extrabold">
+          <Settings className="h-7 w-7 text-emerald-600" aria-hidden />
+          Settings
+        </h1>
+        <p className="text-muted mt-1.5 text-sm">Appearance, account, and household</p>
+      </header>
 
       <ColorLegendCard />
 
@@ -2565,7 +2571,7 @@ function SettingsView({
 function LoadingScreen({ message }) {
   return (
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col items-center justify-center px-6">
-      <AppLogo variant="mark" className="mb-4 animate-pulse opacity-90" />
+      <Refrigerator className="mb-4 h-12 w-12 animate-pulse text-emerald-600" aria-hidden />
       <p className="text-heading text-center text-sm font-semibold">{message}</p>
     </div>
   );

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { ChefHat, Copy, Home, LogIn, Share2, UserPlus, Users } from 'lucide-react';
-import { AppLogoHero } from './AppLogo.jsx';
+import { ChefHat, Copy, Home, LogIn, Refrigerator, Share2, UserPlus, Users } from 'lucide-react';
 import { sendPasswordResetEmail } from '../api.js';
 
 export function AuthScreen({
@@ -95,11 +94,13 @@ export function AuthScreen({
   if (needsHousehold && createdSession) {
     return (
       <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col justify-center px-5 py-8">
-        <AppLogoHero
-          title="Your household is ready"
-          tagline="Share this code with your partner so they can join the same fridge."
-          className="mb-6"
-        />
+        <header className="mb-6 text-center">
+          <Refrigerator className="mx-auto mb-3 h-10 w-10 text-emerald-600" aria-hidden />
+          <h1 className="text-heading text-2xl font-extrabold">Your household is ready</h1>
+          <p className="text-muted mt-2 text-sm">
+            Share this code with your partner so they can join the same fridge.
+          </p>
+        </header>
 
         <div className="surface-card mb-5 p-5 text-center">
           <p className="text-muted mb-2 text-xs font-semibold uppercase tracking-wide">
@@ -144,11 +145,13 @@ export function AuthScreen({
   if (needsHousehold) {
     return (
       <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col px-5 py-8">
-        <AppLogoHero
-          title="Set up your household"
-          tagline="Create a new shared fridge or join your partner with their invite code."
-          className="mb-6"
-        />
+        <header className="mb-6 text-center">
+          <Refrigerator className="mx-auto mb-3 h-10 w-10 text-emerald-600" aria-hidden />
+          <h1 className="text-heading text-2xl font-extrabold">Set up your household</h1>
+          <p className="text-muted mt-2 text-sm">
+            Create a new shared fridge or join your partner with their invite code.
+          </p>
+        </header>
 
         {error && (
           <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
@@ -252,7 +255,11 @@ export function AuthScreen({
 
   return (
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col justify-center px-5 py-8">
-      <AppLogoHero tagline="Track food, plan meals, and share with your household." />
+      <header className="mb-8 text-center">
+        <Refrigerator className="mx-auto mb-3 h-12 w-12 text-emerald-600" aria-hidden />
+        <h1 className="text-heading text-3xl font-extrabold tracking-tight">What&apos;s in the Fridge?</h1>
+        <p className="text-muted mt-2 text-sm">Track food, plan meals, and share with your household.</p>
+      </header>
 
       {!recoverStep ? (
         <>
