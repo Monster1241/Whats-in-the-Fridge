@@ -1341,13 +1341,13 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
     updateItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const requestDeletePlentifulItem = (id) => {
+  const requestDeleteItem = (id) => {
     const item = items.find((entry) => entry.id === id);
     if (!item) return;
     setConfirmDeleteItem({ id: item.id, name: item.name });
   };
 
-  const confirmDeletePlentifulItem = () => {
+  const confirmDeleteItemAction = () => {
     if (!confirmDeleteItem) return;
     deleteItem(confirmDeleteItem.id);
     setConfirmDeleteItem(null);
@@ -1653,7 +1653,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
                   key={item.id}
                   item={item}
                   onOpenEditor={setEditingItem}
-                  onDelete={deleteItem}
+                  onDelete={requestDeleteItem}
                 />
               ))}
             </InventorySection>
@@ -1670,7 +1670,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
                   key={item.id}
                   item={item}
                   onOpenEditor={setEditingItem}
-                  onDelete={requestDeletePlentifulItem}
+                  onDelete={requestDeleteItem}
                 />
               ))}
             </InventorySection>
@@ -1681,7 +1681,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
       {confirmDeleteItem && (
         <ConfirmDeleteItemModal
           itemName={confirmDeleteItem.name}
-          onConfirm={confirmDeletePlentifulItem}
+          onConfirm={confirmDeleteItemAction}
           onCancel={() => setConfirmDeleteItem(null)}
         />
       )}
