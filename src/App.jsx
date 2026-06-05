@@ -944,6 +944,55 @@ function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt, onPreferre
   );
 }
 
+function ConfirmDeleteItemModal({ itemName, onConfirm, onCancel }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="delete-item-title"
+    >
+      <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 id="delete-item-title" className="text-heading text-lg font-bold">
+              Remove item?
+            </h3>
+            <p className="text-muted mt-2 text-sm leading-relaxed">
+              <span className="font-semibold text-slate-800 dark:text-slate-200">{itemName}</span>{' '}
+              will be removed from your household inventory.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-xl bg-rose-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
+          >
+            Yes, remove it
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InventoryItemRow({ item, onOpenEditor, onDelete, showCategory = false }) {
   const urgencyLabel = formatExpiryUrgency(item);
   const catMeta = getCategoryMeta(item.category, item.itemType);
@@ -1101,6 +1150,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
   const pingInFlightRef = useRef(false);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState(null);
 
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
@@ -1289,6 +1339,18 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
 
   const deleteItem = (id) => {
     updateItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const requestDeletePlentifulItem = (id) => {
+    const item = items.find((entry) => entry.id === id);
+    if (!item) return;
+    setConfirmDeleteItem({ id: item.id, name: item.name });
+  };
+
+  const confirmDeletePlentifulItem = () => {
+    if (!confirmDeleteItem) return;
+    deleteItem(confirmDeleteItem.id);
+    setConfirmDeleteItem(null);
   };
 
   const markItemStocked = (id) => {
@@ -1608,12 +1670,20 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
                   key={item.id}
                   item={item}
                   onOpenEditor={setEditingItem}
-                  onDelete={deleteItem}
+                  onDelete={requestDeletePlentifulItem}
                 />
               ))}
             </InventorySection>
           </>
         )
+      )}
+
+      {confirmDeleteItem && (
+        <ConfirmDeleteItemModal
+          itemName={confirmDeleteItem.name}
+          onConfirm={confirmDeletePlentifulItem}
+          onCancel={() => setConfirmDeleteItem(null)}
+        />
       )}
 
       {editingItem && (
