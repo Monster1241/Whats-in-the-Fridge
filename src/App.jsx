@@ -42,6 +42,7 @@ import { classifyItem } from './inventory/classifyItem.js';
 import { normalizeName } from './inventory/itemUtils.js';
 import {
   Bell,
+  BookOpen,
   Bookmark,
   Calendar,
   Check,
@@ -1985,6 +1986,156 @@ function RecipesView({ items, updateItems, savedRecipes }) {
   );
 }
 
+function AppGuideSection({ enabledModules, onShowTipsAgain }) {
+  const [open, setOpen] = useState(false);
+  const showRecipes = isModuleEnabled(enabledModules, MODULE_KEYS.FOOD);
+
+  const sections = [
+    {
+      icon: Refrigerator,
+      title: 'Home — track what you have',
+      steps: [
+        'Type an item name for suggestions, or scan a barcode on the add field.',
+        'Use Ambient, Fresh, and Freezer tabs for pantry, fridge, and frozen goods.',
+        'Tap a status badge on any row to edit details or mark it out of stock.',
+        `Food with an expiry date within ${EXPIRING_SOON_DAYS} days moves to Expiring Soon automatically.`,
+        'Use More options when adding to pick Home Essentials or Baby Care categories.',
+      ],
+    },
+    {
+      icon: ShoppingCart,
+      title: 'Shopping list — what to buy',
+      steps: [
+        'Open Shopping List from the sky-blue tab on Home.',
+        'Out-of-stock items appear here; add more with the + field.',
+        'Tap a store badge to set where your household buys each item.',
+        'Tap the check when bought — the item returns to in stock.',
+        'Ping partner to shop sends a push notification to other household members.',
+      ],
+    },
+    ...(showRecipes
+      ? [
+          {
+            icon: ChefHat,
+            title: 'Recipes — what you can cook',
+            steps: [
+              'Open Recipes to see meals you can make from what is in stock.',
+              'Save favourites with the bookmark icon.',
+              'Add missing ingredients straight to the shared shopping list.',
+            ],
+          },
+        ]
+      : []),
+    {
+      icon: Users,
+      title: 'Household — share with your partner',
+      steps: [
+        'Share your invite code so someone can join the same fridge.',
+        'Everyone in the household sees the same inventory and shopping list.',
+        'Enable push notifications below so shopping pings reach your partner.',
+      ],
+    },
+    {
+      icon: Settings,
+      title: 'Settings — customize the app',
+      steps: [
+        'Turn modules on or off: Food & Kitchen, Home Essentials, and Baby Care.',
+        'Switch light or dark mode, update your profile, and manage household members.',
+        'Clear all items only if you want to wipe inventory for everyone.',
+      ],
+    },
+  ];
+
+  return (
+    <section className="surface-card mb-5 overflow-hidden p-4">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 text-left active:scale-[0.99]"
+        aria-expanded={open}
+      >
+        <div className="min-w-0 flex-1">
+          <h2 className="text-heading flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
+            <BookOpen className="h-4 w-4 text-sky-600" aria-hidden />
+            How to use the app
+          </h2>
+          {!open && (
+            <p className="text-muted mt-1 text-xs leading-relaxed">
+              Quick guide to Home, shopping list, recipes, and household sharing
+            </p>
+          )}
+        </div>
+        {open ? (
+          <ChevronUp className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+        ) : (
+          <ChevronDown className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 dark:border-slate-600">
+          <p className="text-muted text-sm leading-relaxed">
+            What&apos;s in the Fridge keeps a shared household inventory. Start on Home,
+            restock from Shopping List, and invite your partner with the code below.
+          </p>
+
+          {sections.map((section) => {
+            const Icon = section.icon;
+            return (
+              <div key={section.title} className="surface-inset rounded-xl p-3">
+                <h3 className="text-heading flex items-center gap-2 text-sm font-bold">
+                  <Icon className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+                  {section.title}
+                </h3>
+                <ol className="text-muted mt-2 list-decimal space-y-1.5 pl-5 text-xs leading-relaxed">
+                  {section.steps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+            );
+          })}
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-600 dark:bg-slate-900/50">
+            <p className="text-heading flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+              <Info className="h-3.5 w-3.5 text-amber-600" aria-hidden />
+              Color badges
+            </p>
+            <ul className="text-muted mt-2 space-y-1 text-xs leading-relaxed">
+              <li>
+                <span className="font-semibold text-emerald-700 dark:text-emerald-400">Green</span>{' '}
+                — in stock / plentiful
+              </li>
+              <li>
+                <span className="font-semibold text-amber-700 dark:text-amber-400">Amber</span>{' '}
+                — expiring soon
+              </li>
+              <li>
+                <span className="font-semibold text-rose-700 dark:text-rose-400">Rose</span>{' '}
+                — out of stock (shows on shopping list)
+              </li>
+              <li>
+                <span className="font-semibold text-sky-700 dark:text-sky-400">Sky</span>{' '}
+                — shopping list tab and tips
+              </li>
+            </ul>
+          </div>
+
+          {onShowTipsAgain && (
+            <button
+              type="button"
+              onClick={onShowTipsAgain}
+              className="w-full rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.99] dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              Show welcome tips again on Home
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function PushNotificationsSettings() {
   const { status, error, enablePush, permission, vapidConfigured } = usePushNotifications();
   const [busy, setBusy] = useState(false);
@@ -2228,6 +2379,11 @@ function SettingsView({
       </header>
 
       <ColorLegendCard />
+
+      <AppGuideSection
+        enabledModules={enabledModules}
+        onShowTipsAgain={resetOnboarding}
+      />
 
       <section className="surface-card mb-5 p-4">
         <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Appearance</h2>
