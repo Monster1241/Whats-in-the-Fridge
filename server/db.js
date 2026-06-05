@@ -218,13 +218,21 @@ export async function findUserByEmail(email) {
   return mapUserDoc(doc);
 }
 
+/** @param {unknown[]} tokens */
+export function dedupeFcmTokens(tokens) {
+  const seen = new Set();
+  const unique = [];
+  for (const raw of tokens ?? []) {
+    const t = String(raw ?? '').trim();
+    if (!t || seen.has(t)) continue;
+    seen.add(t);
+    unique.push(t);
+  }
+  return unique;
+}
+
 /**
- * Appends a Web Push FCM token for the user (deduplicated).
- * @param {string} userId
- * @param {string} token
- */
-/**
- * FCM tokens for household members other than excludeUserId.
+ * FCM tokens for household members other than excludeUserId (unique, trimmed).
  * @param {string} householdId
  * @param {string} excludeUserId
  * @returns {Promise<string[]>}
@@ -240,13 +248,13 @@ export async function getHouseholdFcmTokens(householdId, excludeUserId) {
     .project({ fcmTokens: 1 })
     .toArray();
 
-  const tokens = new Set();
+  const collected = [];
   for (const doc of docs) {
     for (const token of doc.fcmTokens ?? []) {
-      if (token) tokens.add(token);
+      collected.push(token);
     }
   }
-  return [...tokens];
+  return dedupeFcmTokens(collected);
 }
 
 export async function removeInvalidFcmTokens(tokens) {
@@ -258,16 +266,35 @@ export async function removeInvalidFcmTokens(tokens) {
   );
 }
 
+/**
+ * Saves one FCM token per user ($addToSet) and compacts legacy duplicate entries.
+ * @param {string} userId
+ * @param {string} token
+ */
 export async function addFcmTokenToUser(userId, token) {
+  const trimmed = String(token ?? '').trim();
+  if (!trimmed) {
+    const err = new Error('FCM token is required.');
+    err.status = 400;
+    throw err;
+  }
+
   const users = getDb().collection('users');
+  const userOid = new ObjectId(userId);
   const result = await users.updateOne(
-    { _id: new ObjectId(userId) },
-    { $addToSet: { fcmTokens: token } },
+    { _id: userOid },
+    { $addToSet: { fcmTokens: trimmed } },
   );
   if (result.matchedCount === 0) {
     const err = new Error('User not found.');
     err.status = 404;
     throw err;
+  }
+
+  const doc = await users.findOne({ _id: userOid }, { projection: { fcmTokens: 1 } });
+  const unique = dedupeFcmTokens(doc?.fcmTokens);
+  if (unique.length !== (doc?.fcmTokens?.length ?? 0)) {
+    await users.updateOne({ _id: userOid }, { $set: { fcmTokens: unique } });
   }
 }
 

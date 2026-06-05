@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AuthScreen } from './components/AuthScreen.jsx';
 import { VerifyEmailScreen } from './components/VerifyEmailScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
@@ -1098,6 +1098,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
   const [editingItem, setEditingItem] = useState(null);
   const [pingBusy, setPingBusy] = useState(false);
   const [pingFeedback, setPingFeedback] = useState(null);
+  const pingInFlightRef = useRef(false);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
 
@@ -1303,6 +1304,8 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
   };
 
   const pingPartner = async () => {
+    if (pingInFlightRef.current) return;
+    pingInFlightRef.current = true;
     setPingBusy(true);
     setPingFeedback(null);
     try {
@@ -1317,6 +1320,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
         text: err.message || 'Could not send notification.',
       });
     } finally {
+      pingInFlightRef.current = false;
       setPingBusy(false);
     }
   };
@@ -1454,7 +1458,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
             className={`mt-2 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] disabled:opacity-60 ${SHOPPING_ACCENT.btn}`}
           >
             <Bell className="h-5 w-5" />
-            {pingBusy ? 'Sending notification…' : '🚀 Ping partner to shop'}
+            {pingBusy ? 'Pinging…' : '🚀 Ping partner to shop'}
           </button>
           {pingFeedback && (
             <p

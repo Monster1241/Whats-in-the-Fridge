@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { dedupeFcmTokens } from './db.js';
 import { initFirebaseAdmin } from './firebaseAdmin.js';
 
 /**
@@ -7,7 +8,7 @@ import { initFirebaseAdmin } from './firebaseAdmin.js';
  * @returns {Promise<{ successCount: number, failureCount: number, invalidTokens: string[] }>}
  */
 export async function sendPushToTokens(tokens, message) {
-  const unique = [...new Set(tokens.filter(Boolean))];
+  const unique = dedupeFcmTokens(tokens);
   if (unique.length === 0) {
     return { successCount: 0, failureCount: 0, invalidTokens: [] };
   }

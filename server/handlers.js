@@ -27,6 +27,7 @@ import {
   updateHouseholdAppState,
   verifyUserEmail,
   deleteUserAccount,
+  dedupeFcmTokens,
   getHouseholdFcmTokens,
   removeInvalidFcmTokens,
 } from './db.js';
@@ -518,7 +519,7 @@ export async function handlePingShoppingList(req, res) {
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b));
 
-    const tokens = await getHouseholdFcmTokens(householdId, auth.user.id);
+    const tokens = dedupeFcmTokens(await getHouseholdFcmTokens(householdId, auth.user.id));
     const memberCount = (await getHouseholdMembers(householdId)).length;
 
     if (memberCount < 2) {
