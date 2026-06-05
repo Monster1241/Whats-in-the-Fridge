@@ -491,7 +491,7 @@ function buildShoppingPingNotification(senderEmail, itemNames) {
   if (itemNames.length === 0) {
     return {
       title: '🛒 Shopping list',
-      body: `${sender} is heading to the shops — your shared list is empty right now.`,
+      body: `${sender} pinged you — your household list is empty. Nothing to grab right now.`,
     };
   }
   const joined = itemNames.join(', ');
@@ -500,7 +500,7 @@ function buildShoppingPingNotification(senderEmail, itemNames) {
     joined.length > maxLen ? `${joined.slice(0, maxLen - 1)}…` : joined;
   return {
     title: '🛒 Time to shop!',
-    body: `${sender} is heading home or to the shops — can you grab: ${list}?`,
+    body: `Heading home or near the shops? ${sender} asked you to grab: ${list}`,
   };
 }
 
