@@ -66,6 +66,7 @@ import {
   ChefHat,
   CircleCheck,
   Copy,
+  Flame,
   FlaskConical,
   Info,
   LogOut,
@@ -1384,17 +1385,11 @@ function InventoryView({
   const pingInFlightRef = useRef(false);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
-  const [shoppingSubView, setShoppingSubView] = useState('list');
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
   const shoppingList = useMemo(
     () => groupShoppingList(items, enabledModules),
     [items, enabledModules],
-  );
-
-  const shoppingListNames = useMemo(
-    () => new Set(shoppingList.map((item) => normalizeName(item.name))),
-    [shoppingList],
   );
 
   const frequentlyRestocked = useMemo(
@@ -1671,16 +1666,6 @@ function InventoryView({
     });
   };
 
-  const addDealToShoppingList = (deal) => {
-    const { itemType, category } = mapDealToInventory(deal);
-    addRestockEntryToShoppingList({
-      name: deal.name,
-      itemType,
-      category,
-      preferredStore: dealStoreToPreferred(deal.store),
-    });
-  };
-
   const markItemStocked = (id) => {
     const item = items.find((entry) => entry.id === id);
     if (item) rememberRestock(item);
@@ -1793,46 +1778,6 @@ function InventoryView({
 
       {isShoppingView(activeView) ? (
         <>
-          <div
-            className={`mb-4 grid grid-cols-2 gap-2 rounded-2xl border p-1 ${SHOPPING_ACCENT.borderSoft}`}
-            role="tablist"
-            aria-label="Shopping module views"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={shoppingSubView === 'list'}
-              onClick={() => setShoppingSubView('list')}
-              className={`rounded-xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.98] ${
-                shoppingSubView === 'list'
-                  ? `${SHOPPING_ACCENT.btn} text-white shadow-md`
-                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
-              }`}
-            >
-              My List
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={shoppingSubView === 'deals'}
-              onClick={() => setShoppingSubView('deals')}
-              className={`rounded-xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.98] ${
-                shoppingSubView === 'deals'
-                  ? 'bg-rose-600 text-white shadow-md shadow-rose-900/30'
-                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
-              }`}
-            >
-              Weekly Deals
-            </button>
-          </div>
-
-          {shoppingSubView === 'deals' ? (
-            <WeeklyDealsFeed
-              onAddDeal={addDealToShoppingList}
-              addedNames={shoppingListNames}
-            />
-          ) : (
-            <>
           {!isDismissed('shopping-tip') && (
             <TipBanner
               title="Your shared shopping list"
@@ -1939,8 +1884,6 @@ function InventoryView({
             >
               {pingFeedback.text}
             </p>
-          )}
-            </>
           )}
         </>
       ) : (
@@ -2239,6 +2182,58 @@ function RecipeCard({ recipe, analysis, isSaved, onToggleSave, onMarkCooked, onA
         </button>
       </div>
     </li>
+  );
+}
+
+function DealsView({ items, updateItems }) {
+  const shoppingListNames = useMemo(
+    () =>
+      new Set(
+        items
+          .filter((item) => item.status === STATUS.OUT)
+          .map((item) => normalizeName(item.name)),
+      ),
+    [items],
+  );
+
+  const addDealToShoppingList = (deal) => {
+    const { itemType, category } = mapDealToInventory(deal);
+    const needle = normalizeName(deal.name);
+    const preferredStore = dealStoreToPreferred(deal.store);
+
+    updateItems((prev) => {
+      const existingIdx = prev.findIndex(
+        (item) => normalizeName(item.name) === needle && item.itemType === itemType,
+      );
+      if (existingIdx >= 0) {
+        const next = [...prev];
+        next[existingIdx] = {
+          ...next[existingIdx],
+          status: STATUS.OUT,
+          category,
+          preferredStore: preferredStore ?? next[existingIdx].preferredStore ?? null,
+        };
+        return next;
+      }
+      const consumption = buildConsumptionFields({ name: deal.name, itemType, category });
+      return [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          name: deal.name,
+          itemType,
+          status: STATUS.OUT,
+          category,
+          expiryDate: null,
+          preferredStore,
+          ...consumption,
+        },
+      ];
+    });
+  };
+
+  return (
+    <WeeklyDealsFeed onAddDeal={addDealToShoppingList} addedNames={shoppingListNames} />
   );
 }
 
@@ -3410,11 +3405,14 @@ export default function App() {
   } = useAppData(appReady);
 
   const navTabs = useMemo(() => {
-    const tabs = [{ id: 'inventory', label: 'Home', icon: Refrigerator }];
+    const tabs = [
+      { id: 'inventory', label: 'Home', icon: Refrigerator, accent: 'emerald' },
+      { id: 'deals', label: 'Hot Deals', icon: Flame, accent: 'rose' },
+    ];
     if (isModuleEnabled(enabledModules, MODULE_KEYS.FOOD)) {
-      tabs.push({ id: 'recipes', label: 'Recipes', icon: ChefHat });
+      tabs.push({ id: 'recipes', label: 'Recipes', icon: ChefHat, accent: 'emerald' });
     }
-    tabs.push({ id: 'settings', label: 'Settings', icon: Settings });
+    tabs.push({ id: 'settings', label: 'Settings', icon: Settings, accent: 'emerald' });
     return tabs;
   }, [enabledModules]);
 
@@ -3505,6 +3503,9 @@ export default function App() {
             enabledModules={enabledModules}
           />
         )}
+        {activeTab === 'deals' && (
+          <DealsView items={items} updateItems={updateItems} />
+        )}
         {activeTab === 'recipes' && (
           <RecipesView items={items} updateItems={updateItems} savedRecipes={savedRecipes} />
         )}
@@ -3530,8 +3531,12 @@ export default function App() {
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         <div className="mx-auto flex max-w-lg">
-          {navTabs.map(({ id, label, icon: Icon }) => {
+          {navTabs.map(({ id, label, icon: Icon, accent }) => {
             const active = activeTab === id;
+            const activeText =
+              accent === 'rose'
+                ? 'text-rose-600 dark:text-rose-400'
+                : 'text-emerald-600 dark:text-emerald-400';
             return (
               <button
                 key={id}
@@ -3539,12 +3544,12 @@ export default function App() {
                 onClick={() => setActiveTab(id)}
                 className={`flex min-h-[60px] flex-1 flex-col items-center justify-center gap-1 px-2 py-2 text-sm font-semibold transition active:scale-[0.98] ${
                   active
-                    ? 'text-emerald-600 dark:text-emerald-400'
+                    ? activeText
                     : 'text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
                 }`}
               >
                 <Icon
-                  className={`h-6 w-6 ${active ? 'text-emerald-600 dark:text-emerald-400' : ''}`}
+                  className={`h-6 w-6 ${active ? activeText : ''}`}
                   strokeWidth={active ? 2.25 : 2}
                 />
                 <span>{label}</span>
