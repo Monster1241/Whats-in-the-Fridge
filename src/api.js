@@ -262,6 +262,13 @@ export async function fetchWeeklyDeals(filters = {}) {
   return parseJson(res);
 }
 
+export async function fetchStoreCatalogues() {
+  const res = await fetch(`${API_BASE}/deals/catalogues`, {
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
 export async function checkApiHealth() {
   try {
     const res = await fetch(`${API_BASE}/health`);

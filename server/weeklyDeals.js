@@ -1,4 +1,10 @@
+import {
+  getCurrentWednesdayStart,
+  getNextWednesdayExpiry,
+} from './groceryCycle.js';
+
 export const WEEKLY_DEALS_COLLECTION = 'weeklyDeals';
+export const WEEKLY_DEALS_ARCHIVE_COLLECTION = 'weeklyDealsArchive';
 
 /** @typedef {'coles'|'woolworths'|'aldi'|'harrisfarm'|'costco'} DealStore */
 
@@ -20,6 +26,38 @@ export const DEAL_STORE_LABELS = {
 
 export const DEAL_CATEGORIES = ['Fresh', 'Pantry', 'Household', 'Baby'];
 
+/** @typedef {'Half Price'|'Super Saver'|'Price Drop'|'Special Buy'|'Bulk Value'} DealType */
+
+export const DEAL_TYPES = /** @type {const} */ ([
+  'Half Price',
+  'Super Saver',
+  'Price Drop',
+  'Special Buy',
+  'Bulk Value',
+]);
+
+const DEAL_TYPE_ALIASES = {
+  halfprice: 'Half Price',
+  'half-price': 'Half Price',
+  supersaver: 'Super Saver',
+  'super-saver': 'Super Saver',
+  pricedrop: 'Price Drop',
+  'price-drop': 'Price Drop',
+  specialbuy: 'Special Buy',
+  'special-buy': 'Special Buy',
+  bulkvalue: 'Bulk Value',
+  'bulk-value': 'Bulk Value',
+  'bulk buy value': 'Bulk Value',
+};
+
+export const DEFAULT_SAVINGS_TEXT_BY_DEAL_TYPE = {
+  'Half Price': 'Half Price!',
+  'Super Saver': 'Super Saver',
+  'Price Drop': 'Price Drop',
+  'Special Buy': 'Special Buy',
+  'Bulk Value': 'Bulk Buy Value',
+};
+
 /**
  * WeeklyDeals collection schema (native MongoDB — mirrors requested Mongoose shape).
  *
@@ -28,6 +66,7 @@ export const DEAL_CATEGORIES = ['Fresh', 'Pantry', 'Household', 'Baby'];
  * @property {DealStore} store
  * @property {number} dealPrice
  * @property {number|null} [originalPrice]
+ * @property {DealType} dealType
  * @property {string} savingsText
  * @property {string} category
  * @property {Date} expiresAt
@@ -43,17 +82,7 @@ function getDb() {
   return db;
 }
 
-export function getNextWednesdayExpiry(from = new Date()) {
-  const d = new Date(
-    Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()),
-  );
-  const day = d.getUTCDay();
-  let daysUntil = (3 - day + 7) % 7;
-  if (daysUntil === 0) daysUntil = 7;
-  d.setUTCDate(d.getUTCDate() + daysUntil);
-  d.setUTCHours(23, 59, 59, 999);
-  return d;
-}
+export { getCurrentWednesdayStart, getNextWednesdayExpiry };
 
 function sanitizePrice(value, { required = false } = {}) {
   const n = Number(value);
@@ -89,6 +118,26 @@ export function normalizeDealCategory(value) {
   return match ?? trimmed.slice(0, 64);
 }
 
+export function normalizeDealType(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  if (DEAL_TYPES.includes(raw)) return raw;
+
+  const key = raw.toLowerCase().replace(/\s+/g, ' ');
+  const compact = key.replace(/\s+/g, '');
+  return DEAL_TYPE_ALIASES[key] ?? DEAL_TYPE_ALIASES[compact] ?? null;
+}
+
+export function inferDealTypeFromSavingsText(savingsText) {
+  const text = String(savingsText ?? '').toLowerCase();
+  if (/half\s*price|½\s*price|1\/2/.test(text)) return 'Half Price';
+  if (/super\s*saver/.test(text)) return 'Super Saver';
+  if (/special\s*buy/.test(text)) return 'Special Buy';
+  if (/bulk|value\s*pack|warehouse/.test(text)) return 'Bulk Value';
+  if (/save\s*\$|price\s*drop|was\s*\$|%\s*off/.test(text)) return 'Price Drop';
+  return 'Price Drop';
+}
+
 function sanitizeExpiresAt(value) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
   if (typeof value === 'string' || typeof value === 'number') {
@@ -119,12 +168,21 @@ export function buildWeeklyDealDoc(input) {
 
   const dealPrice = sanitizePrice(input.dealPrice, { required: true });
   const originalPrice = sanitizePrice(input.originalPrice);
-  const savingsText = String(input.savingsText ?? '').trim().slice(0, 120);
-  if (!savingsText) {
-    const err = new Error('Savings text is required.');
+  const savingsTextRaw = String(input.savingsText ?? '').trim().slice(0, 120);
+  const dealType =
+    normalizeDealType(input.dealType) ??
+    (savingsTextRaw ? inferDealTypeFromSavingsText(savingsTextRaw) : null);
+
+  if (!dealType) {
+    const err = new Error(
+      `dealType is required. Use one of: ${DEAL_TYPES.join(', ')}.`,
+    );
     err.status = 400;
     throw err;
   }
+
+  const savingsText =
+    savingsTextRaw || DEFAULT_SAVINGS_TEXT_BY_DEAL_TYPE[dealType] || dealType;
 
   const category = normalizeDealCategory(input.category) ?? 'Pantry';
   const now = new Date();
@@ -134,6 +192,7 @@ export function buildWeeklyDealDoc(input) {
     store,
     dealPrice,
     originalPrice,
+    dealType,
     savingsText,
     category,
     expiresAt: sanitizeExpiresAt(input.expiresAt),
@@ -146,6 +205,10 @@ export function buildWeeklyDealDoc(input) {
  * @param {import('mongodb').WithId<import('mongodb').Document>} doc
  */
 export function mapWeeklyDealDoc(doc) {
+  const dealType =
+    normalizeDealType(doc.dealType) ??
+    inferDealTypeFromSavingsText(doc.savingsText);
+
   return {
     id: doc._id.toString(),
     name: doc.name,
@@ -153,6 +216,7 @@ export function mapWeeklyDealDoc(doc) {
     storeLabel: DEAL_STORE_LABELS[doc.store] ?? doc.store,
     dealPrice: doc.dealPrice,
     originalPrice: doc.originalPrice ?? null,
+    dealType,
     savingsText: doc.savingsText,
     category: doc.category,
     expiresAt:
@@ -171,14 +235,16 @@ export async function ensureWeeklyDealIndexes(collection) {
   await collection.createIndex({ store: 1, category: 1 });
   await collection.createIndex({ expiresAt: 1 });
   await collection.createIndex({ name: 1, store: 1 });
+  await collection.createIndex({ dealType: 1 });
 }
 
-const SEED_DEALS = [
+export const WEEKLY_DEAL_TEMPLATES = [
   {
     name: 'Sirena Tuna 185g',
     store: 'coles',
     dealPrice: 1.25,
     originalPrice: 2.5,
+    dealType: 'Half Price',
     savingsText: 'Half Price!',
     category: 'Pantry',
   },
@@ -187,6 +253,7 @@ const SEED_DEALS = [
     store: 'woolworths',
     dealPrice: 28,
     originalPrice: 42,
+    dealType: 'Super Saver',
     savingsText: 'Save $14.00',
     category: 'Baby',
   },
@@ -195,6 +262,7 @@ const SEED_DEALS = [
     store: 'harrisfarm',
     dealPrice: 5.99,
     originalPrice: 8.99,
+    dealType: 'Price Drop',
     savingsText: 'Save $3.00',
     category: 'Fresh',
   },
@@ -203,6 +271,7 @@ const SEED_DEALS = [
     store: 'costco',
     dealPrice: 19.99,
     originalPrice: null,
+    dealType: 'Bulk Value',
     savingsText: 'Bulk Buy Value',
     category: 'Household',
   },
@@ -211,6 +280,7 @@ const SEED_DEALS = [
     store: 'aldi',
     dealPrice: 3.49,
     originalPrice: null,
+    dealType: 'Special Buy',
     savingsText: 'Special Buy',
     category: 'Fresh',
   },
@@ -219,6 +289,7 @@ const SEED_DEALS = [
     store: 'coles',
     dealPrice: 18,
     originalPrice: 36,
+    dealType: 'Half Price',
     savingsText: 'Half Price!',
     category: 'Household',
   },
@@ -227,6 +298,7 @@ const SEED_DEALS = [
     store: 'woolworths',
     dealPrice: 4.5,
     originalPrice: 6.5,
+    dealType: 'Price Drop',
     savingsText: 'Save $2.00',
     category: 'Fresh',
   },
@@ -235,10 +307,19 @@ const SEED_DEALS = [
     store: 'costco',
     dealPrice: 24.99,
     originalPrice: null,
+    dealType: 'Bulk Value',
     savingsText: 'Bulk Buy Value',
     category: 'Household',
   },
 ];
+
+/**
+ * @param {Date} expiresAt
+ * @param {typeof WEEKLY_DEAL_TEMPLATES} [templates]
+ */
+export function buildDealsForCycle(expiresAt, templates = WEEKLY_DEAL_TEMPLATES) {
+  return templates.map((entry) => buildWeeklyDealDoc({ ...entry, expiresAt }));
+}
 
 export async function seedWeeklyDealsIfEmpty() {
   const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
@@ -246,7 +327,7 @@ export async function seedWeeklyDealsIfEmpty() {
   if (count > 0) return false;
 
   const expiresAt = getNextWednesdayExpiry();
-  const docs = SEED_DEALS.map((entry) => buildWeeklyDealDoc({ ...entry, expiresAt }));
+  const docs = buildDealsForCycle(expiresAt);
 
   try {
     await collection.insertMany(docs, { ordered: false });

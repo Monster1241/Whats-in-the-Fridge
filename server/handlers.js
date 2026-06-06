@@ -32,6 +32,7 @@ import {
   removeInvalidFcmTokens,
 } from './db.js';
 import { sendPushToTokens } from './fcm.js';
+import { fetchActiveCataloguesPerStore } from './storeCatalogues.js';
 import {
   DEAL_CATEGORIES,
   DEAL_STORES,
@@ -693,6 +694,25 @@ export async function handleGetWeeklyDeals(req, res) {
     res.status(200).json(payload);
   } catch (err) {
     console.error('GET /api/deals/weekly', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleGetStoreCatalogues(req, res) {
+  try {
+    const auth = await requireVerified(req, res);
+    if (!auth) return;
+
+    const { catalogues, byStore } = await fetchActiveCataloguesPerStore();
+
+    res.status(200).json({
+      count: catalogues.length,
+      catalogues,
+      byStore,
+    });
+  } catch (err) {
+    console.error('GET /api/deals/catalogues', err);
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
   }

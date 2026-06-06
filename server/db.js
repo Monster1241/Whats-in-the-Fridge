@@ -1,5 +1,9 @@
 import { MongoClient, ObjectId } from 'mongodb';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules, validateEnabledModules } from './enabledModules.js';
+import {
+  ensureStoreCatalogueIndexes,
+  STORE_CATALOGUES_COLLECTION,
+} from './storeCatalogues.js';
 import { ensureWeeklyDealIndexes, WEEKLY_DEALS_COLLECTION } from './weeklyDeals.js';
 
 const DB_NAME = 'whats-in-the-fridge';
@@ -131,6 +135,7 @@ async function ensureIndexes(db) {
   );
   await db.collection('inventory').createIndex({ household_id: 1 });
   await ensureWeeklyDealIndexes(db.collection(WEEKLY_DEALS_COLLECTION));
+  await ensureStoreCatalogueIndexes(db.collection(STORE_CATALOGUES_COLLECTION));
 }
 
 async function ensureIndexesSafe(db) {

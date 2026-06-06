@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { closeDb } from './db.js';
 import { createApp } from './app.js';
 import { ensureDb } from './ensureDb.js';
+import { startGroceryCronScheduler } from './groceryCronScheduler.js';
 
 const PORT = Number(process.env.PORT) || 3001;
 const app = createApp();
@@ -17,6 +18,7 @@ async function start() {
 
   app.listen(PORT, () => {
     console.log(`API server running on port ${PORT}`);
+    startGroceryCronScheduler();
   });
 }
 
