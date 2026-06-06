@@ -88,7 +88,9 @@ const RECIPE_VIEW = {
 };
 
 /** Minimum in-stock ingredients (Fresh / Expiring) to show a matched recipe. */
-const MIN_STOCKED_INGREDIENTS_FOR_RECIPE = 3;
+const MIN_STOCKED_INGREDIENTS_FOR_RECIPE = 2;
+/** Target number of recipes on the Matched tab (fills with next-best main-ingredient matches). */
+const MIN_MATCHED_RECIPES_TO_SHOW = 4;
 
 const MAIN_INGREDIENT_PATTERN =
   /chicken|beef|salmon|chorizo|egg|pork|mince|tofu|lentil|potato|noodle|shrimp|fish|turkey|lamb|sausage|bacon/i;
@@ -2185,12 +2187,31 @@ function RecipesView({ items, updateItems, savedRecipes }) {
   const [recipeView, setRecipeView] = useState(RECIPE_VIEW.MATCHED);
 
   const cookableRecipes = useMemo(() => {
-    return RECIPES.map((recipe) => {
+    const scored = RECIPES.map((recipe) => {
       const analysis = analyzeRecipe(recipe, items);
       return { recipe, analysis, score: analysis.stockedCount };
-    })
+    });
+
+    const strict = scored
       .filter(({ analysis }) => recipeMatchesInventory(analysis))
       .sort((a, b) => b.score - a.score);
+
+    if (strict.length >= MIN_MATCHED_RECIPES_TO_SHOW) {
+      return strict;
+    }
+
+    const shownIds = new Set(strict.map(({ recipe }) => recipe.id));
+    const filler = scored
+      .filter(
+        ({ recipe, analysis }) =>
+          !shownIds.has(recipe.id) &&
+          analysis.hasMainIngredient &&
+          analysis.stockedCount >= 1,
+      )
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MIN_MATCHED_RECIPES_TO_SHOW - strict.length);
+
+    return [...strict, ...filler];
   }, [items]);
 
   const savedRecipeCards = useMemo(() => {
