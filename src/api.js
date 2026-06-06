@@ -246,6 +246,29 @@ export async function saveAppState(partial) {
   return parseJson(res);
 }
 
+/**
+ * @param {string[]} names
+ * @returns {Promise<{ suggestions: Array<{
+ *   id: string,
+ *   name: string,
+ *   itemType: string,
+ *   category: string,
+ *   prices: Array<{ store: string, label: string, price: number|null }>,
+ *   deal: { active: boolean, store: string|null, label: string|null, discountText: string|null, isHalfPrice: boolean, originalPrice: number|null },
+ *   lastUpdated: string|null
+ * }> }>}
+ */
+export async function fetchProductSuggestionsByNames(names) {
+  const unique = [...new Set(names.map((name) => String(name).trim()).filter(Boolean))];
+  if (unique.length === 0) return { suggestions: [] };
+
+  const params = new URLSearchParams({ names: unique.join(',') });
+  const res = await fetch(`${API_BASE}/products/autocomplete?${params}`, {
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
 export async function checkApiHealth() {
   try {
     const res = await fetch(`${API_BASE}/health`);

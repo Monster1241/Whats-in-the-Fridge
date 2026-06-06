@@ -7,8 +7,14 @@ import {
   PushNotificationProvider,
   usePushNotifications,
 } from './context/PushNotificationContext.jsx';
-import { fetchHouseholdMembers, pingShoppingList, removeHouseholdMember } from './api.js';
+import {
+  fetchHouseholdMembers,
+  fetchProductSuggestionsByNames,
+  pingShoppingList,
+  removeHouseholdMember,
+} from './api.js';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
+import { ShoppingListPriceBadges } from './components/ShoppingListPriceBadges.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
 import {
@@ -901,7 +907,15 @@ function ShoppingListBoughtButton({ itemName, onBought }) {
   );
 }
 
-function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt, onPreferredStoreChange }) {
+function ShoppingListItemRow({
+  item,
+  onOpenEditor,
+  onDelete,
+  onGotIt,
+  onPreferredStoreChange,
+  productPricing,
+  pricingLoading = false,
+}) {
   const catMeta = getCategoryMeta(item.category, item.itemType);
   const { store, detail } = getShoppingSuggestionForItem(item);
 
@@ -911,6 +925,7 @@ function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt, onPreferre
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <p className="text-heading text-sm font-semibold">{item.name}</p>
+            <ShoppingListPriceBadges pricing={productPricing} loading={pricingLoading} />
             {catMeta && (
               <p className="mt-0.5 text-xs text-slate-500">
                 {itemTypeLabelEmoji(item.itemType)} {catMeta.emoji}{' '}
@@ -1389,6 +1404,40 @@ function InventoryView({
     [items, enabledModules],
   );
 
+  const [shoppingPricesByName, setShoppingPricesByName] = useState({});
+  const [shoppingPricesLoading, setShoppingPricesLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isShoppingView(activeView) || shoppingList.length === 0) {
+      setShoppingPricesByName({});
+      setShoppingPricesLoading(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setShoppingPricesLoading(true);
+
+    fetchProductSuggestionsByNames(shoppingList.map((entry) => entry.name))
+      .then(({ suggestions }) => {
+        if (cancelled) return;
+        const next = {};
+        for (const suggestion of suggestions ?? []) {
+          next[normalizeName(suggestion.name)] = suggestion;
+        }
+        setShoppingPricesByName(next);
+      })
+      .catch(() => {
+        if (!cancelled) setShoppingPricesByName({});
+      })
+      .finally(() => {
+        if (!cancelled) setShoppingPricesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shoppingList, activeView]);
+
   const frequentlyRestocked = useMemo(
     () => getFrequentlyRestocked(restockHistory, items, enabledModules, 10),
     [restockHistory, items, enabledModules],
@@ -1850,6 +1899,8 @@ function InventoryView({
                 onDelete={(id) => deleteItem(id, { trackHistory: true })}
                 onGotIt={markItemStocked}
                 onPreferredStoreChange={updatePreferredStore}
+                productPricing={shoppingPricesByName[normalizeName(item.name)]}
+                pricingLoading={shoppingPricesLoading}
               />
             ))}
           </InventorySection>

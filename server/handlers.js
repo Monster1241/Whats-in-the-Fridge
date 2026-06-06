@@ -32,6 +32,10 @@ import {
   removeInvalidFcmTokens,
 } from './db.js';
 import { sendPushToTokens } from './fcm.js';
+import {
+  findProductSuggestionsByNames,
+  searchProductSuggestions,
+} from './productSuggestions.js';
 
 async function authPayload(user) {
   const isVerified = Boolean(user.isVerified);
@@ -629,6 +633,34 @@ export async function handlePingShoppingList(req, res) {
         ? 'Push notifications are not configured on the server.'
         : friendly.message || 'Could not send shopping ping.';
     res.status(friendly.status || 500).json({ error: message });
+  }
+}
+
+export async function handleProductAutocomplete(req, res) {
+  try {
+    const auth = await requireVerified(req, res);
+    if (!auth) return;
+
+    const q = String(req.query.q ?? '').trim();
+    const rawNames = req.query.names ?? req.query.name ?? '';
+    const names = (Array.isArray(rawNames) ? rawNames : String(rawNames).split(','))
+      .map((name) => String(name).trim())
+      .filter(Boolean);
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 8, 1), 20);
+
+    let suggestions = [];
+    if (names.length > 0) {
+      suggestions = await findProductSuggestionsByNames(names);
+    } else if (q) {
+      suggestions = await searchProductSuggestions(q, limit);
+    }
+
+    res.status(200).json({ suggestions });
+  } catch (err) {
+    console.error('GET /api/products/autocomplete', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
   }
 }
 
