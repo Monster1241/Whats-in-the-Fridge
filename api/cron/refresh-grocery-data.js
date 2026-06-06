@@ -4,6 +4,12 @@ import {
   normalizeGroceryRefreshMode,
   refreshGroceryData,
 } from '../../server/groceryDataRefresh.js';
+import {
+  getSydneyClock,
+  getSydneyCronSkipReason,
+  isSydneyGroceryCronDue,
+  SYDNEY_TZ,
+} from '../../server/sydneyCronGuard.js';
 
 function unauthorized(res) {
   res.status(401).json({ error: 'Unauthorized cron request.' });
@@ -36,6 +42,22 @@ export default async function handler(req, res) {
     return;
   }
 
+  const now = new Date();
+  const sydney = getSydneyClock(now);
+  const force = String(req.query?.force ?? '').toLowerCase() === 'true';
+
+  if (!force && !isSydneyGroceryCronDue(mode, now)) {
+    res.status(200).json({
+      ok: true,
+      skipped: true,
+      mode,
+      timezone: SYDNEY_TZ,
+      sydney,
+      reason: getSydneyCronSkipReason(mode, now),
+    });
+    return;
+  }
+
   const resolved = getMongoUri();
   if (resolved.error) {
     res.status(503).json({ error: resolved.error });
@@ -44,8 +66,13 @@ export default async function handler(req, res) {
 
   try {
     await connectDb(resolved.uri);
-    const result = await refreshGroceryData(mode);
-    res.status(200).json(result);
+    const result = await refreshGroceryData(mode, { now });
+    res.status(200).json({
+      ...result,
+      timezone: SYDNEY_TZ,
+      sydney,
+      forced: force,
+    });
   } catch (err) {
     console.error('GET /api/cron/refresh-grocery-data', err);
     res.status(500).json({ error: err.message || 'Grocery refresh failed.' });

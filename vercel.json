@@ -9,13 +9,19 @@
   "crons": [
     {
       "path": "/api/cron/refresh-grocery-data?mode=sneakPeek",
-      "schedule": "0 18 * * 1",
-      "timezone": "Australia/Sydney"
+      "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/cron/refresh-grocery-data?mode=sneakPeek",
+      "schedule": "0 8 * * 1"
     },
     {
       "path": "/api/cron/refresh-grocery-data?mode=officialReset",
-      "schedule": "1 0 * * 3",
-      "timezone": "Australia/Sydney"
+      "schedule": "1 13 * * 2"
+    },
+    {
+      "path": "/api/cron/refresh-grocery-data?mode=officialReset",
+      "schedule": "1 14 * * 2"
     }
   ],
   "functions": {
