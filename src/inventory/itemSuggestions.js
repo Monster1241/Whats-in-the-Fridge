@@ -6,7 +6,7 @@ import {
 } from './constants.js';
 import { isItemTypeEnabled } from './modules.js';
 
-/** @typedef {{ name: string, itemType: 'Food'|'Household', category: string }} ItemSuggestion */
+/** @typedef {{ name: string, itemType: 'Food'|'Household'|'Baby', category: string }} ItemSuggestion */
 
 /** @type {ItemSuggestion[]} */
 export const ITEM_SUGGESTIONS = [
@@ -21,6 +21,12 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Dishcloths', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
   { name: 'Floor Cleaner', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
   { name: 'Disinfectant Wipes', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
+  { name: 'Multi-Purpose Wipes', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
+  { name: 'Microfiber Cloths', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
+  { name: 'Bleach', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
+  { name: 'Window Cleaner', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
+  { name: 'Drain Cleaner', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
+  { name: 'Rubber Gloves', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
   { name: 'Aluminium Foil', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
   { name: 'Baking Paper', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
   // Household — Laundry
@@ -30,6 +36,9 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Stain Remover', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.LAUNDRY },
   { name: 'Dryer Sheets', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.LAUNDRY },
   { name: 'Washing Pegs', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.LAUNDRY },
+  { name: 'Laundry Pods', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.LAUNDRY },
+  { name: 'Fabric Stain Remover Spray', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.LAUNDRY },
+  { name: 'Lint Roller', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.LAUNDRY },
   // Household — Bathroom
   { name: 'Toilet Paper', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.BATHROOM },
   { name: 'Hand Soap', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.BATHROOM },
@@ -78,6 +87,19 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Italian Herbs', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Stock Cubes', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   { name: 'Baking Powder', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Sriracha', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Maple Syrup', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Peanut Butter', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Rolled Oats', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'White Vinegar', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Apple Cider Vinegar', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Panko Breadcrumbs', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Canned Chickpeas', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Canned Black Beans', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Coconut Milk', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Tuna Cans', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Chicken Stock', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
+  { name: 'Vegetable Stock', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.AMBIENT },
   // Food — Fresh
   { name: 'Milk', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
   { name: 'Eggs', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
@@ -92,6 +114,25 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Broccoli', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
   { name: 'Salmon Fillet', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
   { name: 'Greek Yogurt', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Beef Mince', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Pork Chops', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Cheddar Cheese', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Parmesan', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Mozzarella', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Sour Cream', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Cream Cheese', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Spinach', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Avocados', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Carrots', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Cucumbers', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Mushrooms', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Onions', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Garlic', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Ginger', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Lemons', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Limes', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Apples', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  { name: 'Bananas', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
   // Food — Freezer
   { name: 'Frozen Peas', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FREEZER },
   { name: 'Frozen Berries', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FREEZER },
@@ -101,6 +142,8 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Nappies Size 1', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
   { name: 'Nappies Size 2', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
   { name: 'Nappies Size 3', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
+  { name: 'Nappies Size 4', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
+  { name: 'Nappies Size 5', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
   { name: 'Baby Formula', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.FOOD },
   { name: 'Baby Puree Pouches', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.FOOD },
   { name: 'Baby Rusks', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.FOOD },
@@ -108,6 +151,12 @@ export const ITEM_SUGGESTIONS = [
   { name: 'Baby Lotion', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
   { name: 'Nappy Rash Cream', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
   { name: 'Baby Powder', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
+  { name: 'Biodegradable Baby Wipes', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
+  { name: 'Baby Body Wash', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
+  { name: 'Baby Shampoo', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
+  { name: 'Teething Gel', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
+  { name: 'Dummy / Pacifier', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
+  { name: 'Baby Sunscreen', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
 ];
 
 function suggestionMatchesQuery(name, needle) {

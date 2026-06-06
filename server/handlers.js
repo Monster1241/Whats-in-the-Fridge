@@ -363,24 +363,75 @@ export async function handleJoinHousehold(req, res) {
   }
 }
 
+function sanitizeRestockHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .map((entry) => {
+      const name = String(entry?.name ?? '').trim().slice(0, 120);
+      if (!name) return null;
+      const itemType =
+        entry?.itemType === 'Household'
+          ? 'Household'
+          : entry?.itemType === 'Baby'
+            ? 'Baby'
+            : 'Food';
+      return {
+        name,
+        itemType,
+        category: String(entry?.category ?? '').trim().slice(0, 64) || 'Ambient',
+        preferredStore:
+          entry?.preferredStore === null || entry?.preferredStore === undefined
+            ? null
+            : String(entry.preferredStore).trim().slice(0, 64) || null,
+        count: Math.min(Math.max(Number(entry?.count) || 1, 1), 9999),
+        lastAt:
+          typeof entry?.lastAt === 'string' && entry.lastAt
+            ? entry.lastAt.slice(0, 32)
+            : new Date().toISOString(),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 50);
+}
+
+function sanitizeConsumptionDuration(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.min(Math.max(Math.round(n), 1), 3650);
+}
+
+function sanitizeStockedAt(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 function sanitizeInventoryItems(items) {
-  return items.map((item) => ({
-    id: item?.id,
-    name: item?.name,
-    itemType:
-      item?.itemType === 'Household'
-        ? 'Household'
-        : item?.itemType === 'Baby'
-          ? 'Baby'
-          : 'Food',
-    category: item?.category,
-    status: item?.status,
-    expiryDate: item?.expiryDate ?? null,
-    preferredStore:
-      item?.preferredStore === null || item?.preferredStore === undefined
-        ? null
-        : String(item.preferredStore).trim() || null,
-  }));
+  const now = new Date().toISOString();
+  return items.map((item) => {
+    const stockedAt = sanitizeStockedAt(item?.stockedAt ?? item?.createdAt) ?? now;
+    return {
+      id: item?.id,
+      name: item?.name,
+      itemType:
+        item?.itemType === 'Household'
+          ? 'Household'
+          : item?.itemType === 'Baby'
+            ? 'Baby'
+            : 'Food',
+      category: item?.category,
+      status: item?.status,
+      expiryDate: item?.expiryDate ?? null,
+      preferredStore:
+        item?.preferredStore === null || item?.preferredStore === undefined
+          ? null
+          : String(item.preferredStore).trim() || null,
+      consumptionDuration: sanitizeConsumptionDuration(item?.consumptionDuration),
+      stockedAt,
+      createdAt: stockedAt,
+    };
+  });
 }
 
 export async function handleGetState(req, res) {
@@ -399,7 +450,8 @@ export async function handlePutState(req, res) {
   if (!requireHouseholdSession(auth, res)) return;
 
   const householdId = getScopedHouseholdId(auth);
-  const { items, settings, enabledModules, savedRecipeIds, onboarding } = req.body ?? {};
+  const { items, settings, enabledModules, savedRecipeIds, onboarding, restockHistory } =
+    req.body ?? {};
   const partial = {};
 
   if (items !== undefined) {
@@ -425,6 +477,13 @@ export async function handlePutState(req, res) {
     partial.savedRecipeIds = savedRecipeIds;
   }
   if (onboarding !== undefined) partial.onboarding = onboarding;
+  if (restockHistory !== undefined) {
+    if (!Array.isArray(restockHistory)) {
+      res.status(400).json({ error: 'restockHistory must be an array' });
+      return;
+    }
+    partial.restockHistory = sanitizeRestockHistory(restockHistory);
+  }
 
   const state = await updateHouseholdAppState(householdId, partial);
   res.status(200).json(state);

@@ -493,6 +493,7 @@ export async function createHousehold(ownerUserId) {
     enabledModules: { ...DEFAULT_ENABLED_MODULES },
     savedRecipeIds: [],
     onboarding: { dismissed: [] },
+    restockHistory: [],
   };
   const result = await households.insertOne(doc);
   return {
@@ -527,6 +528,7 @@ export async function getHouseholdMeta(householdId) {
     enabledModules: normalizeEnabledModules(doc.enabledModules),
     savedRecipeIds: doc.savedRecipeIds ?? [],
     onboarding: doc.onboarding ?? { dismissed: [] },
+    restockHistory: Array.isArray(doc.restockHistory) ? doc.restockHistory : [],
   };
 }
 
@@ -555,6 +557,7 @@ export async function getHouseholdAppState(householdId) {
     enabledModules: meta.enabledModules,
     savedRecipeIds: meta.savedRecipeIds,
     onboarding: meta.onboarding,
+    restockHistory: meta.restockHistory,
     householdCode: meta.invite_code,
     inviteCode: meta.invite_code,
   };
@@ -578,6 +581,7 @@ export async function updateHouseholdAppState(householdId, partial) {
   }
   if (partial.savedRecipeIds !== undefined) householdUpdate.savedRecipeIds = partial.savedRecipeIds;
   if (partial.onboarding !== undefined) householdUpdate.onboarding = partial.onboarding;
+  if (partial.restockHistory !== undefined) householdUpdate.restockHistory = partial.restockHistory;
 
   if (Object.keys(householdUpdate).length > 1) {
     await households.updateOne({ _id: householdOid }, { $set: householdUpdate });
@@ -596,6 +600,7 @@ export async function replaceInventoryForHousehold(householdId, items) {
   await inventory.deleteMany({ household_id: scopedId });
   if (!Array.isArray(items) || items.length === 0) return;
 
+  const now = new Date().toISOString();
   const docs = items.map((item) => ({
     id: item.id,
     name: item.name,
@@ -609,6 +614,9 @@ export async function replaceInventoryForHousehold(householdId, items) {
     status: item.status,
     expiryDate: item.expiryDate ?? null,
     preferredStore: item.preferredStore ?? null,
+    consumptionDuration: item.consumptionDuration ?? null,
+    stockedAt: item.stockedAt ?? item.createdAt ?? now,
+    createdAt: item.stockedAt ?? item.createdAt ?? now,
     household_id: scopedId,
     updated_at: new Date(),
   }));

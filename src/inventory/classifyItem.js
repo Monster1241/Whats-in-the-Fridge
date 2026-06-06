@@ -122,3 +122,10 @@ export function resolveIntakeCategory(name, fallback = {}) {
     classified: false,
   };
 }
+
+export {
+  buildConsumptionFields,
+  calculateItemStatus,
+  getDefaultConsumptionDuration,
+  isAlmostFinished,
+} from './consumption.js';

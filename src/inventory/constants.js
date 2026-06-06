@@ -129,6 +129,7 @@ export const INVENTORY_VIEW = {
 export const STATUS = {
   FRESH: 'fresh',
   EXPIRING: 'expiring',
+  ALMOST_FINISHED: 'almost_finished',
   OUT: 'out',
 };
 

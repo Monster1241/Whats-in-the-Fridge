@@ -10,6 +10,15 @@ import {
   STATUS,
 } from './constants.js';
 import { normalizePreferredStore } from './storeOptions.js';
+import { getDefaultConsumptionDuration } from './consumption.js';
+
+function backfillStockedAt(item, consumptionDuration) {
+  const existing = item.stockedAt ?? item.createdAt;
+  if (existing) return existing;
+  const midpoint = new Date();
+  midpoint.setDate(midpoint.getDate() - Math.floor(consumptionDuration * 0.5));
+  return midpoint.toISOString();
+}
 
 export function normalizeName(value) {
   return String(value || '')
@@ -38,6 +47,11 @@ export function migrateItem(item) {
     ? category
     : defaultCategoryForItemType(itemType);
   const status = item.status === STATUS.OUT ? STATUS.OUT : STATUS.FRESH;
+  const consumptionDuration =
+    typeof item.consumptionDuration === 'number' && item.consumptionDuration > 0
+      ? item.consumptionDuration
+      : getDefaultConsumptionDuration(item.name ?? '', itemType, resolvedCategory);
+  const stockedAt = backfillStockedAt(item, consumptionDuration);
 
   return {
     ...item,
@@ -46,6 +60,9 @@ export function migrateItem(item) {
     status,
     expiryDate: item.expiryDate ?? null,
     preferredStore: normalizePreferredStore(item.preferredStore),
+    consumptionDuration,
+    stockedAt,
+    createdAt: stockedAt,
   };
 }
 

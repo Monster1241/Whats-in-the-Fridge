@@ -41,6 +41,19 @@ import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
 import { classifyItem } from './inventory/classifyItem.js';
 import { normalizeName } from './inventory/itemUtils.js';
 import {
+  getFrequentlyRestocked,
+  recordRestockEvent,
+  restockHistoryKey,
+} from './inventory/restockHistory.js';
+import { filterKitchenStatusItems } from './inventory/kitchenStatus.js';
+import {
+  buildConsumptionFields,
+  calculateItemStatus,
+  filterPredictedLowItems,
+  getConsumptionUrgencyLabel,
+} from './inventory/consumption.js';
+import {
+  AlertTriangle,
   Bell,
   BookOpen,
   Bookmark,
@@ -116,6 +129,11 @@ const STATUS_META = {
     label: 'Expiring Soon',
     badge: 'bg-amber-500 text-slate-900',
     section: 'expiring',
+  },
+  [STATUS.ALMOST_FINISHED]: {
+    label: 'Almost Finished',
+    badge: 'bg-orange-500 text-white',
+    section: 'almost',
   },
   [STATUS.OUT]: {
     label: 'Out of Stock',
@@ -565,9 +583,7 @@ function isExpiringSoon(item) {
 }
 
 function getDisplayStatus(item) {
-  if (item.status === STATUS.OUT) return STATUS.OUT;
-  if (isExpiringSoon(item)) return STATUS.EXPIRING;
-  return STATUS.FRESH;
+  return calculateItemStatus(item);
 }
 
 function groupByCategory(items, category, itemType) {
@@ -675,7 +691,10 @@ function analyzeRecipe(recipe, items) {
   }
 
   const stockedCount = have.filter(
-    (entry) => entry.status === STATUS.FRESH || entry.status === STATUS.EXPIRING,
+    (entry) =>
+      entry.status === STATUS.FRESH ||
+      entry.status === STATUS.EXPIRING ||
+      entry.status === STATUS.ALMOST_FINISHED,
   ).length;
   const mainIngredient = getRecipeMainIngredient(recipe);
   const hasMainIngredient = isStockedIngredient(mainIngredient, items);
@@ -945,61 +964,18 @@ function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt, onPreferre
   );
 }
 
-function ConfirmDeleteItemModal({ itemName, onConfirm, onCancel }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-item-title"
-    >
-      <div className="surface-card w-full max-w-md p-5 shadow-2xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h3 id="delete-item-title" className="text-heading text-lg font-bold">
-              Remove item?
-            </h3>
-            <p className="text-muted mt-2 text-sm leading-relaxed">
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{itemName}</span>{' '}
-              will be removed from your household inventory.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-xl bg-rose-600 py-3 text-sm font-semibold text-white active:scale-[0.98]"
-          >
-            Yes, remove it
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InventoryItemRow({ item, onOpenEditor, onDelete, showCategory = false }) {
+function InventoryItemRow({
+  item,
+  onOpenEditor,
+  onDelete,
+  onMoveToShopping,
+  showCategory = false,
+}) {
   const urgencyLabel = formatExpiryUrgency(item);
   const catMeta = getCategoryMeta(item.category, item.itemType);
   const displayStatus = getDisplayStatus(item);
   return (
-    <li className="surface-row flex items-center gap-2 px-3 py-2.5">
+    <li className="surface-row group flex items-center gap-2 px-3 py-2.5">
       <div className="min-w-0 flex-1">
         <p className="text-heading truncate text-sm font-medium">{item.name}</p>
         {showCategory && catMeta && (
@@ -1019,15 +995,250 @@ function InventoryItemRow({ item, onOpenEditor, onDelete, showCategory = false }
         )}
       </div>
       <StatusBadge status={displayStatus} onOpenPicker={() => onOpenEditor(item)} />
+      <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition sm:opacity-80 sm:group-hover:opacity-100">
+        {onMoveToShopping && (
+          <button
+            type="button"
+            onClick={() => onMoveToShopping(item.id)}
+            className={`rounded-lg p-2 text-slate-500 transition ${SHOPPING_ACCENT.hover} hover:text-sky-700 dark:hover:text-sky-300`}
+            aria-label={`Add ${item.name} to shopping list`}
+          >
+            <ShoppingCart className="h-4 w-4" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onDelete(item.id)}
+          className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
+          aria-label={`Remove ${item.name}`}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    </li>
+  );
+}
+
+function KitchenStatusCard({ item, onFinished, onRestock }) {
+  const urgencyLabel = formatExpiryUrgency(item);
+  const catMeta = getCategoryMeta(item.category, item.itemType);
+
+  return (
+    <article className="surface-card flex w-[min(100%,17rem)] shrink-0 snap-start flex-col gap-3 rounded-xl border border-amber-200/80 p-3 shadow-sm dark:border-amber-800/60">
+      <div className="min-w-0">
+        <p className="text-heading line-clamp-2 text-sm font-bold leading-snug">{item.name}</p>
+        {urgencyLabel && (
+          <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300">
+            <Calendar className="h-3 w-3 shrink-0" aria-hidden />
+            {urgencyLabel}
+          </p>
+        )}
+        {catMeta && (
+          <p className="text-muted mt-1 text-[10px]">
+            {catMeta.emoji} {catMeta.label}
+          </p>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onFinished(item.id)}
+          className="rounded-lg border border-rose-200 bg-rose-50 py-2 text-xs font-bold text-rose-700 transition active:scale-[0.98] hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-950"
+        >
+          Finished
+        </button>
+        <button
+          type="button"
+          onClick={() => onRestock(item.id)}
+          className={`rounded-lg py-2 text-xs font-bold text-white transition active:scale-[0.98] ${SHOPPING_ACCENT.btn}`}
+        >
+          Restock
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
+  const urgencyLabel = getConsumptionUrgencyLabel(item);
+  const catMeta = getCategoryMeta(item.category, item.itemType);
+
+  return (
+    <article className="surface-card flex w-[min(100%,18rem)] shrink-0 snap-start flex-col gap-3 rounded-xl border border-orange-200/90 p-3 shadow-sm dark:border-orange-800/60">
+      <div className="min-w-0">
+        <p className="text-heading line-clamp-2 text-sm font-bold leading-snug">{item.name}</p>
+        <p className="mt-1 text-xs font-medium leading-relaxed text-orange-800 dark:text-orange-300">
+          {urgencyLabel}
+        </p>
+        {catMeta && (
+          <p className="text-muted mt-1 text-[10px]">
+            {catMeta.emoji} {catMeta.label}
+          </p>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onRestock(item.id)}
+          className={`flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-xl py-2.5 text-xs font-bold text-white transition active:scale-[0.98] ${SHOPPING_ACCENT.btn}`}
+        >
+          <ShoppingCart className="h-5 w-5" aria-hidden />
+          Restock
+        </button>
+        <button
+          type="button"
+          onClick={() => onStillGotIt(item.id)}
+          className="flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-orange-300 bg-orange-50 py-2.5 text-xs font-bold text-orange-900 transition active:scale-[0.98] hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-950/50 dark:text-orange-200 dark:hover:bg-orange-950"
+        >
+          <Check className="h-5 w-5" aria-hidden />
+          Still Got It
+        </button>
+      </div>
       <button
         type="button"
         onClick={() => onDelete(item.id)}
-        className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
-        aria-label={`Remove ${item.name}`}
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
       >
-        <Trash2 className="h-4 w-4" />
+        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+        Delete — I&apos;m done with this
       </button>
-    </li>
+    </article>
+  );
+}
+
+function PredictedLowBanner({ items, onRestock, onStillGotIt, onDelete }) {
+  if (items.length === 0) return null;
+
+  return (
+    <section className="mb-4 rounded-2xl border-2 border-orange-300 bg-gradient-to-br from-orange-50 to-amber-50/90 p-4 dark:border-orange-700 dark:from-orange-950/40 dark:to-amber-950/30">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-heading flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-orange-900 dark:text-orange-200">
+            <FlaskConical className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden />
+            Predicted to be Running Low
+          </h2>
+          <p className="text-muted mt-1 text-xs leading-relaxed">
+            Based on how long items usually last in your household (~85% of typical supply used).
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+          {items.length}
+        </span>
+      </div>
+      <div className="touch-pan-x flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
+        {items.map((item) => (
+          <PredictedLowCard
+            key={item.id}
+            item={item}
+            onRestock={onRestock}
+            onStillGotIt={onStillGotIt}
+            onDelete={onDelete}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function KitchenStatusBanner({ items, onFinished, onRestock }) {
+  if (items.length === 0) return null;
+
+  return (
+    <section className="mb-4 rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50/80 p-4 dark:border-amber-700 dark:from-amber-950/50 dark:to-orange-950/30">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <h2 className="text-heading flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-amber-900 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+            Kitchen Status
+          </h2>
+          <p className="text-muted mt-1 text-xs leading-relaxed">
+            Use up soon or running low — finish it or send to your shopping list.
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
+          {items.length}
+        </span>
+      </div>
+      <div className="touch-pan-x flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
+        {items.map((item) => (
+          <KitchenStatusCard
+            key={item.id}
+            item={item}
+            onFinished={onFinished}
+            onRestock={onRestock}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FrequentlyRestockedSection({ suggestions, onAdd }) {
+  const [open, setOpen] = useState(false);
+
+  if (suggestions.length === 0) return null;
+
+  return (
+    <section className={`surface-card mb-5 overflow-hidden border-2 p-4 ${SHOPPING_ACCENT.borderSoft}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 text-left active:scale-[0.99]"
+        aria-expanded={open}
+      >
+        <div className="min-w-0 flex-1">
+          <h2 className={`text-sm font-bold uppercase tracking-wide ${SHOPPING_ACCENT.textLabel}`}>
+            Frequently Restocked
+          </h2>
+          {!open && (
+            <p className="text-muted mt-1 text-xs leading-relaxed">
+              {suggestions.length} household favourite{suggestions.length === 1 ? '' : 's'} — tap + to
+              re-add
+            </p>
+          )}
+        </div>
+        {open ? (
+          <ChevronUp className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+        ) : (
+          <ChevronDown className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+        )}
+      </button>
+
+      {open && (
+        <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-600">
+          <p className="text-muted mb-3 text-xs leading-relaxed">
+            Items you&apos;ve bought or removed before. Tap + to put them back on your shopping list.
+          </p>
+          <ul className="space-y-2">
+            {suggestions.map((entry) => {
+              const meta = getCategoryMeta(entry.category, entry.itemType);
+              return (
+                <li
+                  key={restockHistoryKey(entry)}
+                  className="surface-inset flex items-center gap-2 rounded-xl px-3 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-heading truncate text-sm font-medium">{entry.name}</p>
+                    <p className="text-muted mt-0.5 text-[10px]">
+                      {meta?.emoji} {meta?.label}
+                      {entry.count > 1 ? ` · restocked ${entry.count}×` : ''}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onAdd(entry)}
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white shadow active:scale-95 ${SHOPPING_ACCENT.btn}`}
+                    aria-label={`Add ${entry.name} to shopping list`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1132,7 +1343,14 @@ function StorageLocationTabs({
   );
 }
 
-function InventoryView({ items, updateItems, onboarding, enabledModules }) {
+function InventoryView({
+  items,
+  updateItems,
+  restockHistory,
+  updateRestockHistory,
+  onboarding,
+  enabledModules,
+}) {
   const { isDismissed, dismiss } = onboarding;
   const defaultModuleKey = getDefaultModuleKey(enabledModules);
   const [inventoryScope, setInventoryScope] = useState(defaultModuleKey);
@@ -1151,12 +1369,25 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
   const pingInFlightRef = useRef(false);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
-  const [confirmDeleteItem, setConfirmDeleteItem] = useState(null);
-
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
   const shoppingList = useMemo(
     () => groupShoppingList(items, enabledModules),
+    [items, enabledModules],
+  );
+
+  const frequentlyRestocked = useMemo(
+    () => getFrequentlyRestocked(restockHistory, items, enabledModules, 10),
+    [restockHistory, items, enabledModules],
+  );
+
+  const kitchenStatusItems = useMemo(
+    () => filterKitchenStatusItems(items, enabledModules, EXPIRING_SOON_DAYS),
+    [items, enabledModules],
+  );
+
+  const predictedLowItems = useMemo(
+    () => filterPredictedLowItems(items, enabledModules),
     [items, enabledModules],
   );
 
@@ -1280,6 +1511,11 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
       resetAddForm();
       return;
     }
+    const consumption = buildConsumptionFields({
+      name,
+      itemType: addItemType,
+      category: addCategory,
+    });
     updateItems((prev) => [
       ...prev,
       {
@@ -1290,6 +1526,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
         category: addCategory,
         expiryDate:
           addItemType === ITEM_TYPE.FOOD && addExpiry && addExpiryDate ? addExpiryDate : null,
+        ...consumption,
       },
     ]);
     resetAddForm();
@@ -1317,6 +1554,11 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
         };
         return next;
       }
+      const consumption = buildConsumptionFields({
+        name,
+        itemType: shopItemType,
+        category: shopCategory,
+      });
       return [
         ...prev,
         {
@@ -1326,6 +1568,7 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
           status: STATUS.OUT,
           category: shopCategory,
           expiryDate: null,
+          ...consumption,
         },
       ];
     });
@@ -1338,25 +1581,90 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
     );
   };
 
-  const deleteItem = (id) => {
-    updateItems((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const requestDeleteItem = (id) => {
-    const item = items.find((entry) => entry.id === id);
+  const rememberRestock = (item) => {
     if (!item) return;
-    setConfirmDeleteItem({ id: item.id, name: item.name });
+    updateRestockHistory((prev) => recordRestockEvent(prev, item));
   };
 
-  const confirmDeleteItemAction = () => {
-    if (!confirmDeleteItem) return;
-    deleteItem(confirmDeleteItem.id);
-    setConfirmDeleteItem(null);
+  const deleteItem = (id, { trackHistory = false } = {}) => {
+    const item = items.find((entry) => entry.id === id);
+    if (trackHistory && item) rememberRestock(item);
+    updateItems((prev) => prev.filter((entry) => entry.id !== id));
+  };
+
+  const moveItemToShoppingList = (id) => {
+    updateItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: STATUS.OUT } : item)),
+    );
+  };
+
+  const resetConsumptionTimer = (id) => {
+    const now = new Date().toISOString();
+    updateItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, stockedAt: now, createdAt: now, status: STATUS.FRESH } : item,
+      ),
+    );
+  };
+
+  const predictiveRestock = (id) => {
+    const item = items.find((entry) => entry.id === id);
+    if (item) rememberRestock(item);
+    moveItemToShoppingList(id);
+  };
+
+  const addRestockEntryToShoppingList = (entry) => {
+    const needle = normalizeName(entry.name);
+    updateItems((prev) => {
+      const existingIdx = prev.findIndex(
+        (item) => normalizeName(item.name) === needle && item.itemType === entry.itemType,
+      );
+      if (existingIdx >= 0) {
+        const next = [...prev];
+        next[existingIdx] = {
+          ...next[existingIdx],
+          status: STATUS.OUT,
+          category: entry.category,
+          preferredStore: entry.preferredStore ?? next[existingIdx].preferredStore ?? null,
+        };
+        return next;
+      }
+      const consumption = buildConsumptionFields({
+        name: entry.name,
+        itemType: entry.itemType,
+        category: entry.category,
+      });
+      return [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          name: entry.name,
+          itemType: entry.itemType,
+          status: STATUS.OUT,
+          category: entry.category,
+          expiryDate: null,
+          preferredStore: entry.preferredStore ?? null,
+          ...consumption,
+        },
+      ];
+    });
   };
 
   const markItemStocked = (id) => {
+    const item = items.find((entry) => entry.id === id);
+    if (item) rememberRestock(item);
+    const now = new Date().toISOString();
     updateItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: STATUS.FRESH } : item)),
+      prev.map((entry) =>
+        entry.id === id
+          ? {
+              ...entry,
+              status: STATUS.FRESH,
+              stockedAt: now,
+              createdAt: now,
+            }
+          : entry,
+      ),
     );
   };
 
@@ -1399,6 +1707,22 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
           Food & household supplies · expiring soon within {EXPIRING_SOON_DAYS} days (food)
         </p>
       </header>
+
+      {!isShoppingView(activeView) && (
+        <>
+          <PredictedLowBanner
+            items={predictedLowItems}
+            onRestock={predictiveRestock}
+            onStillGotIt={resetConsumptionTimer}
+            onDelete={(id) => deleteItem(id, { trackHistory: true })}
+          />
+          <KitchenStatusBanner
+            items={kitchenStatusItems}
+            onFinished={(id) => deleteItem(id, { trackHistory: true })}
+            onRestock={moveItemToShoppingList}
+          />
+        </>
+      )}
 
       {!isDismissed('welcome') && (
         <TipBanner
@@ -1507,12 +1831,17 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
                 key={item.id}
                 item={item}
                 onOpenEditor={setEditingItem}
-                onDelete={deleteItem}
+                onDelete={(id) => deleteItem(id, { trackHistory: true })}
                 onGotIt={markItemStocked}
                 onPreferredStoreChange={updatePreferredStore}
               />
             ))}
           </InventorySection>
+
+          <FrequentlyRestockedSection
+            suggestions={frequentlyRestocked}
+            onAdd={addRestockEntryToShoppingList}
+          />
 
           <button
             type="button"
@@ -1654,7 +1983,8 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
                   key={item.id}
                   item={item}
                   onOpenEditor={setEditingItem}
-                  onDelete={requestDeleteItem}
+                  onDelete={(id) => deleteItem(id, { trackHistory: true })}
+                  onMoveToShopping={moveItemToShoppingList}
                 />
               ))}
             </InventorySection>
@@ -1671,20 +2001,13 @@ function InventoryView({ items, updateItems, onboarding, enabledModules }) {
                   key={item.id}
                   item={item}
                   onOpenEditor={setEditingItem}
-                  onDelete={requestDeleteItem}
+                  onDelete={(id) => deleteItem(id, { trackHistory: true })}
+                  onMoveToShopping={moveItemToShoppingList}
                 />
               ))}
             </InventorySection>
           </>
         )
-      )}
-
-      {confirmDeleteItem && (
-        <ConfirmDeleteItemModal
-          itemName={confirmDeleteItem.name}
-          onConfirm={confirmDeleteItemAction}
-          onCancel={() => setConfirmDeleteItem(null)}
-        />
       )}
 
       {editingItem && (
@@ -1893,6 +2216,11 @@ function RecipesView({ items, updateItems, savedRecipes }) {
           continue;
         }
         const classified = classifyItem(name);
+        const consumption = buildConsumptionFields({
+          name,
+          itemType: ITEM_TYPE.FOOD,
+          category: classified?.category ?? FOOD_CATEGORY.AMBIENT,
+        });
         next.push({
           id: crypto.randomUUID(),
           name,
@@ -1900,6 +2228,7 @@ function RecipesView({ items, updateItems, savedRecipes }) {
           status: STATUS.OUT,
           category: classified?.category ?? FOOD_CATEGORY.AMBIENT,
           expiryDate: null,
+          ...consumption,
         });
       }
       return next;
@@ -2974,6 +3303,8 @@ export default function App() {
     reload,
     items,
     updateItems,
+    restockHistory,
+    updateRestockHistory,
     settings,
     updateSettings,
     enabledModules,
@@ -3073,6 +3404,8 @@ export default function App() {
           <InventoryView
             items={items}
             updateItems={updateItems}
+            restockHistory={restockHistory}
+            updateRestockHistory={updateRestockHistory}
             onboarding={onboarding}
             enabledModules={enabledModules}
           />

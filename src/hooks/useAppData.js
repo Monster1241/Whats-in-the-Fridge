@@ -19,13 +19,14 @@ export function useAppData(enabled) {
   const [enabledModules, setEnabledModules] = useState({ ...DEFAULT_ENABLED_MODULES });
   const [savedIds, setSavedIds] = useState([]);
   const [onboarding, setOnboarding] = useState({ dismissed: [] });
+  const [restockHistory, setRestockHistory] = useState([]);
   const [householdCode, setHouseholdCode] = useState('');
 
   const skipSaveRef = useRef(true);
   const saveTimerRef = useRef(null);
-  const latestRef = useRef({ items, settings, savedIds, onboarding });
+  const latestRef = useRef({ items, settings, savedIds, onboarding, restockHistory });
 
-  latestRef.current = { items, settings, savedIds, onboarding };
+  latestRef.current = { items, settings, savedIds, onboarding, restockHistory };
 
   const applyState = useCallback((state) => {
     setItems(migrateItems(state.items));
@@ -35,6 +36,7 @@ export function useAppData(enabled) {
     setOnboarding(
       state.onboarding?.dismissed ? state.onboarding : { dismissed: [] },
     );
+    setRestockHistory(Array.isArray(state.restockHistory) ? state.restockHistory : []);
     setHouseholdCode(state.householdCode || state.inviteCode || '');
   }, []);
 
@@ -107,14 +109,20 @@ export function useAppData(enabled) {
 
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
-      const { items: nextItems, settings: nextSettings, savedIds: nextSaved, onboarding: nextOnboarding } =
-        latestRef.current;
+      const {
+        items: nextItems,
+        settings: nextSettings,
+        savedIds: nextSaved,
+        onboarding: nextOnboarding,
+        restockHistory: nextRestockHistory,
+      } = latestRef.current;
       try {
         const state = await saveAppState({
           items: nextItems,
           settings: nextSettings,
           savedRecipeIds: nextSaved,
           onboarding: nextOnboarding,
+          restockHistory: nextRestockHistory,
         });
         skipSaveRef.current = true;
         applyState(state);
@@ -125,7 +133,7 @@ export function useAppData(enabled) {
     }, SAVE_DELAY_MS);
 
     return () => clearTimeout(saveTimerRef.current);
-  }, [items, settings, savedIds, onboarding, loading, error, enabled, applyState]);
+  }, [items, settings, savedIds, onboarding, restockHistory, loading, error, enabled, applyState]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark');
@@ -133,6 +141,10 @@ export function useAppData(enabled) {
 
   const updateItems = useCallback((updater) => {
     setItems((prev) => (typeof updater === 'function' ? updater(prev) : updater));
+  }, []);
+
+  const updateRestockHistory = useCallback((updater) => {
+    setRestockHistory((prev) => (typeof updater === 'function' ? updater(prev) : updater));
   }, []);
 
   const updateSettings = useCallback((updater) => {
@@ -193,6 +205,8 @@ export function useAppData(enabled) {
     reload,
     items,
     updateItems,
+    restockHistory,
+    updateRestockHistory,
     settings,
     updateSettings,
     enabledModules,
