@@ -1,9 +1,5 @@
 import { MongoClient, ObjectId } from 'mongodb';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules, validateEnabledModules } from './enabledModules.js';
-import {
-  ensureProductSuggestionIndexes,
-  PRODUCT_SUGGESTIONS_COLLECTION,
-} from './productSuggestions.js';
 
 const DB_NAME = 'whats-in-the-fridge';
 
@@ -133,7 +129,6 @@ async function ensureIndexes(db) {
     },
   );
   await db.collection('inventory').createIndex({ household_id: 1 });
-  await ensureProductSuggestionIndexes(db.collection(PRODUCT_SUGGESTIONS_COLLECTION));
 }
 
 async function ensureIndexesSafe(db) {
