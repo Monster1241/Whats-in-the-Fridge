@@ -11,6 +11,7 @@ import { fetchHouseholdMembers, pingShoppingList, removeHouseholdMember } from '
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
+import { WeeklyDealsFeed } from './components/WeeklyDealsFeed.jsx';
 import {
   defaultCategoryForItemType,
   getCategoriesForItemType,
@@ -39,6 +40,7 @@ import {
 } from './inventory/modules.js';
 import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
 import { classifyItem } from './inventory/classifyItem.js';
+import { dealStoreToPreferred, mapDealToInventory } from './inventory/mapDealToInventory.js';
 import { normalizeName } from './inventory/itemUtils.js';
 import {
   getFrequentlyRestocked,
@@ -1382,11 +1384,17 @@ function InventoryView({
   const pingInFlightRef = useRef(false);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
+  const [shoppingSubView, setShoppingSubView] = useState('list');
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
   const shoppingList = useMemo(
     () => groupShoppingList(items, enabledModules),
     [items, enabledModules],
+  );
+
+  const shoppingListNames = useMemo(
+    () => new Set(shoppingList.map((item) => normalizeName(item.name))),
+    [shoppingList],
   );
 
   const frequentlyRestocked = useMemo(
@@ -1663,6 +1671,16 @@ function InventoryView({
     });
   };
 
+  const addDealToShoppingList = (deal) => {
+    const { itemType, category } = mapDealToInventory(deal);
+    addRestockEntryToShoppingList({
+      name: deal.name,
+      itemType,
+      category,
+      preferredStore: dealStoreToPreferred(deal.store),
+    });
+  };
+
   const markItemStocked = (id) => {
     const item = items.find((entry) => entry.id === id);
     if (item) rememberRestock(item);
@@ -1775,6 +1793,46 @@ function InventoryView({
 
       {isShoppingView(activeView) ? (
         <>
+          <div
+            className={`mb-4 grid grid-cols-2 gap-2 rounded-2xl border p-1 ${SHOPPING_ACCENT.borderSoft}`}
+            role="tablist"
+            aria-label="Shopping module views"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={shoppingSubView === 'list'}
+              onClick={() => setShoppingSubView('list')}
+              className={`rounded-xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.98] ${
+                shoppingSubView === 'list'
+                  ? `${SHOPPING_ACCENT.btn} text-white shadow-md`
+                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
+            >
+              My List
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={shoppingSubView === 'deals'}
+              onClick={() => setShoppingSubView('deals')}
+              className={`rounded-xl px-3 py-2.5 text-sm font-bold transition active:scale-[0.98] ${
+                shoppingSubView === 'deals'
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-900/30'
+                  : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'
+              }`}
+            >
+              Weekly Deals
+            </button>
+          </div>
+
+          {shoppingSubView === 'deals' ? (
+            <WeeklyDealsFeed
+              onAddDeal={addDealToShoppingList}
+              addedNames={shoppingListNames}
+            />
+          ) : (
+            <>
           {!isDismissed('shopping-tip') && (
             <TipBanner
               title="Your shared shopping list"
@@ -1881,6 +1939,8 @@ function InventoryView({
             >
               {pingFeedback.text}
             </p>
+          )}
+            </>
           )}
         </>
       ) : (

@@ -32,6 +32,14 @@ import {
   removeInvalidFcmTokens,
 } from './db.js';
 import { sendPushToTokens } from './fcm.js';
+import {
+  DEAL_CATEGORIES,
+  DEAL_STORES,
+  fetchWeeklyDeals,
+  groupWeeklyDeals,
+  normalizeDealCategory,
+  normalizeDealStore,
+} from './weeklyDeals.js';
 
 async function authPayload(user) {
   const isVerified = Boolean(user.isVerified);
@@ -629,6 +637,64 @@ export async function handlePingShoppingList(req, res) {
         ? 'Push notifications are not configured on the server.'
         : friendly.message || 'Could not send shopping ping.';
     res.status(friendly.status || 500).json({ error: message });
+  }
+}
+
+export async function handleGetWeeklyDeals(req, res) {
+  try {
+    const auth = await requireVerified(req, res);
+    if (!auth) return;
+
+    const store = String(req.query.store ?? '').trim() || null;
+    const category = String(req.query.category ?? '').trim() || null;
+    const groupByRaw = String(req.query.groupBy ?? '').trim().toLowerCase();
+
+    if (store) {
+      const stores = store.split(',').map((value) => normalizeDealStore(value));
+      if (stores.some((value) => value === null)) {
+        res.status(400).json({
+          error: `Invalid store. Use one of: ${DEAL_STORES.join(', ')}.`,
+        });
+        return;
+      }
+    }
+
+    if (category) {
+      const categories = category.split(',').map((value) => normalizeDealCategory(value));
+      if (categories.some((value) => !value)) {
+        res.status(400).json({
+          error: `Invalid category. Use one of: ${DEAL_CATEGORIES.join(', ')}.`,
+        });
+        return;
+      }
+    }
+
+    const groupBy = groupByRaw === 'store' || groupByRaw === 'category' ? groupByRaw : null;
+    if (groupByRaw && !groupBy) {
+      res.status(400).json({ error: "groupBy must be 'store' or 'category'." });
+      return;
+    }
+
+    const deals = await fetchWeeklyDeals({ store, category });
+    const payload = {
+      filters: {
+        store: store || null,
+        category: category || null,
+        groupBy,
+      },
+      count: deals.length,
+      deals,
+    };
+
+    if (groupBy) {
+      payload.grouped = groupWeeklyDeals(deals, groupBy);
+    }
+
+    res.status(200).json(payload);
+  } catch (err) {
+    console.error('GET /api/deals/weekly', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
   }
 }
 

@@ -246,6 +246,22 @@ export async function saveAppState(partial) {
   return parseJson(res);
 }
 
+/**
+ * @param {{ store?: string, category?: string, groupBy?: 'store'|'category' }} [filters]
+ */
+export async function fetchWeeklyDeals(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.store) params.set('store', filters.store);
+  if (filters.category) params.set('category', filters.category);
+  if (filters.groupBy) params.set('groupBy', filters.groupBy);
+
+  const query = params.toString();
+  const res = await fetch(`${API_BASE}/deals/weekly${query ? `?${query}` : ''}`, {
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
 export async function checkApiHealth() {
   try {
     const res = await fetch(`${API_BASE}/health`);

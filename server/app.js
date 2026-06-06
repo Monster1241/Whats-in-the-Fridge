@@ -6,6 +6,7 @@ import { asyncRoute } from './routeUtils.js';
 import { authRouter } from './routes/auth.js';
 import { householdRouter } from './routes/household.js';
 import { stateRouter } from './routes/state.js';
+import { dealsRouter } from './routes/deals.js';
 
 export function createApp() {
   const app = express();
@@ -25,6 +26,7 @@ export function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/household', householdRouter);
   app.use('/api/state', stateRouter);
+  app.use('/api/deals', dealsRouter);
 
   return app;
 }
