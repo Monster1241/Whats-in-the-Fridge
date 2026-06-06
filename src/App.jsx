@@ -1140,13 +1140,13 @@ function PredictedLowBanner({ items, onRestock, onStillGotIt, onDelete }) {
   );
 }
 
-function KitchenStatusBanner({ items, onFinished, onRestock }) {
+function KitchenStatusBanner({ items, onFinished, onRestock, onDismiss }) {
   if (items.length === 0) return null;
 
   return (
     <section className="mb-4 rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-orange-50/80 p-4 dark:border-amber-700 dark:from-amber-950/50 dark:to-orange-950/30">
       <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-heading flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-amber-900 dark:text-amber-200">
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
             Kitchen Status
@@ -1155,9 +1155,20 @@ function KitchenStatusBanner({ items, onFinished, onRestock }) {
             Use up soon or running low — finish it or send to your shopping list.
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
-          {items.length}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold text-white">
+            {items.length}
+          </span>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded-lg p-1.5 text-slate-500 transition hover:bg-white/70 hover:text-slate-800 dark:hover:bg-amber-950 dark:hover:text-slate-200"
+            aria-label="Remove Kitchen Status section"
+            title="Remove"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
       </div>
       <div className="touch-pan-x flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
         {items.map((item) => (
@@ -1716,11 +1727,14 @@ function InventoryView({
             onStillGotIt={resetConsumptionTimer}
             onDelete={(id) => deleteItem(id, { trackHistory: true })}
           />
-          <KitchenStatusBanner
-            items={kitchenStatusItems}
-            onFinished={(id) => deleteItem(id, { trackHistory: true })}
-            onRestock={moveItemToShoppingList}
-          />
+          {!isDismissed('kitchen-status') && (
+            <KitchenStatusBanner
+              items={kitchenStatusItems}
+              onFinished={(id) => deleteItem(id, { trackHistory: true })}
+              onRestock={moveItemToShoppingList}
+              onDismiss={() => dismiss('kitchen-status')}
+            />
+          )}
         </>
       )}
 
