@@ -1,4 +1,3 @@
 import { createGroceryCronHandler } from './groceryCronHandler.js';
 
-/** Manual / legacy entry — accepts ?mode=sneakPeek|officialReset */
 export default createGroceryCronHandler('officialReset');
