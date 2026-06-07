@@ -309,6 +309,31 @@ export async function seedWeeklyDealsIfEmpty() {
   return true;
 }
 
+/**
+ * Clears all weekly deal records and re-inserts from WEEKLY_DEAL_TEMPLATES.
+ * @returns {Promise<{ deleted: number, inserted: number, expiresAt: string }>}
+ */
+export async function reseedWeeklyDeals() {
+  const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
+  const removeResult = await collection.deleteMany({});
+  const expiresAt = getNextWednesdayExpiry();
+  const docs = buildDealsForCycle(expiresAt);
+
+  if (docs.length > 0) {
+    try {
+      await collection.insertMany(docs, { ordered: false });
+    } catch (err) {
+      if (err?.code !== 11000) throw err;
+    }
+  }
+
+  return {
+    deleted: removeResult.deletedCount ?? 0,
+    inserted: docs.length,
+    expiresAt: expiresAt.toISOString(),
+  };
+}
+
 function parseFilterList(value) {
   return [
     ...new Set(

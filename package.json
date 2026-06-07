@@ -12,7 +12,8 @@
     "start": "node server/index.js",
     "refresh:grocery": "node tasks/refreshGroceryData.js",
     "refresh:grocery:sneak": "node tasks/refreshGroceryData.js --mode sneakPeek",
-    "refresh:grocery:reset": "node tasks/refreshGroceryData.js --mode officialReset"
+    "refresh:grocery:reset": "node tasks/refreshGroceryData.js --mode officialReset",
+    "seed:weekly-deals": "node tasks/seedWeeklyDeals.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
