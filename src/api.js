@@ -262,8 +262,15 @@ export async function fetchWeeklyDeals(filters = {}) {
   return parseJson(res);
 }
 
-export async function fetchStoreCatalogues() {
-  const res = await fetch(`${API_BASE}/deals/catalogues`, {
+/**
+ * @param {{ postcode?: string }} [options]
+ */
+export async function fetchStoreCatalogues(options = {}) {
+  const params = new URLSearchParams();
+  if (options.postcode) params.set('postcode', options.postcode);
+
+  const query = params.toString();
+  const res = await fetch(`${API_BASE}/deals/catalogues${query ? `?${query}` : ''}`, {
     headers: authHeaders(),
   });
   return parseJson(res);

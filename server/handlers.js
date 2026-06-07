@@ -720,12 +720,17 @@ export async function handleGetStoreCatalogues(req, res) {
     const auth = await requireVerified(req, res);
     if (!auth) return;
 
-    const { catalogues, byStore } = await fetchActiveCataloguesPerStore();
+    const postcode = req.query?.postcode ?? null;
+    const { catalogues, byStore, locale } = await fetchActiveCataloguesPerStore({ postcode });
 
     res.status(200).json({
       count: catalogues.length,
       catalogues,
       byStore,
+      postcode: locale.postcode,
+      region: locale.region,
+      regionLabel: locale.regionLabel,
+      isFallbackPostcode: locale.isFallback,
     });
   } catch (err) {
     console.error('GET /api/deals/catalogues', err);

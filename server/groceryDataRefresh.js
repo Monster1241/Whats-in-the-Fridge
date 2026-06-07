@@ -110,9 +110,11 @@ async function upsertCataloguesForCycle(cycle, mode) {
   let skipped = 0;
 
   for (const doc of docs) {
+    const regionKey = doc.regions?.[0] ?? null;
     const existing = await collection.findOne({
       store: doc.store,
       validFrom: doc.validFrom,
+      ...(regionKey ? { regions: regionKey } : {}),
     });
 
     if (existing) {

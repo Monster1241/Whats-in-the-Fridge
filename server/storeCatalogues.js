@@ -1,4 +1,13 @@
 import {
+  appendPostcodeToCatalogueUrl,
+  DEFAULT_FALLBACK_POSTCODE,
+  DEFAULT_FALLBACK_REGION,
+  normalizeCatalogueRegions,
+  postcodeToRegion,
+  REGION_LABELS,
+  resolveCatalogueLocale,
+} from './catalogueRegions.js';
+import {
   getCurrentWednesdayStart,
   getNextWednesdayExpiry,
 } from './groceryCycle.js';
@@ -22,6 +31,8 @@ export const STORE_CATALOGUES_ARCHIVE_COLLECTION = 'storeCataloguesArchive';
  * @property {string} pdfUrl
  * @property {string} imageUrl
  * @property {string} externalLink
+ * @property {import('./catalogueRegions.js').CatalogueRegion[]} regions
+ * @property {string[]} [postcodes]
  * @property {Date} created_at
  * @property {Date} updated_at
  */
@@ -100,6 +111,17 @@ export function buildStoreCatalogueDoc(input) {
     throw err;
   }
 
+  const regions = normalizeCatalogueRegions(input.regions);
+  const postcodes = Array.isArray(input.postcodes)
+    ? [
+        ...new Set(
+          input.postcodes
+            .map((value) => String(value ?? '').replace(/\D/g, '').slice(0, 4))
+            .filter((value) => /^\d{4}$/.test(value)),
+        ),
+      ]
+    : [];
+
   const now = new Date();
 
   return {
@@ -110,6 +132,8 @@ export function buildStoreCatalogueDoc(input) {
     pdfUrl: sanitizeUrl(input.pdfUrl, { required: true, field: 'pdfUrl' }),
     imageUrl: sanitizeUrl(input.imageUrl, { field: 'imageUrl' }),
     externalLink: sanitizeUrl(input.externalLink, { required: true, field: 'externalLink' }),
+    regions,
+    postcodes,
     created_at: input.created_at instanceof Date ? input.created_at : now,
     updated_at: now,
   };
@@ -135,6 +159,8 @@ export function mapStoreCatalogueDoc(doc) {
     pdfUrl: doc.pdfUrl,
     imageUrl: doc.imageUrl || null,
     externalLink: doc.externalLink,
+    regions: Array.isArray(doc.regions) ? doc.regions : [],
+    postcodes: Array.isArray(doc.postcodes) ? doc.postcodes : [],
   };
 }
 
@@ -143,8 +169,36 @@ export function mapStoreCatalogueDoc(doc) {
  */
 export async function ensureStoreCatalogueIndexes(collection) {
   await collection.createIndex({ store: 1, validFrom: -1 });
+  await collection.createIndex({ store: 1, regions: 1, validFrom: -1 });
+  await collection.createIndex({ store: 1, postcodes: 1, validFrom: -1 });
   await collection.createIndex({ validFrom: 1, validTo: 1 });
 }
+
+/** Regions seeded per retail cycle (zone-specific flyers). */
+export const SEED_CATALOGUE_REGIONS = ['ACT', 'NSW_Metro', 'NSW_Sth', 'VIC'];
+
+/** Which catalogue zones each retailer supports in seed data. */
+const STORE_REGION_COVERAGE = {
+  coles: SEED_CATALOGUE_REGIONS,
+  woolworths: SEED_CATALOGUE_REGIONS,
+  aldi: SEED_CATALOGUE_REGIONS,
+  harrisfarm: ['ACT', 'NSW_Metro', 'NSW_Sth', 'NSW_Nth'],
+  costco: ['ACT', 'NSW_Metro', 'NSW_Sth', 'VIC', 'QLD', 'SA', 'WA'],
+};
+
+/** Representative postcodes used to build region-aware catalogue portal links. */
+const REGION_SAMPLE_POSTCODE = {
+  ACT: '2912',
+  NSW_Metro: '2000',
+  NSW_Sth: '2500',
+  NSW_Nth: '2300',
+  VIC: '3000',
+  QLD: '4000',
+  SA: '5000',
+  WA: '6000',
+  TAS: '7000',
+  NT: '0800',
+};
 
 function formatCatalogueMonth(date) {
   return date.toLocaleDateString('en-AU', { month: 'long', day: 'numeric', timeZone: 'UTC' });
@@ -192,19 +246,32 @@ const CATALOGUE_TEMPLATES = {
  */
 export function buildCataloguesForCycle(validFrom, validTo) {
   const monthLabel = formatCatalogueMonth(validFrom);
+  const docs = [];
 
-  return DEAL_STORES.map((store) => {
+  for (const store of DEAL_STORES) {
     const template = CATALOGUE_TEMPLATES[store];
-    return buildStoreCatalogueDoc({
-      store,
-      title: `${CATALOGUE_TITLE_PREFIX[store]} - ${monthLabel}`,
-      pdfUrl: template.pdfUrl,
-      imageUrl: template.imageUrl,
-      externalLink: template.externalLink,
-      validFrom,
-      validTo,
-    });
-  });
+    const regions = STORE_REGION_COVERAGE[store] ?? SEED_CATALOGUE_REGIONS;
+
+    for (const region of regions) {
+      const samplePostcode = REGION_SAMPLE_POSTCODE[region] ?? DEFAULT_FALLBACK_POSTCODE;
+      const regionLabel = REGION_LABELS[region] ?? region;
+
+      docs.push(
+        buildStoreCatalogueDoc({
+          store,
+          title: `${CATALOGUE_TITLE_PREFIX[store]} — ${regionLabel} — ${monthLabel}`,
+          pdfUrl: appendPostcodeToCatalogueUrl(template.pdfUrl, samplePostcode),
+          imageUrl: template.imageUrl,
+          externalLink: appendPostcodeToCatalogueUrl(template.externalLink, samplePostcode),
+          regions: [region],
+          validFrom,
+          validTo,
+        }),
+      );
+    }
+  }
+
+  return docs;
 }
 
 function buildSeedCatalogues() {
@@ -230,30 +297,82 @@ export async function seedStoreCataloguesIfEmpty() {
 }
 
 /**
- * Returns the latest active catalogue per store (validFrom <= now <= validTo).
+ * @param {import('mongodb').Collection} collection
+ * @param {import('./weeklyDeals.js').DealStore} store
+ * @param {string} region
+ * @param {string} postcode
+ * @param {Date} now
  */
-export async function fetchActiveCataloguesPerStore() {
+async function findActiveCatalogueForStore(collection, store, region, postcode, now) {
+  const activeWindow = {
+    store,
+    validFrom: { $lte: now },
+    validTo: { $gte: now },
+  };
+
+  const byPostcode = await collection.findOne(
+    { ...activeWindow, postcodes: postcode },
+    { sort: { validFrom: -1 } },
+  );
+  if (byPostcode) return byPostcode;
+
+  const byRegion = await collection.findOne(
+    { ...activeWindow, regions: region },
+    { sort: { validFrom: -1 } },
+  );
+  if (byRegion) return byRegion;
+
+  const byMetroFallback = await collection.findOne(
+    { ...activeWindow, regions: DEFAULT_FALLBACK_REGION },
+    { sort: { validFrom: -1 } },
+  );
+  if (byMetroFallback) return byMetroFallback;
+
+  return collection.findOne(activeWindow, { sort: { validFrom: -1 } });
+}
+
+/**
+ * Returns the latest active catalogue per store for the user's postcode zone.
+ * @param {{ postcode?: string|null }} [options]
+ */
+export async function fetchActiveCataloguesPerStore(options = {}) {
   const collection = getDb().collection(STORE_CATALOGUES_COLLECTION);
   await seedStoreCataloguesIfEmpty();
 
+  const locale = resolveCatalogueLocale(options.postcode);
   const now = new Date();
   const catalogues = [];
 
   for (const store of DEAL_STORES) {
-    const doc = await collection.findOne(
-      {
-        store,
-        validFrom: { $lte: now },
-        validTo: { $gte: now },
-      },
-      { sort: { validFrom: -1 } },
+    const doc = await findActiveCatalogueForStore(
+      collection,
+      store,
+      locale.region,
+      locale.postcode,
+      now,
     );
     if (doc) {
-      catalogues.push(mapStoreCatalogueDoc(doc));
+      const mapped = mapStoreCatalogueDoc(doc);
+      catalogues.push({
+        ...mapped,
+        externalLink: appendPostcodeToCatalogueUrl(mapped.externalLink, locale.postcode),
+        pdfUrl: appendPostcodeToCatalogueUrl(mapped.pdfUrl, locale.postcode),
+      });
     }
   }
 
   const byStore = Object.fromEntries(catalogues.map((entry) => [entry.store, entry]));
 
-  return { catalogues, byStore };
+  return {
+    catalogues,
+    byStore,
+    locale,
+  };
 }
+
+export {
+  DEFAULT_FALLBACK_POSTCODE,
+  DEFAULT_FALLBACK_REGION,
+  postcodeToRegion,
+  resolveCatalogueLocale,
+};

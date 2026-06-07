@@ -1,9 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Check, Download, ExternalLink, Flame, Plus, Search } from 'lucide-react';
+import {
+  BookOpen,
+  Check,
+  Download,
+  ExternalLink,
+  Flame,
+  MapPin,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react';
 import { fetchStoreCatalogues, fetchWeeklyDeals } from '../api.js';
 import { StoreLogo } from './StoreLogo.jsx';
 import { DEAL_TYPE_SUB_FILTERS, matchesDealTypeSubFilter } from '../inventory/dealTypes.js';
 import { normalizeName } from '../inventory/itemUtils.js';
+import {
+  isValidAustralianPostcode,
+  readStoredPostcode,
+  writeStoredPostcode,
+} from '../inventory/postcodeStorage.js';
 
 const SECTIONS = [
   {
@@ -139,12 +154,99 @@ function getDealTypeBadgeStyle(deal) {
   return DEAL_BADGE_FALLBACK;
 }
 
+function PostcodeModal({ postcode, draft, onDraftChange, onSave, onClose, error }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="postcode-modal-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xs rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div>
+            <h3 id="postcode-modal-title" className="text-heading text-sm font-bold">
+              Your postcode
+            </h3>
+            <p className="text-muted mt-0.5 text-xs">Local flyers &amp; catalogue links for your area</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <label className="block">
+          <span className="text-muted mb-1.5 block text-[10px] font-bold uppercase tracking-wide">
+            4-digit Australian postcode
+          </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="postal-code"
+            maxLength={4}
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value.replace(/\D/g, '').slice(0, 4))}
+            placeholder={postcode}
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-lg font-bold tracking-[0.2em] text-slate-900 outline-none ring-sky-300/0 focus:border-sky-400 focus:ring-2 focus:ring-sky-300/40 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+          />
+        </label>
+
+        {error && (
+          <p className="mt-2 text-center text-xs font-semibold text-rose-600 dark:text-rose-400">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={onSave}
+          className="mt-4 w-full rounded-xl bg-sky-600 py-3 text-sm font-bold text-white transition hover:bg-sky-500 active:scale-[0.98]"
+        >
+          Save postcode
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PostcodeChip({ postcode, regionLabel, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/90 px-2.5 py-1.5 text-xs font-bold text-slate-700 ring-1 ring-slate-200/90 transition hover:bg-white hover:ring-sky-300 active:scale-[0.98] dark:bg-slate-900/90 dark:text-slate-200 dark:ring-slate-600 dark:hover:ring-sky-700"
+      aria-label={`Postcode ${postcode}. Tap to change your location.`}
+      title={regionLabel ? `Flyers for ${regionLabel}` : 'Set your postcode'}
+    >
+      <MapPin className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" aria-hidden />
+      <span className="tabular-nums">{postcode}</span>
+    </button>
+  );
+}
+
 function SectionToggle({ activeSection, onChange, dealsCount, cataloguesCount }) {
   const activeIndex = SECTIONS.findIndex((section) => section.id === activeSection);
 
   return (
     <div
-      className="mb-4 rounded-2xl bg-slate-100/90 p-1 ring-1 ring-slate-200/80 dark:bg-slate-800/90 dark:ring-slate-700"
+      className="rounded-2xl bg-slate-100/90 p-1 ring-1 ring-slate-200/80 dark:bg-slate-800/90 dark:ring-slate-700"
       role="tablist"
       aria-label="Hot deals sections"
     >
@@ -358,6 +460,11 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const [storeFilter, setStoreFilter] = useState('all');
   const [dealTypeFilter, setDealTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [postcode, setPostcode] = useState(() => readStoredPostcode());
+  const [regionLabel, setRegionLabel] = useState('');
+  const [showPostcodeModal, setShowPostcodeModal] = useState(false);
+  const [postcodeDraft, setPostcodeDraft] = useState(postcode);
+  const [postcodeError, setPostcodeError] = useState('');
   const [deals, setDeals] = useState([]);
   const [catalogues, setCatalogues] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -386,23 +493,44 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
     loadDeals(storeFilter);
   }, [storeFilter, loadDeals]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadCatalogues = useCallback(async (currentPostcode) => {
     setCataloguesLoading(true);
-    fetchStoreCatalogues()
-      .then((data) => {
-        if (!cancelled) setCatalogues(data.catalogues ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setCatalogues([]);
-      })
-      .finally(() => {
-        if (!cancelled) setCataloguesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const data = await fetchStoreCatalogues({ postcode: currentPostcode });
+      setCatalogues(data.catalogues ?? []);
+      setRegionLabel(data.regionLabel ?? '');
+      if (data.postcode) setPostcode(data.postcode);
+    } catch {
+      setCatalogues([]);
+    } finally {
+      setCataloguesLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadCatalogues(postcode);
+  }, [postcode, loadCatalogues]);
+
+  const openPostcodeModal = () => {
+    setPostcodeDraft(postcode);
+    setPostcodeError('');
+    setShowPostcodeModal(true);
+  };
+
+  const savePostcode = () => {
+    if (!isValidAustralianPostcode(postcodeDraft)) {
+      setPostcodeError('Enter a valid 4-digit Australian postcode.');
+      return;
+    }
+    const saved = writeStoredPostcode(postcodeDraft);
+    if (!saved) {
+      setPostcodeError('Could not save postcode. Try again.');
+      return;
+    }
+    setPostcode(saved);
+    setShowPostcodeModal(false);
+    setPostcodeError('');
+  };
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -453,12 +581,32 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
 
   return (
     <div className="pb-4" aria-label="Hot deals portal">
-      <SectionToggle
-        activeSection={activeSection}
-        onChange={setActiveSection}
-        dealsCount={dealsCount}
-        cataloguesCount={cataloguesCount}
-      />
+      <div className="mb-4 flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <SectionToggle
+            activeSection={activeSection}
+            onChange={setActiveSection}
+            dealsCount={dealsCount}
+            cataloguesCount={cataloguesCount}
+          />
+        </div>
+        <PostcodeChip
+          postcode={postcode}
+          regionLabel={regionLabel}
+          onClick={openPostcodeModal}
+        />
+      </div>
+
+      {showPostcodeModal && (
+        <PostcodeModal
+          postcode={postcode}
+          draft={postcodeDraft}
+          onDraftChange={setPostcodeDraft}
+          onSave={savePostcode}
+          onClose={() => setShowPostcodeModal(false)}
+          error={postcodeError}
+        />
+      )}
 
       <div
         key={activeSection}
@@ -473,7 +621,12 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
               ? '🔥 Featured Super Savers & Item Specials'
               : '📖 Full Digital Weekly Catalogues'}
           </h2>
-          <p className="text-muted mt-1 text-xs leading-relaxed">{activeSectionMeta.description}</p>
+          <p className="text-muted mt-1 text-xs leading-relaxed">
+            {activeSectionMeta.description}
+            {activeSection === 'catalogues' && regionLabel && (
+              <span className="text-heading font-semibold"> · {regionLabel} ({postcode})</span>
+            )}
+          </p>
         </div>
 
         {activeSection === 'deals' && (
