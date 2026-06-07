@@ -36,6 +36,8 @@ import { fetchActiveCataloguesPerStore } from './storeCatalogues.js';
 import {
   DEAL_CATEGORIES,
   DEAL_STORES,
+  DEAL_TYPES,
+  expandDealTypeFilter,
   fetchWeeklyDeals,
   groupWeeklyDeals,
   normalizeDealCategory,
@@ -648,6 +650,7 @@ export async function handleGetWeeklyDeals(req, res) {
 
     const store = String(req.query.store ?? '').trim() || null;
     const category = String(req.query.category ?? '').trim() || null;
+    const dealType = String(req.query.dealType ?? '').trim() || null;
     const groupByRaw = String(req.query.groupBy ?? '').trim().toLowerCase();
 
     if (store) {
@@ -670,17 +673,30 @@ export async function handleGetWeeklyDeals(req, res) {
       }
     }
 
+    if (dealType) {
+      const expanded = dealType
+        .split(',')
+        .flatMap((value) => expandDealTypeFilter(value.trim()) ?? []);
+      if (expanded.length === 0) {
+        res.status(400).json({
+          error: `Invalid dealType. Use one of: ${DEAL_TYPES.join(', ')}, or groups: halfPrice, superSaver, priceDrops.`,
+        });
+        return;
+      }
+    }
+
     const groupBy = groupByRaw === 'store' || groupByRaw === 'category' ? groupByRaw : null;
     if (groupByRaw && !groupBy) {
       res.status(400).json({ error: "groupBy must be 'store' or 'category'." });
       return;
     }
 
-    const deals = await fetchWeeklyDeals({ store, category });
+    const deals = await fetchWeeklyDeals({ store, category, dealType });
     const payload = {
       filters: {
         store: store || null,
         category: category || null,
+        dealType: dealType || null,
         groupBy,
       },
       count: deals.length,

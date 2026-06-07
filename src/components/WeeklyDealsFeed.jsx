@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Check, Download, ExternalLink, Flame, Plus } from 'lucide-react';
+import {
+  BookOpen,
+  Check,
+  Download,
+  ExternalLink,
+  Plus,
+  Search,
+  X,
+} from 'lucide-react';
 import { fetchStoreCatalogues, fetchWeeklyDeals } from '../api.js';
+import { DEAL_TYPE_SUB_FILTERS, matchesDealTypeSubFilter } from '../inventory/dealTypes.js';
 import { normalizeName } from '../inventory/itemUtils.js';
 
 const STORE_FILTERS = [
@@ -46,12 +55,37 @@ const STORE_FILTERS = [
   },
 ];
 
+const CATALOGUE_STORE_ORDER = ['coles', 'woolworths', 'aldi', 'harrisfarm', 'costco'];
+
 const STORE_BADGE_STYLES = {
   coles: 'bg-red-600 text-white',
   woolworths: 'bg-emerald-600 text-white',
   aldi: 'bg-blue-800 text-white',
   harrisfarm: 'bg-orange-500 text-white',
   costco: 'bg-[#E31837] text-white',
+};
+
+const CATALOGUE_TILE_STYLES = {
+  coles: {
+    frame: 'border-red-200/80 bg-gradient-to-r from-red-600 via-red-500 to-red-700 dark:border-red-900',
+    glow: 'shadow-red-900/25',
+  },
+  woolworths: {
+    frame: 'border-emerald-200/80 bg-gradient-to-r from-emerald-700 via-emerald-600 to-emerald-800 dark:border-emerald-900',
+    glow: 'shadow-emerald-900/25',
+  },
+  aldi: {
+    frame: 'border-blue-200/80 bg-gradient-to-r from-blue-900 via-blue-800 to-blue-950 dark:border-blue-950',
+    glow: 'shadow-blue-900/30',
+  },
+  harrisfarm: {
+    frame: 'border-orange-200/80 bg-gradient-to-r from-orange-500 via-orange-400 to-amber-600 dark:border-orange-900',
+    glow: 'shadow-orange-900/25',
+  },
+  costco: {
+    frame: 'border-rose-200/80 bg-gradient-to-r from-[#E31837] via-[#c41230] to-[#9e0f26] dark:border-rose-950',
+    glow: 'shadow-rose-900/30',
+  },
 };
 
 const DEAL_BADGE_FALLBACK =
@@ -69,6 +103,11 @@ function formatValidityRange(validFrom, validTo) {
   return `${from} – ${to}`;
 }
 
+function openExternalUrl(url) {
+  if (!url) return;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 /**
  * @param {{ dealType?: string, store?: string }} deal
  */
@@ -76,85 +115,19 @@ function getDealTypeBadgeStyle(deal) {
   if (deal.dealType === 'Half Price') {
     return 'bg-rose-700 text-white ring-rose-800 shadow-rose-900/20 dark:bg-rose-800 dark:ring-rose-900';
   }
-  if (deal.dealType === 'Super Saver' || deal.dealType === 'Price Drop') {
+  if (deal.dealType === 'Super Saver') {
     return 'bg-amber-500 text-amber-950 ring-amber-600 shadow-amber-900/15 dark:bg-amber-600 dark:text-amber-50 dark:ring-amber-700';
+  }
+  if (deal.dealType === 'Price Drop' || deal.dealType === 'Reduced') {
+    return 'bg-sky-700 text-white ring-sky-800 shadow-sky-900/15 dark:bg-sky-800 dark:ring-sky-900';
   }
   if (deal.store === 'aldi' && deal.dealType === 'Special Buy') {
     return 'bg-blue-800 text-white ring-blue-900 shadow-blue-900/20 dark:bg-blue-900 dark:ring-blue-950';
-  }
-  if (deal.dealType === 'Bulk Value') {
-    return 'bg-indigo-700 text-white ring-indigo-800 dark:bg-indigo-800 dark:ring-indigo-900';
   }
   if (deal.dealType === 'Special Buy') {
     return 'bg-blue-700 text-white ring-blue-800 dark:bg-blue-800 dark:ring-blue-900';
   }
   return DEAL_BADGE_FALLBACK;
-}
-
-function openExternalUrl(url) {
-  if (!url) return;
-  window.open(url, '_blank', 'noopener,noreferrer');
-}
-
-function CatalogueCard({ catalogue }) {
-  const storeBadge = STORE_BADGE_STYLES[catalogue.store] ?? 'bg-slate-700 text-white';
-  const validity = formatValidityRange(catalogue.validFrom, catalogue.validTo);
-
-  return (
-    <article className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex gap-3 p-3">
-        <div className="relative h-24 w-20 shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">
-          {catalogue.imageUrl ? (
-            <img
-              src={catalogue.imageUrl}
-              alt=""
-              className="h-full w-full object-cover"
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-              }}
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <BookOpen className="h-7 w-7 text-slate-400" aria-hidden />
-            </div>
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <span
-            className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${storeBadge}`}
-          >
-            {catalogue.storeLabel}
-          </span>
-          <h3 className="text-heading mt-1.5 line-clamp-2 text-sm font-bold leading-snug">
-            {catalogue.title}
-          </h3>
-          <p className="text-muted mt-1 text-xs font-medium">{validity}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-3 dark:border-slate-800">
-        <button
-          type="button"
-          onClick={() => openExternalUrl(catalogue.externalLink)}
-          className="flex min-h-[2.75rem] items-center justify-center gap-1.5 rounded-xl bg-slate-800 px-2 py-2.5 text-xs font-bold text-white transition active:scale-[0.98] hover:bg-slate-700 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white"
-        >
-          <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
-          View Live Catalogue
-        </button>
-        <button
-          type="button"
-          onClick={() => openExternalUrl(catalogue.pdfUrl)}
-          disabled={!catalogue.pdfUrl}
-          className="flex min-h-[2.75rem] items-center justify-center gap-1.5 rounded-xl border-2 border-sky-200 bg-sky-50 px-2 py-2.5 text-xs font-bold text-sky-800 transition active:scale-[0.98] hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950/60"
-        >
-          <Download className="h-4 w-4 shrink-0" aria-hidden />
-          Download PDF
-        </button>
-      </div>
-    </article>
-  );
 }
 
 function WeeklyDealCard({ deal, isAdded, onAdd }) {
@@ -164,7 +137,7 @@ function WeeklyDealCard({ deal, isAdded, onAdd }) {
   const dealPrice = formatPrice(deal.dealPrice);
 
   return (
-    <article className="surface-card relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-2xl border border-slate-200/90 shadow-sm dark:border-slate-700">
+    <article className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-2xl border border-amber-200/60 bg-white shadow-sm dark:border-amber-900/40 dark:bg-slate-900">
       <div className="p-3 pb-14">
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
           <span
@@ -225,6 +198,152 @@ function WeeklyDealCard({ deal, isAdded, onAdd }) {
   );
 }
 
+function CatalogueTile({ catalogue, onOpen }) {
+  const tileStyle = CATALOGUE_TILE_STYLES[catalogue.store] ?? {
+    frame: 'border-slate-300 bg-gradient-to-r from-slate-700 to-slate-900',
+    glow: 'shadow-slate-900/25',
+  };
+  const validity = formatValidityRange(catalogue.validFrom, catalogue.validTo);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(catalogue)}
+      className={`group relative w-full overflow-hidden rounded-2xl border-2 text-left shadow-lg transition active:scale-[0.99] hover:shadow-xl ${tileStyle.frame} ${tileStyle.glow}`}
+      aria-label={`Open ${catalogue.storeLabel} digital catalogue`}
+    >
+      <div className="flex min-h-[7.5rem] items-stretch gap-0 sm:min-h-[8.5rem]">
+        <div className="relative w-28 shrink-0 overflow-hidden sm:w-36">
+          {catalogue.imageUrl ? (
+            <img
+              src={catalogue.imageUrl}
+              alt=""
+              className="h-full w-full object-cover opacity-90 transition group-hover:opacity-100"
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center bg-black/20">
+              <BookOpen className="h-10 w-10 text-white/70" aria-hidden />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/30" aria-hidden />
+        </div>
+
+        <div className="flex min-w-0 flex-1 flex-col justify-center px-4 py-4 sm:px-5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/80">
+            {catalogue.storeLabel}
+          </p>
+          <h3 className="mt-1 line-clamp-2 text-base font-extrabold leading-snug text-white sm:text-lg">
+            {catalogue.title}
+          </h3>
+          <p className="mt-2 text-xs font-semibold text-white/85">{validity}</p>
+          <p className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-white/95">
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            Tap to browse live catalogue
+          </p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function CataloguePortalModal({ catalogue, onClose }) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  if (!catalogue) return null;
+
+  const storeBadge = STORE_BADGE_STYLES[catalogue.store] ?? 'bg-slate-700 text-white';
+  const validity = formatValidityRange(catalogue.validFrom, catalogue.validTo);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="catalogue-portal-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-3xl border border-sky-200 bg-white shadow-2xl dark:border-sky-900 dark:bg-slate-900"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="relative h-36 overflow-hidden bg-gradient-to-br from-sky-100 to-indigo-100 dark:from-sky-950 dark:to-indigo-950">
+          {catalogue.imageUrl ? (
+            <img
+              src={catalogue.imageUrl}
+              alt=""
+              className="h-full w-full object-cover opacity-80"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <BookOpen className="h-14 w-14 text-sky-400/80" aria-hidden />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-3 top-3 rounded-full bg-black/40 p-2 text-white transition hover:bg-black/60"
+            aria-label="Close catalogue portal"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="absolute bottom-3 left-4 right-4">
+            <span
+              className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${storeBadge}`}
+            >
+              {catalogue.storeLabel}
+            </span>
+          </div>
+        </div>
+
+        <div className="p-5">
+          <h3 id="catalogue-portal-title" className="text-heading text-lg font-bold leading-snug">
+            {catalogue.title}
+          </h3>
+          <p className="text-muted mt-2 text-sm font-medium">Valid {validity}</p>
+          <p className="text-muted mt-3 text-sm leading-relaxed">
+            Open the retailer&apos;s live digital catalogue portal in your browser, or download the
+            weekly PDF for offline browsing.
+          </p>
+
+          <div className="mt-5 grid gap-2.5">
+            <button
+              type="button"
+              onClick={() => openExternalUrl(catalogue.externalLink)}
+              className="flex min-h-[3rem] items-center justify-center gap-2 rounded-2xl bg-slate-800 px-4 py-3 text-sm font-bold text-white transition active:scale-[0.98] hover:bg-slate-700 dark:bg-sky-600 dark:hover:bg-sky-500"
+            >
+              <ExternalLink className="h-5 w-5 shrink-0" aria-hidden />
+              View Live Catalogue
+            </button>
+            <button
+              type="button"
+              onClick={() => openExternalUrl(catalogue.pdfUrl)}
+              disabled={!catalogue.pdfUrl}
+              className="flex min-h-[3rem] items-center justify-center gap-2 rounded-2xl border-2 border-sky-200 bg-sky-50 px-4 py-3 text-sm font-bold text-sky-800 transition active:scale-[0.98] hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300 dark:hover:bg-sky-950/60"
+            >
+              <Download className="h-5 w-5 shrink-0" aria-hidden />
+              Download PDF
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * @param {{
  *   onAddDeal: (deal: object) => void,
@@ -233,12 +352,15 @@ function WeeklyDealCard({ deal, isAdded, onAdd }) {
  */
 export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const [storeFilter, setStoreFilter] = useState('all');
+  const [dealTypeFilter, setDealTypeFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [deals, setDeals] = useState([]);
   const [catalogues, setCatalogues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cataloguesLoading, setCataloguesLoading] = useState(true);
   const [error, setError] = useState(null);
   const [justAddedIds, setJustAddedIds] = useState(() => new Set());
+  const [activeCatalogue, setActiveCatalogue] = useState(null);
 
   const loadDeals = useCallback(async (store) => {
     setLoading(true);
@@ -277,10 +399,24 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
     };
   }, []);
 
-  const filteredCatalogues = useMemo(() => {
-    if (storeFilter === 'all') return catalogues;
-    return catalogues.filter((entry) => entry.store === storeFilter);
-  }, [catalogues, storeFilter]);
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const filteredDeals = useMemo(() => {
+    return deals.filter((deal) => {
+      if (!matchesDealTypeSubFilter(deal, dealTypeFilter)) return false;
+      if (!normalizedSearch) return true;
+      const haystack = [deal.name, deal.category, deal.storeLabel, deal.dealType, deal.savingsText]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+  }, [deals, dealTypeFilter, normalizedSearch]);
+
+  const orderedCatalogues = useMemo(() => {
+    const byStore = Object.fromEntries(catalogues.map((entry) => [entry.store, entry]));
+    return CATALOGUE_STORE_ORDER.map((store) => byStore[store]).filter(Boolean);
+  }, [catalogues]);
 
   const isDealAdded = useCallback(
     (deal) => justAddedIds.has(deal.id) || addedNames.has(normalizeName(deal.name)),
@@ -294,30 +430,55 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   };
 
   const emptyMessage = useMemo(() => {
-    if (storeFilter === 'all') return 'No weekly deals right now — check back after Wednesday.';
-    const label = STORE_FILTERS.find((entry) => entry.id === storeFilter)?.label ?? 'This store';
-    return `No active deals at ${label} this week.`;
-  }, [storeFilter]);
+    const typeLabel =
+      DEAL_TYPE_SUB_FILTERS.find((entry) => entry.id === dealTypeFilter)?.label ?? 'these filters';
+    if (normalizedSearch) {
+      return `No deals match "${searchQuery.trim()}". Try another search or filter.`;
+    }
+    if (deals.length === 0) {
+      if (storeFilter === 'all') return 'No weekly deals right now — check back after Wednesday.';
+      const label = STORE_FILTERS.find((entry) => entry.id === storeFilter)?.label ?? 'This store';
+      return `No active deals at ${label} this week.`;
+    }
+    return `No ${typeLabel === 'Show All' ? 'matching' : typeLabel.toLowerCase()} deals for this selection.`;
+  }, [storeFilter, dealTypeFilter, deals.length, normalizedSearch, searchQuery]);
 
   return (
-    <div className="space-y-6 pb-4" aria-label="Weekly deals portal">
-      {/* Section 1: Itemized Hot Deals */}
-      <section aria-labelledby="hot-deals-heading">
-        <div className="mb-3 flex items-center gap-2">
-          <Flame className="h-5 w-5 text-rose-600 dark:text-rose-400" aria-hidden />
-          <div>
-            <h2
-              id="hot-deals-heading"
-              className="text-heading text-sm font-bold uppercase tracking-wide"
-            >
-              Itemized Hot Deals
-            </h2>
-            <p className="text-muted text-xs">Refreshes every Wednesday · tap + to add to your list</p>
-          </div>
+    <div className="space-y-8 pb-4" aria-label="Weekly deals portal">
+      {/* Upper: itemized deals */}
+      <section
+        aria-labelledby="featured-deals-heading"
+        className="rounded-3xl border-2 border-amber-200/90 bg-gradient-to-b from-rose-50/90 via-amber-50/50 to-white p-4 shadow-sm dark:border-amber-900/50 dark:from-rose-950/40 dark:via-amber-950/20 dark:to-slate-900"
+      >
+        <div className="mb-4">
+          <h2
+            id="featured-deals-heading"
+            className="text-heading text-base font-extrabold leading-snug tracking-tight sm:text-lg"
+          >
+            🔥 Featured Super Savers &amp; Item Specials
+          </h2>
+          <p className="text-muted mt-1 text-xs leading-relaxed">
+            Search and filter single-item discounts · tap + to add to your shopping list
+          </p>
         </div>
 
+        <label className="relative mb-4 block">
+          <span className="sr-only">Search deals</span>
+          <Search
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-700/70 dark:text-amber-300/70"
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search deals by product, category, or store…"
+            className="w-full rounded-2xl border border-amber-200/80 bg-white py-3 pl-10 pr-4 text-sm font-medium text-slate-800 shadow-inner outline-none ring-amber-300/0 transition placeholder:text-slate-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/40 dark:border-amber-900/60 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-amber-700 dark:focus:ring-amber-700/40"
+          />
+        </label>
+
         <div
-          className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1"
+          className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1"
           role="tablist"
           aria-label="Filter deals by store"
         >
@@ -340,12 +501,36 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
           })}
         </div>
 
+        <div
+          className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1"
+          role="tablist"
+          aria-label="Filter deals by promotion type"
+        >
+          {DEAL_TYPE_SUB_FILTERS.map((filter) => {
+            const active = dealTypeFilter === filter.id;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setDealTypeFilter(filter.id)}
+                className={`shrink-0 rounded-lg px-3 py-2 text-[11px] font-bold ring-1 transition active:scale-[0.98] ${
+                  active ? filter.active : filter.idle
+                }`}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
+        </div>
+
         {loading && (
           <div className="grid grid-cols-2 gap-3">
             {Array.from({ length: 4 }).map((_, index) => (
               <div
                 key={index}
-                className="h-40 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700"
+                className="h-40 animate-pulse rounded-2xl bg-amber-100/80 dark:bg-amber-950/40"
                 aria-hidden
               />
             ))}
@@ -353,7 +538,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
         )}
 
         {!loading && error && (
-          <div className="surface-card rounded-2xl border border-rose-200 bg-rose-50 px-4 py-6 text-center dark:border-rose-900 dark:bg-rose-950/40">
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-6 text-center dark:border-rose-900 dark:bg-rose-950/40">
             <p className="text-sm font-semibold text-rose-800 dark:text-rose-200">{error}</p>
             <button
               type="button"
@@ -365,15 +550,15 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
           </div>
         )}
 
-        {!loading && !error && deals.length === 0 && (
-          <div className="surface-card rounded-2xl border border-dashed border-slate-300 px-4 py-10 text-center dark:border-slate-600">
+        {!loading && !error && filteredDeals.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-amber-300/80 bg-white/60 px-4 py-10 text-center dark:border-amber-900 dark:bg-slate-900/40">
             <p className="text-muted text-sm">{emptyMessage}</p>
           </div>
         )}
 
-        {!loading && !error && deals.length > 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            {deals.map((deal) => (
+        {!loading && !error && filteredDeals.length > 0 && (
+          <div className="grid grid-cols-2 gap-3 transition-opacity duration-200">
+            {filteredDeals.map((deal) => (
               <WeeklyDealCard
                 key={deal.id}
                 deal={deal}
@@ -385,51 +570,58 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
         )}
       </section>
 
-      {/* Section 2: Store Catalogues */}
+      {/* Lower: full digital catalogues */}
       <section
         aria-labelledby="catalogues-heading"
-        className="surface-card rounded-2xl border-2 border-sky-200 bg-gradient-to-b from-sky-50/80 to-white p-4 dark:border-sky-900 dark:from-sky-950/30 dark:to-slate-900"
+        className="rounded-3xl border-2 border-indigo-200/90 bg-gradient-to-b from-sky-50/90 via-indigo-50/40 to-white p-4 shadow-sm dark:border-indigo-900/60 dark:from-sky-950/30 dark:via-indigo-950/20 dark:to-slate-900"
       >
-        <h2
-          id="catalogues-heading"
-          className="text-heading mb-1 text-sm font-bold uppercase tracking-wide"
-        >
-          📖 Latest Digital Catalogues
-        </h2>
-        <p className="text-muted mb-4 text-xs leading-relaxed">
-          Browse this week&apos;s flyers or save a PDF for offline shopping.
-        </p>
+        <div className="mb-4">
+          <h2
+            id="catalogues-heading"
+            className="text-heading text-base font-extrabold leading-snug tracking-tight sm:text-lg"
+          >
+            📖 Full Digital Weekly Catalogues
+          </h2>
+          <p className="text-muted mt-1 text-xs leading-relaxed">
+            Full-store weekly flyers for Coles, Woolworths, ALDI, Harris Farm, and Costco
+          </p>
+        </div>
 
         {cataloguesLoading && (
           <div className="space-y-3">
-            {Array.from({ length: 3 }).map((_, index) => (
+            {CATALOGUE_STORE_ORDER.map((store) => (
               <div
-                key={index}
-                className="h-36 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-700"
+                key={store}
+                className="h-[7.5rem] animate-pulse rounded-2xl bg-indigo-100/80 dark:bg-indigo-950/40"
                 aria-hidden
               />
             ))}
           </div>
         )}
 
-        {!cataloguesLoading && filteredCatalogues.length === 0 && (
-          <p className="text-muted rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm dark:border-slate-600">
-            {storeFilter === 'all'
-              ? 'No active catalogues this week.'
-              : `No catalogue available for ${
-                  STORE_FILTERS.find((entry) => entry.id === storeFilter)?.label ?? 'this store'
-                } right now.`}
+        {!cataloguesLoading && orderedCatalogues.length === 0 && (
+          <p className="text-muted rounded-2xl border border-dashed border-indigo-300/80 bg-white/50 px-4 py-10 text-center text-sm dark:border-indigo-900 dark:bg-slate-900/40">
+            No active catalogues this week — check back after Wednesday.
           </p>
         )}
 
-        {!cataloguesLoading && filteredCatalogues.length > 0 && (
-          <div className="space-y-3">
-            {filteredCatalogues.map((catalogue) => (
-              <CatalogueCard key={catalogue.id} catalogue={catalogue} />
+        {!cataloguesLoading && orderedCatalogues.length > 0 && (
+          <div className="flex w-full flex-col gap-3">
+            {orderedCatalogues.map((catalogue) => (
+              <CatalogueTile
+                key={catalogue.id}
+                catalogue={catalogue}
+                onOpen={setActiveCatalogue}
+              />
             ))}
           </div>
         )}
       </section>
+
+      <CataloguePortalModal
+        catalogue={activeCatalogue}
+        onClose={() => setActiveCatalogue(null)}
+      />
     </div>
   );
 }

@@ -2,6 +2,9 @@ import {
   getCurrentWednesdayStart,
   getNextWednesdayExpiry,
 } from './groceryCycle.js';
+import { WEEKLY_DEAL_TEMPLATES } from './seedWeeklyDeals.js';
+
+export { WEEKLY_DEAL_TEMPLATES };
 
 export const WEEKLY_DEALS_COLLECTION = 'weeklyDeals';
 export const WEEKLY_DEALS_ARCHIVE_COLLECTION = 'weeklyDealsArchive';
@@ -26,36 +29,56 @@ export const DEAL_STORE_LABELS = {
 
 export const DEAL_CATEGORIES = ['Fresh', 'Pantry', 'Household', 'Baby'];
 
-/** @typedef {'Half Price'|'Super Saver'|'Price Drop'|'Special Buy'|'Bulk Value'} DealType */
+/**
+ * @typedef {'Half Price'|'Super Saver'|'Price Drop'|'Reduced'|'Special Buy'} DealType
+ * Half Price — strict 50% off
+ * Super Saver — high-value absolute dollar discounts
+ * Price Drop / Reduced — standard catalog markdowns
+ * Special Buy — ALDI limited-inventory lines
+ */
 
 export const DEAL_TYPES = /** @type {const} */ ([
   'Half Price',
   'Super Saver',
   'Price Drop',
+  'Reduced',
   'Special Buy',
-  'Bulk Value',
 ]);
+
+/** UI / API filter groups that map to one or more deal types. */
+export const DEAL_TYPE_FILTER_GROUPS = {
+  halfPrice: ['Half Price'],
+  superSaver: ['Super Saver'],
+  priceDrops: ['Price Drop', 'Reduced'],
+};
 
 const DEAL_TYPE_ALIASES = {
   halfprice: 'Half Price',
   'half-price': 'Half Price',
+  '50off': 'Half Price',
+  '50%off': 'Half Price',
   supersaver: 'Super Saver',
   'super-saver': 'Super Saver',
+  'super savers': 'Super Saver',
   pricedrop: 'Price Drop',
   'price-drop': 'Price Drop',
+  'price drops': 'Price Drop',
+  reduced: 'Reduced',
+  markdown: 'Reduced',
   specialbuy: 'Special Buy',
   'special-buy': 'Special Buy',
-  bulkvalue: 'Bulk Value',
-  'bulk-value': 'Bulk Value',
-  'bulk buy value': 'Bulk Value',
+  bulkvalue: 'Super Saver',
+  'bulk-value': 'Super Saver',
+  'bulk buy value': 'Super Saver',
+  'bulk value': 'Super Saver',
 };
 
 export const DEFAULT_SAVINGS_TEXT_BY_DEAL_TYPE = {
   'Half Price': 'Half Price!',
   'Super Saver': 'Super Saver',
   'Price Drop': 'Price Drop',
+  Reduced: 'Reduced',
   'Special Buy': 'Special Buy',
-  'Bulk Value': 'Bulk Buy Value',
 };
 
 /**
@@ -130,12 +153,36 @@ export function normalizeDealType(value) {
 
 export function inferDealTypeFromSavingsText(savingsText) {
   const text = String(savingsText ?? '').toLowerCase();
-  if (/half\s*price|½\s*price|1\/2/.test(text)) return 'Half Price';
-  if (/super\s*saver/.test(text)) return 'Super Saver';
+  if (/half\s*price|½\s*price|1\/2|50%\s*off/.test(text)) return 'Half Price';
+  if (/super\s*saver|save\s*\$\d+/.test(text)) return 'Super Saver';
   if (/special\s*buy/.test(text)) return 'Special Buy';
-  if (/bulk|value\s*pack|warehouse/.test(text)) return 'Bulk Value';
-  if (/save\s*\$|price\s*drop|was\s*\$|%\s*off/.test(text)) return 'Price Drop';
+  if (/bulk|value\s*pack|warehouse/.test(text)) return 'Super Saver';
+  if (/\breduced\b|markdown/.test(text)) return 'Reduced';
+  if (/price\s*drop|was\s*\$|%\s*off/.test(text)) return 'Price Drop';
   return 'Price Drop';
+}
+
+/**
+ * Resolves legacy or alias deal types to the current tier set.
+ * @param {string|null|undefined} dealType
+ */
+export function resolveDealType(dealType) {
+  const normalized = normalizeDealType(dealType);
+  if (!normalized) return null;
+  if (normalized === 'Bulk Value') return 'Super Saver';
+  return normalized;
+}
+
+/**
+ * @param {string} filterKey
+ * @returns {DealType[]|null}
+ */
+export function expandDealTypeFilter(filterKey) {
+  const key = String(filterKey ?? '').trim();
+  if (!key || key.toLowerCase() === 'all') return null;
+  if (DEAL_TYPE_FILTER_GROUPS[key]) return DEAL_TYPE_FILTER_GROUPS[key];
+  const normalized = resolveDealType(key);
+  return normalized ? [normalized] : null;
 }
 
 function sanitizeExpiresAt(value) {
@@ -170,7 +217,7 @@ export function buildWeeklyDealDoc(input) {
   const originalPrice = sanitizePrice(input.originalPrice);
   const savingsTextRaw = String(input.savingsText ?? '').trim().slice(0, 120);
   const dealType =
-    normalizeDealType(input.dealType) ??
+    resolveDealType(input.dealType) ??
     (savingsTextRaw ? inferDealTypeFromSavingsText(savingsTextRaw) : null);
 
   if (!dealType) {
@@ -206,8 +253,7 @@ export function buildWeeklyDealDoc(input) {
  */
 export function mapWeeklyDealDoc(doc) {
   const dealType =
-    normalizeDealType(doc.dealType) ??
-    inferDealTypeFromSavingsText(doc.savingsText);
+    resolveDealType(doc.dealType) ?? inferDealTypeFromSavingsText(doc.savingsText);
 
   return {
     id: doc._id.toString(),
@@ -237,81 +283,6 @@ export async function ensureWeeklyDealIndexes(collection) {
   await collection.createIndex({ name: 1, store: 1 });
   await collection.createIndex({ dealType: 1 });
 }
-
-export const WEEKLY_DEAL_TEMPLATES = [
-  {
-    name: 'Sirena Tuna 185g',
-    store: 'coles',
-    dealPrice: 1.25,
-    originalPrice: 2.5,
-    dealType: 'Half Price',
-    savingsText: 'Half Price!',
-    category: 'Pantry',
-  },
-  {
-    name: 'Huggies Bulk Nappies',
-    store: 'woolworths',
-    dealPrice: 28,
-    originalPrice: 42,
-    dealType: 'Super Saver',
-    savingsText: 'Save $14.00',
-    category: 'Baby',
-  },
-  {
-    name: 'Organic Avocados 1kg',
-    store: 'harrisfarm',
-    dealPrice: 5.99,
-    originalPrice: 8.99,
-    dealType: 'Price Drop',
-    savingsText: 'Save $3.00',
-    category: 'Fresh',
-  },
-  {
-    name: 'Stainless Steel Water Bottle 2-Pack',
-    store: 'costco',
-    dealPrice: 19.99,
-    originalPrice: null,
-    dealType: 'Bulk Value',
-    savingsText: 'Bulk Buy Value',
-    category: 'Household',
-  },
-  {
-    name: 'Barossa Fine Foods Salami 200g',
-    store: 'aldi',
-    dealPrice: 3.49,
-    originalPrice: null,
-    dealType: 'Special Buy',
-    savingsText: 'Special Buy',
-    category: 'Fresh',
-  },
-  {
-    name: 'Finish Dishwashing Tablets 56pk',
-    store: 'coles',
-    dealPrice: 18,
-    originalPrice: 36,
-    dealType: 'Half Price',
-    savingsText: 'Half Price!',
-    category: 'Household',
-  },
-  {
-    name: 'Macro Organic Greek Yoghurt 1kg',
-    store: 'woolworths',
-    dealPrice: 4.5,
-    originalPrice: 6.5,
-    dealType: 'Price Drop',
-    savingsText: 'Save $2.00',
-    category: 'Fresh',
-  },
-  {
-    name: 'Kirkland Paper Towels 12-Pack',
-    store: 'costco',
-    dealPrice: 24.99,
-    originalPrice: null,
-    dealType: 'Bulk Value',
-    savingsText: 'Bulk Buy Value',
-    category: 'Household',
-  },
-];
 
 /**
  * @param {Date} expiresAt
@@ -350,7 +321,7 @@ function parseFilterList(value) {
 }
 
 /**
- * @param {{ store?: string|null, category?: string|null }} filters
+ * @param {{ store?: string|null, category?: string|null, dealType?: string|null }} filters
  */
 export async function fetchWeeklyDeals(filters = {}) {
   const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
@@ -374,12 +345,20 @@ export async function fetchWeeklyDeals(filters = {}) {
     query.category = { $in: categoryFilters };
   }
 
+  const dealTypeFilters = parseFilterList(filters.dealType)
+    .flatMap((value) => expandDealTypeFilter(value) ?? [])
+    .map((value) => resolveDealType(value))
+    .filter(Boolean);
+  const uniqueDealTypes = [...new Set(dealTypeFilters)];
+
   const docs = await collection
     .find(query)
     .sort({ store: 1, category: 1, name: 1 })
     .toArray();
 
-  return docs.map(mapWeeklyDealDoc);
+  const mapped = docs.map(mapWeeklyDealDoc);
+  if (uniqueDealTypes.length === 0) return mapped;
+  return mapped.filter((deal) => uniqueDealTypes.includes(deal.dealType));
 }
 
 /**
