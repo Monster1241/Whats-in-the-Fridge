@@ -2,7 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/(?!cron/)(.*)", "destination": "/api/index.js" },
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [
@@ -21,7 +21,17 @@
       "maxDuration": 10,
       "includeFiles": "server/**"
     },
-    "api/cron/*.js": {
+    "api/cron/sneak-peek.js": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "server/**"
+    },
+    "api/cron/official-reset.js": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "server/**"
+    },
+    "api/cron/refresh-grocery-data.js": {
       "memory": 1024,
       "maxDuration": 30,
       "includeFiles": "server/**"

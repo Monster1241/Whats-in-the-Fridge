@@ -1,3 +1,3 @@
-import { createGroceryCronHandler } from './groceryCronHandler.js';
+import { createGroceryCronHandler } from '../../server/groceryCronHandler.js';
 
 export default createGroceryCronHandler('officialReset');
