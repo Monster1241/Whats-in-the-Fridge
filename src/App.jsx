@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AppSplashScreen } from './components/AppSplashScreen.jsx';
 import { AuthScreen } from './components/AuthScreen.jsx';
 import { VerifyEmailScreen } from './components/VerifyEmailScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
@@ -7,7 +8,13 @@ import {
   PushNotificationProvider,
   usePushNotifications,
 } from './context/PushNotificationContext.jsx';
-import { fetchHouseholdMembers, pingShoppingList, removeHouseholdMember } from './api.js';
+import {
+  checkApiHealth,
+  fetchHouseholdMembers,
+  pingShoppingList,
+  removeHouseholdMember,
+} from './api.js';
+import { readStoredPostcode } from './inventory/postcodeStorage.js';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
@@ -3381,9 +3388,35 @@ function ErrorScreen({ error, onRetry }) {
   );
 }
 
+const SPLASH_MIN_MS = 1400;
+
 export default function App() {
+  const [splashPhase, setSplashPhase] = useState('active');
   const [activeTab, setActiveTab] = useState('inventory');
   const auth = useAuth();
+
+  useEffect(() => {
+    let cancelled = false;
+    const startedAt = Date.now();
+
+    (async () => {
+      readStoredPostcode();
+      await checkApiHealth();
+
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < SPLASH_MIN_MS) {
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, SPLASH_MIN_MS - elapsed);
+        });
+      }
+
+      if (!cancelled) setSplashPhase('exiting');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const appReady = auth.canUseApp;
   const {
     loading,
@@ -3421,6 +3454,15 @@ export default function App() {
       setActiveTab('inventory');
     }
   }, [activeTab, enabledModules]);
+
+  if (splashPhase !== 'done') {
+    return (
+      <AppSplashScreen
+        exiting={splashPhase === 'exiting'}
+        onExitComplete={() => setSplashPhase('done')}
+      />
+    );
+  }
 
   if (auth.booting) {
     return <LoadingScreen message="Checking session…" />;
