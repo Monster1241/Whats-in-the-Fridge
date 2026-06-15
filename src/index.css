@@ -225,3 +225,19 @@ body {
     opacity: 1;
   }
 }
+
+/* Hot deals — add-to-list button confirmation */
+.deal-add-btn--confirmed .deal-add-btn__icon {
+  animation: dealAddPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes dealAddPop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

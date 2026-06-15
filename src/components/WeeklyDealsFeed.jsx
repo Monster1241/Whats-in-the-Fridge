@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
   Check,
@@ -19,6 +19,10 @@ import {
   readStoredPostcode,
   writeStoredPostcode,
 } from '../inventory/postcodeStorage.js';
+import {
+  readStoredDealsSection,
+  writeStoredDealsSection,
+} from '../inventory/dealsSectionStorage.js';
 
 const SECTIONS = [
   {
@@ -309,7 +313,7 @@ function SectionToggle({ activeSection, onChange, dealsCount, cataloguesCount })
   );
 }
 
-function WeeklyDealCard({ deal, isAdded, onAdd }) {
+function WeeklyDealCard({ deal, showAddedFeedback, onAdd }) {
   const storeBadge = STORE_BADGE_STYLES[deal.store] ?? 'bg-slate-700 text-white';
   const dealBadgeStyle = getDealTypeBadgeStyle(deal);
   const original = formatPrice(deal.originalPrice);
@@ -354,23 +358,26 @@ function WeeklyDealCard({ deal, isAdded, onAdd }) {
       <button
         type="button"
         onClick={() => onAdd(deal)}
-        disabled={isAdded}
-        className={`absolute bottom-3 right-3 flex h-12 min-w-[3rem] items-center justify-center gap-1 rounded-2xl px-3 text-sm font-bold shadow-lg transition active:scale-95 disabled:cursor-default ${
-          isAdded
-            ? 'bg-emerald-600 text-white shadow-emerald-900/30'
+        disabled={showAddedFeedback}
+        className={`deal-add-btn absolute bottom-3 right-3 flex h-12 min-w-[3rem] items-center justify-center gap-1 rounded-2xl px-3 text-sm font-bold shadow-lg transition-all duration-200 active:scale-95 disabled:cursor-default ${
+          showAddedFeedback
+            ? 'deal-add-btn--confirmed bg-emerald-600 text-white shadow-emerald-900/30'
             : 'bg-sky-600 text-white shadow-sky-900/30 hover:bg-sky-500'
         }`}
         aria-label={
-          isAdded ? `${deal.name} added to shopping list` : `Add ${deal.name} to shopping list`
+          showAddedFeedback
+            ? `${deal.name} added to shopping list`
+            : `Add ${deal.name} to shopping list`
         }
       >
-        {isAdded ? (
-          <>
-            <Check className="h-5 w-5 shrink-0" strokeWidth={2.5} aria-hidden />
-            <span className="text-xs">Added!</span>
-          </>
+        {showAddedFeedback ? (
+          <Check
+            className="deal-add-btn__icon h-6 w-6 shrink-0"
+            strokeWidth={2.5}
+            aria-hidden
+          />
         ) : (
-          <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden />
+          <Plus className="h-6 w-6 shrink-0" strokeWidth={2.5} aria-hidden />
         )}
       </button>
     </article>
@@ -456,7 +463,7 @@ function CatalogueCard({ catalogue }) {
  * }} props
  */
 export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
-  const [activeSection, setActiveSection] = useState('deals');
+  const [activeSection, setActiveSection] = useState(() => readStoredDealsSection());
   const [storeFilter, setStoreFilter] = useState('all');
   const [dealTypeFilter, setDealTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -470,7 +477,20 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const [loading, setLoading] = useState(true);
   const [cataloguesLoading, setCataloguesLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [justAddedIds, setJustAddedIds] = useState(() => new Set());
+  const [flashAddedIds, setFlashAddedIds] = useState(() => new Set());
+  const flashTimersRef = useRef(new Map());
+
+  const handleSectionChange = useCallback((section) => {
+    setActiveSection(section);
+    writeStoredDealsSection(section);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      flashTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      flashTimersRef.current.clear();
+    };
+  }, []);
 
   const activeSectionMeta = SECTIONS.find((section) => section.id === activeSection) ?? SECTIONS[0];
 
@@ -551,15 +571,35 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
     return CATALOGUE_STORE_ORDER.map((store) => byStore[store]).filter(Boolean);
   }, [catalogues]);
 
-  const isDealAdded = useCallback(
-    (deal) => justAddedIds.has(deal.id) || addedNames.has(normalizeName(deal.name)),
-    [addedNames, justAddedIds],
+  const isOnShoppingList = useCallback(
+    (deal) => addedNames.has(normalizeName(deal.name)),
+    [addedNames],
+  );
+
+  const showAddedFeedback = useCallback(
+    (deal) => flashAddedIds.has(deal.id) || isOnShoppingList(deal),
+    [flashAddedIds, isOnShoppingList],
   );
 
   const handleAdd = (deal) => {
-    if (isDealAdded(deal)) return;
+    if (isOnShoppingList(deal) || flashAddedIds.has(deal.id)) return;
     onAddDeal(deal);
-    setJustAddedIds((prev) => new Set(prev).add(deal.id));
+
+    setFlashAddedIds((prev) => new Set(prev).add(deal.id));
+
+    const existingTimer = flashTimersRef.current.get(deal.id);
+    if (existingTimer) window.clearTimeout(existingTimer);
+
+    const timer = window.setTimeout(() => {
+      setFlashAddedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(deal.id);
+        return next;
+      });
+      flashTimersRef.current.delete(deal.id);
+    }, 1500);
+
+    flashTimersRef.current.set(deal.id, timer);
   };
 
   const emptyMessage = useMemo(() => {
@@ -585,7 +625,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
         <div className="min-w-0 flex-1">
           <SectionToggle
             activeSection={activeSection}
-            onChange={setActiveSection}
+            onChange={handleSectionChange}
             dealsCount={dealsCount}
             cataloguesCount={cataloguesCount}
           />
@@ -728,12 +768,12 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
             {!loading && !error && filteredDeals.length > 0 && (
               <div className="grid grid-cols-2 gap-3">
                 {filteredDeals.map((deal) => (
-                  <WeeklyDealCard
-                    key={deal.id}
-                    deal={deal}
-                    isAdded={isDealAdded(deal)}
-                    onAdd={handleAdd}
-                  />
+              <WeeklyDealCard
+                key={deal.id}
+                deal={deal}
+                showAddedFeedback={showAddedFeedback(deal)}
+                onAdd={handleAdd}
+              />
                 ))}
               </div>
             )}
