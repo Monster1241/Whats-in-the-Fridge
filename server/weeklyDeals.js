@@ -310,6 +310,36 @@ export async function seedWeeklyDealsIfEmpty() {
 }
 
 /**
+ * If all records are stale (expired), repopulate a fresh cycle so users
+ * still see active deals even if cron refreshes haven't run yet.
+ * @param {import('mongodb').Collection} collection
+ * @param {Date} [now]
+ */
+async function ensureActiveDealsForCurrentCycle(collection, now = new Date()) {
+  const hasActive = await collection.countDocuments(
+    { expiresAt: { $gte: now } },
+    { limit: 1 },
+  );
+  if (hasActive > 0) return false;
+
+  const expiresAt = getNextWednesdayExpiry(now);
+  const docs = buildDealsForCycle(expiresAt);
+
+  // Clear stale rows first to avoid serving only expired cycles forever.
+  await collection.deleteMany({ expiresAt: { $lt: now } });
+
+  if (docs.length > 0) {
+    try {
+      await collection.insertMany(docs, { ordered: false });
+    } catch (err) {
+      if (err?.code !== 11000) throw err;
+    }
+  }
+
+  return true;
+}
+
+/**
  * Clears all weekly deal records and re-inserts from WEEKLY_DEAL_TEMPLATES.
  * @returns {Promise<{ deleted: number, inserted: number, expiresAt: string }>}
  */
@@ -351,6 +381,7 @@ function parseFilterList(value) {
 export async function fetchWeeklyDeals(filters = {}) {
   const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
   await seedWeeklyDealsIfEmpty();
+  await ensureActiveDealsForCurrentCycle(collection);
 
   const query = {
     expiresAt: { $gte: new Date() },
