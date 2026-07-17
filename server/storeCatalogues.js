@@ -297,6 +297,37 @@ export async function seedStoreCataloguesIfEmpty() {
 }
 
 /**
+ * If no catalogues are currently active (all expired), rebuild the current
+ * cycle so users still see flyers even when cron refreshes haven't run yet.
+ * @param {import('mongodb').Collection} collection
+ * @param {Date} [now]
+ */
+async function ensureActiveCataloguesForCurrentCycle(collection, now = new Date()) {
+  const hasActive = await collection.countDocuments(
+    { validFrom: { $lte: now }, validTo: { $gte: now } },
+    { limit: 1 },
+  );
+  if (hasActive > 0) return false;
+
+  const validFrom = getCurrentWednesdayStart(now);
+  const validTo = getNextWednesdayExpiry(now);
+  const docs = buildCataloguesForCycle(validFrom, validTo);
+
+  // Clear stale rows so we don't keep only-expired cycles around forever.
+  await collection.deleteMany({ validTo: { $lt: now } });
+
+  if (docs.length > 0) {
+    try {
+      await collection.insertMany(docs, { ordered: false });
+    } catch (err) {
+      if (err?.code !== 11000) throw err;
+    }
+  }
+
+  return true;
+}
+
+/**
  * @param {import('mongodb').Collection} collection
  * @param {import('./weeklyDeals.js').DealStore} store
  * @param {string} region
@@ -339,8 +370,10 @@ export async function fetchActiveCataloguesPerStore(options = {}) {
   const collection = getDb().collection(STORE_CATALOGUES_COLLECTION);
   await seedStoreCataloguesIfEmpty();
 
-  const locale = resolveCatalogueLocale(options.postcode);
   const now = new Date();
+  await ensureActiveCataloguesForCurrentCycle(collection, now);
+
+  const locale = resolveCatalogueLocale(options.postcode);
   const catalogues = [];
 
   for (const store of DEAL_STORES) {
