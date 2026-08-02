@@ -19,6 +19,7 @@ import { InventorySearch } from './components/InventorySearch.jsx';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { SubCategoryToggle } from './components/SubCategoryToggle.jsx';
+import { SubCategoryFilterMenu } from './components/SubCategoryFilterMenu.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
 import { WeeklyDealsFeed } from './components/WeeklyDealsFeed.jsx';
 import {
@@ -51,7 +52,6 @@ import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
 import { classifyItem } from './inventory/classifyItem.js';
 import {
   countItemsBySubCategory,
-  getSubcategoriesForCategory,
   getSubcategoryMeta,
   groupItemsBySubCategory,
   resolveSubCategory,
@@ -608,17 +608,19 @@ function getDisplayStatus(item) {
   return calculateItemStatus(item);
 }
 
-function groupByCategory(items, category, itemType, subCategoryFilter = 'all') {
+function groupByCategory(items, category, itemType, selectedSubCategories = null) {
   const inCategory = items.filter(
     (item) =>
       item.category === category &&
       item.itemType === itemType &&
       isInStockInventory(item),
   );
-  const filterBySub = (list) =>
-    subCategoryFilter === 'all'
-      ? list
-      : list.filter((item) => (item.subCategory || SUBCATEGORY_OTHER) === subCategoryFilter);
+  const filterBySub = (list) => {
+    if (!selectedSubCategories || selectedSubCategories.size === 0) return list;
+    return list.filter((item) =>
+      selectedSubCategories.has(item.subCategory || SUBCATEGORY_OTHER),
+    );
+  };
 
   const expiring = filterBySub(
     inCategory.filter(isExpiringSoon).sort(sortByUrgencyThenName),
@@ -1375,54 +1377,6 @@ function InventorySection({ title, emoji, accent, itemCount, children, emptyText
   );
 }
 
-function SubCategoryFilterRow({ itemType, category, activeFilter, onChange, counts }) {
-  const options = getSubcategoriesForCategory(itemType, category);
-  const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
-  if (total === 0) return null;
-
-  return (
-    <div className="mb-4 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-600 dark:bg-slate-900/50">
-      <p className="text-muted mb-2 text-[10px] font-bold uppercase tracking-wider">Browse by type</p>
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by sub-category">
-        <button
-          type="button"
-          onClick={() => onChange('all')}
-          className={`inline-flex min-h-[2.25rem] items-center rounded-full px-3 text-xs font-bold ring-1 transition active:scale-[0.98] ${
-            activeFilter === 'all'
-              ? 'bg-slate-800 text-white ring-slate-900 dark:bg-slate-200 dark:text-slate-900'
-              : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600'
-          }`}
-          aria-pressed={activeFilter === 'all'}
-        >
-          All ({total})
-        </button>
-        {options.map((sub) => {
-          const count = counts.get(sub) ?? 0;
-          if (count === 0) return null;
-          const meta = getSubcategoryMeta(sub, itemType, category);
-          const active = activeFilter === sub;
-          return (
-            <button
-              key={sub}
-              type="button"
-              onClick={() => onChange(sub)}
-              className={`inline-flex min-h-[2.25rem] items-center gap-1 rounded-full px-3 text-xs font-bold ring-1 transition active:scale-[0.98] ${
-                active
-                  ? 'bg-emerald-600 text-white ring-emerald-700'
-                  : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600'
-              }`}
-              aria-pressed={active}
-            >
-              <span aria-hidden>{meta.emoji}</span>
-              {meta.label} ({count})
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function StorageLocationTabs({
   enabledModules,
   inventoryScope,
@@ -1512,7 +1466,7 @@ function InventoryView({
   const [shopItemType, setShopItemType] = useState(getItemTypeForModule(defaultModuleKey));
   const [shopCategory, setShopCategory] = useState(getInitialCategoryForModule(defaultModuleKey));
   const [activeView, setActiveView] = useState(getInitialCategoryForModule(defaultModuleKey));
-  const [subCategoryFilter, setSubCategoryFilter] = useState('all');
+  const [subCategoryFilters, setSubCategoryFilters] = useState(() => new Set());
   const [editingItem, setEditingItem] = useState(null);
   const [pingBusy, setPingBusy] = useState(false);
   const [pingFeedback, setPingFeedback] = useState(null);
@@ -1544,12 +1498,25 @@ function InventoryView({
 
   const categoryGrouped = useMemo(() => {
     if (isShoppingPage) return null;
-    return groupByCategory(items, activeView, scopeItemType, subCategoryFilter);
-  }, [items, activeView, scopeItemType, isShoppingPage, subCategoryFilter]);
+    return groupByCategory(items, activeView, scopeItemType, subCategoryFilters);
+  }, [items, activeView, scopeItemType, isShoppingPage, subCategoryFilters]);
 
   useEffect(() => {
-    setSubCategoryFilter('all');
+    setSubCategoryFilters(new Set());
   }, [activeView, inventoryScope]);
+
+  const toggleSubCategoryFilter = useCallback((subCategory) => {
+    setSubCategoryFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(subCategory)) next.delete(subCategory);
+      else next.add(subCategory);
+      return next;
+    });
+  }, []);
+
+  const clearSubCategoryFilters = useCallback(() => {
+    setSubCategoryFilters(new Set());
+  }, []);
 
   useEffect(() => {
     if (!duplicateNotice) return undefined;
@@ -2303,21 +2270,23 @@ function InventoryView({
               )}
             </form>
 
-            <p className="text-muted mb-4 text-sm">
-              {getCategoryMeta(activeView, scopeItemType)?.emoji}{' '}
-              <span className="font-semibold text-slate-800 dark:text-slate-200">
-                {getCategoryMeta(activeView, scopeItemType)?.label}
-              </span>{' '}
-              — {getCategoryMeta(activeView, scopeItemType)?.subtitle}
-            </p>
-
-            <SubCategoryFilterRow
-              itemType={scopeItemType}
-              category={activeView}
-              activeFilter={subCategoryFilter}
-              onChange={setSubCategoryFilter}
-              counts={categoryGrouped.subCategoryCounts}
-            />
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <p className="text-muted min-w-0 text-sm">
+                {getCategoryMeta(activeView, scopeItemType)?.emoji}{' '}
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {getCategoryMeta(activeView, scopeItemType)?.label}
+                </span>{' '}
+                — {getCategoryMeta(activeView, scopeItemType)?.subtitle}
+              </p>
+              <SubCategoryFilterMenu
+                itemType={scopeItemType}
+                category={activeView}
+                selected={subCategoryFilters}
+                onToggle={toggleSubCategoryFilter}
+                onClear={clearSubCategoryFilters}
+                counts={categoryGrouped.subCategoryCounts}
+              />
+            </div>
 
             <InventorySection
               title={`Expiring Soon (within ${EXPIRING_SOON_DAYS} days)`}
