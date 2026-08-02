@@ -73,12 +73,30 @@ body {
 .barcode-scanner-view {
   position: relative;
   width: 100%;
-  min-height: min(65vh, 480px);
+  min-height: min(58vh, 420px);
   height: 100%;
-  max-height: 72vh;
+  max-height: 68vh;
   border-radius: 1rem;
   overflow: hidden;
   background: #000;
+}
+
+.barcode-scanner-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.barcode-scanner-frame {
+  width: min(88%, 320px);
+  height: min(28%, 130px);
+  border: 2px solid rgb(52 211 153);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 0 0 9999px rgb(0 0 0 / 0.45),
+    0 0 24px rgb(52 211 153 / 0.35);
 }
 
 .barcode-scanner-view video {
@@ -86,8 +104,7 @@ body {
 }
 
 .barcode-scanner-view #qr-shaded-region {
-  border-width: 3px !important;
-  border-color: rgb(52 211 153) !important;
+  border-width: 0 !important;
 }
 
 .dark input[type='date'] {

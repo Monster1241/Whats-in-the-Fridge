@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, CheckCircle2, Loader2 } from 'lucide-react';
 import { filterItemSuggestions } from '../inventory/itemSuggestions.js';
 import { getCategoryMeta } from '../inventory/constants.js';
 import { getSubcategoryMeta } from '../inventory/subcategories.js';
@@ -32,6 +32,7 @@ export function ItemTypeahead({
   const [scannerOpen, setScannerOpen] = useState(false);
   const [barcodeLookingUp, setBarcodeLookingUp] = useState(false);
   const [barcodeUnknown, setBarcodeUnknown] = useState(false);
+  const [scanFeedback, setScanFeedback] = useState(null);
 
   const matches = useMemo(
     () => filterItemSuggestions(value, enabledModules),
@@ -57,6 +58,7 @@ export function ItemTypeahead({
 
   const pick = (entry) => {
     setBarcodeUnknown(false);
+    setScanFeedback(null);
     onChange(entry.name);
     onPick?.(entry);
     setOpen(false);
@@ -66,6 +68,7 @@ export function ItemTypeahead({
     const lookupId = lookupAbortRef.current + 1;
     lookupAbortRef.current = lookupId;
     setBarcodeUnknown(false);
+    setScanFeedback(null);
     setBarcodeLookingUp(true);
     onChange(BARCODE_LOOKUP_LOADING_TEXT);
     setOpen(false);
@@ -76,11 +79,33 @@ export function ItemTypeahead({
 
       if (result) {
         onChange(result.name);
+        const catMeta = getCategoryMeta(result.category, result.itemType);
+        const subMeta = getSubcategoryMeta(
+          result.subCategory,
+          result.itemType,
+          result.category,
+        );
+        setScanFeedback({
+          type: 'success',
+          title: result.name,
+          detail: [
+            result.isAustralian ? 'Australian product' : 'Product found',
+            catMeta?.label,
+            subMeta.label,
+            result.expiryHint,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        });
         onBarcodeResolved?.(result);
-        setOpen(true);
       } else {
         onChange('');
         setBarcodeUnknown(true);
+        setScanFeedback({
+          type: 'unknown',
+          title: 'Barcode not in database',
+          detail: 'Type the product name — we’ll still auto-categorise it for you.',
+        });
         vibrateBarcodeUnknown();
         onBarcodeResolved?.(null);
       }
@@ -88,6 +113,11 @@ export function ItemTypeahead({
       if (lookupAbortRef.current !== lookupId) return;
       onChange('');
       setBarcodeUnknown(true);
+      setScanFeedback({
+        type: 'unknown',
+        title: 'Lookup failed',
+        detail: 'Check your connection or type the item name manually.',
+      });
       vibrateBarcodeUnknown();
       onBarcodeResolved?.(null);
     } finally {
@@ -113,6 +143,7 @@ export function ItemTypeahead({
             onChange={(e) => {
               if (barcodeLookingUp) return;
               setBarcodeUnknown(false);
+              setScanFeedback(null);
               onChange(e.target.value);
               setOpen(true);
             }}
@@ -195,14 +226,40 @@ export function ItemTypeahead({
             type="button"
             disabled={barcodeLookingUp}
             onClick={() => setScannerOpen(true)}
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-emerald-700 shadow-sm transition active:scale-95 hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-emerald-400 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/40"
-            aria-label="Scan barcode"
-            title="Scan barcode"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-2 border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm transition active:scale-95 hover:border-emerald-400 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+            aria-label="Scan product barcode"
+            title="Scan barcode (AU products)"
           >
             <Camera className="h-5 w-5" />
           </button>
         )}
       </div>
+
+      {barcodeLookingUp && (
+        <p className="mt-2 flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" aria-hidden />
+          Searching AU &amp; global product databases…
+        </p>
+      )}
+
+      {scanFeedback && !barcodeLookingUp && (
+        <p
+          role="status"
+          className={`mt-2 rounded-xl px-3 py-2 text-xs leading-snug ${
+            scanFeedback.type === 'success'
+              ? 'border border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100'
+              : 'border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100'
+          }`}
+        >
+          {scanFeedback.type === 'success' && (
+            <CheckCircle2 className="mb-0.5 inline h-3.5 w-3.5 shrink-0" aria-hidden />
+          )}{' '}
+          <span className="font-bold">{scanFeedback.title}</span>
+          {scanFeedback.detail && (
+            <span className="mt-0.5 block font-medium opacity-90">{scanFeedback.detail}</span>
+          )}
+        </p>
+      )}
 
       {enableBarcodeScan && (
         <BarcodeScanner

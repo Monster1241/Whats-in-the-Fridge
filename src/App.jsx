@@ -49,6 +49,7 @@ import {
   resolveModuleKey,
 } from './inventory/modules.js';
 import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
+import { guessExpiryForItem } from './inventory/expiryGuess.js';
 import { classifyItem } from './inventory/classifyItem.js';
 import {
   countItemsBySubCategory,
@@ -1579,6 +1580,18 @@ function InventoryView({
     setAddSubCategory(resolveSubCategory(draft, nextType, nextCategory));
   };
 
+  const suggestAddExpiry = useCallback((name, itemType, category, subCategory) => {
+    if (itemType !== ITEM_TYPE.FOOD) return null;
+    const trimmed = String(name || '').trim();
+    if (!trimmed || trimmed === BARCODE_LOOKUP_LOADING_TEXT) return null;
+    return guessExpiryForItem({
+      name: trimmed,
+      itemType,
+      category,
+      subCategory,
+    }).expiryDate;
+  }, []);
+
   const applySuggestion = (entry, target) => {
     const sub =
       entry.subCategory ?? resolveSubCategory(entry.name, entry.itemType, entry.category);
@@ -1656,6 +1669,12 @@ function InventoryView({
     };
 
     applySuggestion(entry, 'add');
+
+    if (entry.itemType === ITEM_TYPE.FOOD && result.suggestedExpiryDate) {
+      setAddExpiry(true);
+      setAddExpiryDate(result.suggestedExpiryDate);
+      setShowAddAdvanced(true);
+    }
 
     const mod = getEnabledModuleList(enabledModules).find(
       (m) => m.itemType === entry.itemType,
@@ -2219,6 +2238,19 @@ function InventoryView({
                   <Plus className="h-5 w-5" />
                 </button>
               </div>
+              {addItemType === ITEM_TYPE.FOOD && addExpiry && addExpiryDate && (
+                <p className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                  Suggested use-by:{' '}
+                  <span className="font-bold">
+                    {new Date(`${addExpiryDate}T12:00:00`).toLocaleDateString(undefined, {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </span>
+                  {' '}— edit in More options if needed
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => setShowAddAdvanced((v) => !v)}
@@ -2285,10 +2317,29 @@ function InventoryView({
                     <input
                       type="checkbox"
                       checked={addExpiry}
-                      onChange={(e) => setAddExpiry(e.target.checked)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setAddExpiry(checked);
+                        if (checked) {
+                          const suggested = suggestAddExpiry(
+                            draft,
+                            addItemType,
+                            addCategory,
+                            addSubCategory,
+                          );
+                          if (suggested) setAddExpiryDate(suggested);
+                        } else {
+                          setAddExpiryDate('');
+                        }
+                      }}
                       className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
                     />
-                    Add expiry date (optional)
+                    Track expiry date
+                    {addExpiry && addExpiryDate && (
+                      <span className="text-muted text-xs font-medium">
+                        (suggested {addExpiryDate})
+                      </span>
+                    )}
                   </label>
                   )}
                   {addItemType === ITEM_TYPE.FOOD && addExpiry && (
@@ -3681,6 +3732,32 @@ function SettingsView({
           </div>
         </div>
       )}
+
+      <section className="surface-card mb-5 p-4">
+        <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Data sources</h2>
+        <p className="text-muted text-sm leading-relaxed">
+          Barcode product names and categories are looked up from{' '}
+          <a
+            href="https://au.openfoodfacts.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-emerald-700 underline dark:text-emerald-400"
+          >
+            Open Food Facts
+          </a>{' '}
+          and{' '}
+          <a
+            href="https://au.openproductsfacts.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-emerald-700 underline dark:text-emerald-400"
+          >
+            Open Products Facts
+          </a>{' '}
+          (Australian and worldwide databases). Use-by dates are estimated from product data or
+          typical shelf life when not printed on the pack.
+        </p>
+      </section>
     </div>
   );
 }
