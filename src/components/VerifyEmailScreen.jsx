@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Mail, Refrigerator } from 'lucide-react';
+import { Loader2, Mail, MailCheck } from 'lucide-react';
+import { AuthShell } from './AuthShell.jsx';
 
 export function VerifyEmailScreen({
   email,
@@ -26,25 +27,31 @@ export function VerifyEmailScreen({
   };
 
   return (
-    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col justify-center px-5 py-8">
-      <header className="mb-6 text-center">
-        <Refrigerator className="mx-auto mb-3 h-10 w-10 text-emerald-600" aria-hidden />
-        <h1 className="text-heading text-2xl font-extrabold">Verify your email</h1>
-        <p className="text-muted mt-2 text-sm leading-relaxed">
+    <AuthShell
+      step="verify"
+      title="Verify your email"
+      subtitle={
+        <>
           We sent a confirmation link to{' '}
-          <span className="font-semibold text-slate-700 dark:text-slate-200">{email}</span>.
-          Open it on this device, then tap the button below.
-        </p>
-      </header>
+          <span className="font-semibold text-slate-700 dark:text-slate-200">{email}</span>. Open it
+          on this device, then tap the button below.
+        </>
+      }
+    >
+      <div className="auth-card auth-form-panel space-y-4">
+        <div className="flex justify-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+            <MailCheck className="h-7 w-7" aria-hidden />
+          </div>
+        </div>
 
-      <div className="surface-card space-y-4 p-5">
         {error && (
-          <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+          <p className="animate-fade-in rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
             {error}
           </p>
         )}
         {message && (
-          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+          <p className="animate-fade-in rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
             {message}
           </p>
         )}
@@ -53,9 +60,9 @@ export function VerifyEmailScreen({
           type="button"
           disabled={busy}
           onClick={() => run(onCheckVerified)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+          className="btn-auth"
         >
-          <Mail className="h-4 w-4" />
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
           {busy ? 'Checking…' : "I've verified my email"}
         </button>
 
@@ -68,7 +75,7 @@ export function VerifyEmailScreen({
               setMessage('Verification email sent again. Check your inbox.');
             })
           }
-          className="text-muted w-full text-sm font-semibold underline-offset-2 hover:text-emerald-700 hover:underline dark:hover:text-emerald-400"
+          className="text-muted w-full text-sm font-semibold underline-offset-2 transition hover:text-emerald-700 hover:underline dark:hover:text-emerald-400"
         >
           Resend verification email
         </button>
@@ -82,6 +89,6 @@ export function VerifyEmailScreen({
           Sign out
         </button>
       </div>
-    </div>
+    </AuthShell>
   );
 }

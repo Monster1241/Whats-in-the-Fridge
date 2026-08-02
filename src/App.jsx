@@ -3764,9 +3764,15 @@ function SettingsView({
 
 function LoadingScreen({ message }) {
   return (
-    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col items-center justify-center px-6">
-      <Refrigerator className="mb-4 h-12 w-12 animate-pulse text-emerald-600" aria-hidden />
-      <p className="text-heading text-center text-sm font-semibold">{message}</p>
+    <div className="auth-screen">
+      <div className="auth-screen__mesh" aria-hidden />
+      <div className="auth-screen__orb auth-screen__orb--a" aria-hidden />
+      <div className="mx-auto flex min-h-full max-w-lg flex-col items-center justify-center px-6">
+        <div className="loading-orbit-mini mb-5" aria-hidden>
+          <div className="loading-orbit-mini__ring" />
+        </div>
+        <p className="text-heading animate-fade-in text-center text-sm font-semibold">{message}</p>
+      </div>
     </div>
   );
 }
@@ -3957,6 +3963,7 @@ export default function App() {
     <PushNotificationProvider enabled={auth.canUseApp}>
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
       <main className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
+        <div key={activeTab} className="animate-page-enter">
         {saveError && (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
             Could not sync latest change. We will retry automatically on your next edit.
@@ -4002,6 +4009,7 @@ export default function App() {
             onLeaveHousehold={auth.leaveHousehold}
           />
         )}
+        </div>
       </main>
 
       <nav
@@ -4034,20 +4042,18 @@ export default function App() {
                 key={id}
                 type="button"
                 onClick={() => setActiveTab(id)}
-                className={`relative flex min-h-[64px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-bold transition active:scale-[0.98] sm:text-xs ${
-                  active
-                    ? accentStyles.text
-                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
+                className={`nav-tab-btn relative flex min-h-[64px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-bold transition-[color,transform] duration-200 active:scale-[0.96] sm:text-xs ${
+                  active ? `nav-tab-btn--active ${accentStyles.text}` : 'text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
                 }`}
               >
                 {active && (
                   <span
-                    className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full ${accentStyles.bar}`}
+                    className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full transition-all duration-300 ${accentStyles.bar}`}
                     aria-hidden
                   />
                 )}
                 <span
-                  className={`relative flex h-9 w-9 items-center justify-center rounded-2xl ${
+                  className={`nav-tab-icon relative flex h-9 w-9 items-center justify-center rounded-2xl transition-all duration-300 ${
                     active ? accentStyles.pill : ''
                   }`}
                 >
