@@ -15,6 +15,7 @@ import {
   removeHouseholdMember,
 } from './api.js';
 import { readStoredPostcode } from './inventory/postcodeStorage.js';
+import { InventorySearch } from './components/InventorySearch.jsx';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
@@ -23,8 +24,6 @@ import {
   defaultCategoryForItemType,
   getCategoriesForItemType,
   getCategoryMeta,
-  INVENTORY_VIEW,
-  isShoppingView,
   FOOD_CATEGORY,
   ITEM_TYPE,
   STATUS,
@@ -1324,7 +1323,6 @@ function StorageLocationTabs({
   onScopeChange,
   activeView,
   onChange,
-  shoppingCount,
 }) {
   const modules = getEnabledModuleList(enabledModules);
   const scopeItemType = getItemTypeForModule(inventoryScope);
@@ -1365,8 +1363,8 @@ function StorageLocationTabs({
               onClick={() => onChange(cat)}
               className={`rounded-xl border px-2 py-3 text-center transition active:scale-[0.98] ${
                 active
-                  ? 'border-emerald-300 bg-emerald-50 ring-2 ring-emerald-500 dark:border-emerald-600 dark:bg-emerald-950/60 dark:ring-emerald-500'
-                  : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-slate-500'
+                  ? `${meta.tabActive} border-transparent ring-2 ring-offset-1 ring-slate-400/50 dark:ring-offset-slate-900`
+                  : `border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800 ${meta.tabIdle}`
               }`}
             >
               <span className="text-lg" aria-hidden>
@@ -1378,30 +1376,12 @@ function StorageLocationTabs({
           );
         })}
       </div>
-      <button
-        type="button"
-        onClick={() => onChange(INVENTORY_VIEW.SHOPPING)}
-        className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition active:scale-[0.98] ${
-          activeView === INVENTORY_VIEW.SHOPPING
-            ? SHOPPING_ACCENT.bgActive
-            : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-slate-500'
-        }`}
-      >
-        <span className="text-heading flex items-center gap-2 text-sm font-bold">
-          <span aria-hidden>🛒</span>
-          Shopping List
-        </span>
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-bold text-white ${SHOPPING_ACCENT.badge}`}
-        >
-          {shoppingCount}
-        </span>
-      </button>
     </div>
   );
 }
 
 function InventoryView({
+  mode,
   items,
   updateItems,
   patchItems,
@@ -1410,6 +1390,7 @@ function InventoryView({
   onboarding,
   enabledModules,
 }) {
+  const isShoppingPage = mode === 'shopping';
   const { isDismissed, dismiss } = onboarding;
   const defaultModuleKey = getDefaultModuleKey(enabledModules);
   const [inventoryScope, setInventoryScope] = useState(defaultModuleKey);
@@ -1451,9 +1432,9 @@ function InventoryView({
   );
 
   const categoryGrouped = useMemo(() => {
-    if (isShoppingView(activeView)) return null;
+    if (isShoppingPage) return null;
     return groupByCategory(items, activeView, scopeItemType);
-  }, [items, activeView, scopeItemType]);
+  }, [items, activeView, scopeItemType, isShoppingPage]);
 
   useEffect(() => {
     const resolved = resolveModuleKey(enabledModules, inventoryScope);
@@ -1462,16 +1443,16 @@ function InventoryView({
       const type = getItemTypeForModule(resolved);
       setAddItemType(type);
       setAddCategory(defaultCategoryForItemType(type));
-      if (!isShoppingView(activeView)) {
+      if (!isShoppingPage) {
         setActiveView(defaultCategoryForItemType(type));
       }
     }
-  }, [enabledModules, inventoryScope, activeView]);
+  }, [enabledModules, inventoryScope, activeView, isShoppingPage]);
 
   const handleScopeChange = (nextModuleKey) => {
     setInventoryScope(nextModuleKey);
     const nextType = getItemTypeForModule(nextModuleKey);
-    if (!isShoppingView(activeView)) {
+    if (!isShoppingPage) {
       const options = getCategoriesForItemType(nextType);
       if (!options.includes(activeView)) {
         setActiveView(defaultCategoryForItemType(nextType));
@@ -1517,17 +1498,21 @@ function InventoryView({
   const handleDraftChange = useCallback(
     (value) => {
       setDraft(value);
-      applySmartClassification(value, 'add');
+      if (addItemType === ITEM_TYPE.FOOD) {
+        applySmartClassification(value, 'add');
+      }
     },
-    [applySmartClassification],
+    [applySmartClassification, addItemType],
   );
 
   const handleShopDraftChange = useCallback(
     (value) => {
       setShopDraft(value);
-      applySmartClassification(value, 'shop');
+      if (shopItemType === ITEM_TYPE.FOOD) {
+        applySmartClassification(value, 'shop');
+      }
     },
-    [applySmartClassification],
+    [applySmartClassification, shopItemType],
   );
 
   const handleBarcodeResolved = (result) => {
@@ -1547,7 +1532,7 @@ function InventoryView({
     );
     if (mod) {
       setInventoryScope(mod.key);
-      if (!isShoppingView(activeView)) {
+      if (!isShoppingPage) {
         setActiveView(entry.category);
       }
     }
@@ -1589,7 +1574,7 @@ function InventoryView({
       },
     ]);
     resetAddForm();
-    if (!isShoppingView(activeView)) {
+    if (!isShoppingPage) {
       setActiveView(addCategory);
       const mod = MODULE_DEFINITIONS.find((m) => m.itemType === addItemType);
       if (mod) setInventoryScope(mod.key);
@@ -1794,19 +1779,91 @@ function InventoryView({
     }
   };
 
+  const handleSearchMoveToShopping = useCallback(
+    (item) => {
+      void patchItems((prev) => {
+        const target = findInventoryItem(prev, item);
+        if (!target) return prev;
+        return prev.map((entry) =>
+          findInventoryItem([entry], target) ? { ...entry, status: STATUS.OUT } : entry,
+        );
+      }, { saveNow: true });
+    },
+    [patchItems],
+  );
+
+  const handleSearchMarkStocked = useCallback(
+    (item) => {
+      const now = new Date().toISOString();
+      void patchItems(
+        (prev) => {
+          const target = findInventoryItem(prev, item);
+          if (!target) return prev;
+          return {
+            items: prev.map((entry) =>
+              findInventoryItem([entry], target)
+                ? { ...entry, status: STATUS.FRESH, stockedAt: now, createdAt: now }
+                : entry,
+            ),
+            restockFrom: target,
+          };
+        },
+        { saveNow: true },
+      );
+    },
+    [patchItems],
+  );
+
+  const handleSearchDelete = useCallback(
+    (item) => {
+      void patchItems(
+        (prev) => {
+          const target = findInventoryItem(prev, item);
+          if (!target) return prev;
+          return {
+            items: prev.filter((entry) => !findInventoryItem([entry], target)),
+            restockFrom: target,
+          };
+        },
+        { saveNow: true },
+      );
+    },
+    [patchItems],
+  );
+
   return (
     <div className="pb-28">
       <header className="mb-4">
         <h1 className="text-heading flex items-center gap-2.5 text-2xl font-extrabold tracking-tight">
-          <Refrigerator className="h-7 w-7 shrink-0 text-emerald-600" aria-hidden />
-          What&apos;s in the Fridge?
+          {isShoppingPage ? (
+            <>
+              <ShoppingCart className={`h-7 w-7 shrink-0 ${SHOPPING_ACCENT.text}`} aria-hidden />
+              Shopping List
+            </>
+          ) : (
+            <>
+              <Refrigerator className="h-7 w-7 shrink-0 text-emerald-600" aria-hidden />
+              Fridge
+            </>
+          )}
         </h1>
         <p className="text-muted mt-1.5 text-sm leading-relaxed">
-          Food & household supplies · expiring soon within {EXPIRING_SOON_DAYS} days (food)
+          {isShoppingPage
+            ? 'Shared list for your household — tap check when bought.'
+            : `Track food & supplies · expiring within ${EXPIRING_SOON_DAYS} days`}
         </p>
       </header>
 
-      {!isShoppingView(activeView) && (
+      <InventorySearch
+        items={items}
+        enabledModules={enabledModules}
+        onMoveToShopping={handleSearchMoveToShopping}
+        onMarkStocked={handleSearchMarkStocked}
+        onDelete={handleSearchDelete}
+        onEdit={setEditingItem}
+      />
+
+      {!isShoppingPage && (
         <>
           {!isDismissed('predicted-low') && (
             <PredictedLowBanner
@@ -1833,12 +1890,12 @@ function InventoryView({
           title="Welcome to your household fridge"
           onDismiss={() => dismiss('welcome')}
         >
-          Track food and household supplies, then use Shopping List for what you need to buy.
+          Track food and household supplies. Use the Shopping tab when you need to buy something.
           Open Settings to share your household code and switch theme.
         </TipBanner>
       )}
 
-      {!isDismissed('color-hint') && !isShoppingView(activeView) && (
+      {!isDismissed('color-hint') && !isShoppingPage && (
         <TipBanner
           title="Quick color guide"
           accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
@@ -1852,16 +1909,17 @@ function InventoryView({
         </TipBanner>
       )}
 
-      <StorageLocationTabs
-        enabledModules={enabledModules}
-        inventoryScope={inventoryScope}
-        onScopeChange={handleScopeChange}
-        activeView={activeView}
-        onChange={setActiveView}
-        shoppingCount={shoppingList.length}
-      />
+      {!isShoppingPage && (
+        <StorageLocationTabs
+          enabledModules={enabledModules}
+          inventoryScope={inventoryScope}
+          onScopeChange={handleScopeChange}
+          activeView={activeView}
+          onChange={setActiveView}
+        />
+      )}
 
-      {isShoppingView(activeView) ? (
+      {isShoppingPage ? (
         <>
           {!isDismissed('shopping-tip') && (
             <TipBanner
@@ -2510,7 +2568,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       icon: ShoppingCart,
       title: 'Shopping list — what to buy',
       steps: [
-        'Open Shopping List from the sky-blue tab on Home.',
+        'Use the Shopping tab in the bottom bar for your shared buy list.',
         'Out-of-stock items appear here; add more with the + field.',
         'Tap a store badge to set where your household buys each item.',
         'Tap the check when bought — the item returns to in stock.',
@@ -3470,7 +3528,7 @@ const SPLASH_MIN_MS = 1400;
 
 export default function App() {
   const [splashPhase, setSplashPhase] = useState('active');
-  const [activeTab, setActiveTab] = useState('inventory');
+  const [activeTab, setActiveTab] = useState('fridge');
   const auth = useAuth();
 
   useEffect(() => {
@@ -3517,20 +3575,28 @@ export default function App() {
   } = useAppData(appReady);
 
   const navTabs = useMemo(() => {
+    const shoppingCount = items.filter((item) => item.status === STATUS.OUT).length;
     const tabs = [
-      { id: 'inventory', label: 'Home', icon: Refrigerator, accent: 'emerald' },
-      { id: 'deals', label: 'Hot Deals', icon: Flame, accent: 'rose' },
+      { id: 'fridge', label: 'Fridge', icon: Refrigerator, accent: 'emerald' },
+      {
+        id: 'shopping',
+        label: 'Shopping',
+        icon: ShoppingCart,
+        accent: 'sky',
+        badge: shoppingCount,
+      },
+      { id: 'deals', label: 'Deals', icon: Flame, accent: 'rose' },
     ];
     if (isModuleEnabled(enabledModules, MODULE_KEYS.FOOD)) {
       tabs.push({ id: 'recipes', label: 'Recipes', icon: ChefHat, accent: 'emerald' });
     }
     tabs.push({ id: 'settings', label: 'Settings', icon: Settings, accent: 'emerald' });
     return tabs;
-  }, [enabledModules]);
+  }, [enabledModules, items]);
 
   useEffect(() => {
     if (activeTab === 'recipes' && !isModuleEnabled(enabledModules, MODULE_KEYS.FOOD)) {
-      setActiveTab('inventory');
+      setActiveTab('fridge');
     }
   }, [activeTab, enabledModules]);
 
@@ -3614,8 +3680,9 @@ export default function App() {
             </button>
           </div>
         )}
-        {activeTab === 'inventory' && (
+        {(activeTab === 'fridge' || activeTab === 'shopping') && (
           <InventoryView
+            mode={activeTab}
             items={items}
             updateItems={updateItems}
             patchItems={patchItems}
@@ -3652,28 +3719,56 @@ export default function App() {
         className="nav-bar fixed bottom-0 left-0 right-0 z-40"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
-        <div className="mx-auto flex max-w-lg">
-          {navTabs.map(({ id, label, icon: Icon, accent }) => {
+        <div className="mx-auto flex max-w-lg px-1">
+          {navTabs.map(({ id, label, icon: Icon, accent, badge }) => {
             const active = activeTab === id;
-            const activeText =
+            const accentStyles =
               accent === 'rose'
-                ? 'text-rose-600 dark:text-rose-400'
-                : 'text-emerald-600 dark:text-emerald-400';
+                ? {
+                    text: 'text-rose-600 dark:text-rose-400',
+                    pill: 'bg-rose-100 dark:bg-rose-950/60',
+                    bar: 'bg-rose-500',
+                  }
+                : accent === 'sky'
+                  ? {
+                      text: 'text-sky-600 dark:text-sky-400',
+                      pill: 'bg-sky-100 dark:bg-sky-950/60',
+                      bar: 'bg-sky-500',
+                    }
+                  : {
+                      text: 'text-emerald-600 dark:text-emerald-400',
+                      pill: 'bg-emerald-100 dark:bg-emerald-950/60',
+                      bar: 'bg-emerald-500',
+                    };
             return (
               <button
                 key={id}
                 type="button"
                 onClick={() => setActiveTab(id)}
-                className={`flex min-h-[60px] flex-1 flex-col items-center justify-center gap-1 px-2 py-2 text-sm font-semibold transition active:scale-[0.98] ${
+                className={`relative flex min-h-[64px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-bold transition active:scale-[0.98] sm:text-xs ${
                   active
-                    ? activeText
+                    ? accentStyles.text
                     : 'text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
                 }`}
               >
-                <Icon
-                  className={`h-6 w-6 ${active ? activeText : ''}`}
-                  strokeWidth={active ? 2.25 : 2}
-                />
+                {active && (
+                  <span
+                    className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full ${accentStyles.bar}`}
+                    aria-hidden
+                  />
+                )}
+                <span
+                  className={`relative flex h-9 w-9 items-center justify-center rounded-2xl ${
+                    active ? accentStyles.pill : ''
+                  }`}
+                >
+                  <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 2} />
+                  {badge > 0 && id === 'shopping' && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-sky-600 px-1 text-[9px] font-bold text-white">
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  )}
+                </span>
                 <span>{label}</span>
               </button>
             );
