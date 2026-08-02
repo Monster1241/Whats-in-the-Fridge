@@ -883,7 +883,7 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
           Item type
         </p>
         <div
-          className={`mb-3 grid gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900 ${getModuleGridClass(getEnabledModuleList(enabledModules).length)}`}
+          className={`mb-3 grid gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-black ${getModuleGridClass(getEnabledModuleList(enabledModules).length)}`}
         >
           {getEnabledModuleList(enabledModules).map((mod) => (
             <button
@@ -920,7 +920,7 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
             type="checkbox"
             checked={needToBuy}
             onChange={(e) => setNeedToBuy(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 bg-white text-sky-600 focus:ring-sky-500 dark:border-slate-500 dark:bg-slate-900"
+            className="h-4 w-4 rounded border-slate-300 bg-white text-sky-600 focus:ring-sky-500 dark:border-slate-500 dark:bg-black"
           />
           Add to shopping list (need to buy)
         </label>
@@ -932,7 +932,7 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
                 type="checkbox"
                 checked={hasExpiry}
                 onChange={(e) => setHasExpiry(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
+                className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-black"
               />
               Set expiry date
             </label>
@@ -1440,7 +1440,7 @@ function StorageLocationTabs({
               className={`scope-tab-btn rounded-xl border px-2 py-2.5 text-center text-sm font-bold active:scale-[0.98] ${
                 active
                   ? 'scope-tab-btn--active border-emerald-300 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500 dark:border-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-200 dark:ring-emerald-500'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-600 dark:bg-black dark:text-slate-400'
               }`}
             >
               <span className="scope-tab-btn__emoji block text-base" aria-hidden>
@@ -1469,7 +1469,7 @@ function StorageLocationTabs({
               className={`storage-tab-btn rounded-xl border px-2 py-3 text-center active:scale-[0.98] ${
                 active
                   ? `storage-tab-btn--active ${meta.tabActive} border-transparent ring-2 ring-offset-1 ring-slate-400/50 dark:ring-offset-slate-900`
-                  : `border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800 ${meta.tabIdle}`
+                  : `border-slate-200 bg-white dark:border-slate-600 dark:bg-black ${meta.tabIdle}`
               }`}
             >
               <span className="storage-tab-btn__emoji text-lg" aria-hidden>
@@ -2324,7 +2324,7 @@ function InventoryView({
                       Item type
                     </p>
                     <div
-                      className={`grid gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900 ${getModuleGridClass(getEnabledModuleList(enabledModules).length)}`}
+                      className={`grid gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-black ${getModuleGridClass(getEnabledModuleList(enabledModules).length)}`}
                     >
                       {getEnabledModuleList(enabledModules).map((mod) => (
                         <button
@@ -2372,7 +2372,7 @@ function InventoryView({
                           setAddExpiryDate('');
                         }
                       }}
-                      className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
+                      className="h-4 w-4 rounded border-slate-300 bg-white text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-black"
                     />
                     Track expiry date
                     {addExpiry && addExpiryDate && (
@@ -2512,7 +2512,7 @@ function RecipeCard({ recipe, analysis, isSaved, onToggleSave, onMarkCooked, onA
             className={`flex h-10 w-10 items-center justify-center rounded-xl border transition active:scale-95 ${
               isSaved
                 ? 'border-violet-300 bg-violet-100 text-violet-700 dark:border-violet-700 dark:bg-violet-950/60 dark:text-violet-300'
-                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-violet-300 hover:text-violet-600 dark:border-slate-600 dark:bg-slate-900 dark:hover:text-violet-400'
+                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-violet-300 hover:text-violet-600 dark:border-slate-600 dark:bg-black dark:hover:text-violet-400'
             }`}
             aria-label={isSaved ? 'Remove from saved recipes' : 'Save recipe'}
             aria-pressed={isSaved}
@@ -2575,7 +2575,7 @@ function RecipeCard({ recipe, analysis, isSaved, onToggleSave, onMarkCooked, onA
                 <button
                   type="button"
                   onClick={() => setShowAddConfirm(false)}
-                  className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                  className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-black dark:text-slate-200"
                 >
                   Cancel
                 </button>
@@ -2962,7 +2962,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
             );
           })}
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-600 dark:bg-slate-900/50">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-600 dark:bg-black/50">
             <p className="text-heading flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
               <Info className="h-3.5 w-3.5 text-amber-600" aria-hidden />
               Color badges
@@ -3329,7 +3329,7 @@ function SettingsView({
                       checked={checked}
                       disabled={modulesBusy || onlyOneLeft}
                       onChange={(e) => handleModuleToggle(mod.key, e.target.checked)}
-                      className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-slate-900"
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-black"
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-heading text-sm font-semibold">
@@ -3437,7 +3437,7 @@ function SettingsView({
             {members.map((member) => (
               <li
                 key={member.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-600 dark:bg-slate-900/50"
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-600 dark:bg-black/50"
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-heading truncate text-sm font-semibold">{member.email}</p>
@@ -3490,7 +3490,7 @@ function SettingsView({
               <button
                 type="button"
                 onClick={copyInviteCode}
-                className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:bg-black dark:text-slate-200"
               >
                 <Copy className="h-4 w-4" />
                 {copied ? 'Copied!' : 'Copy code'}

@@ -39,9 +39,9 @@ const SECTIONS = [
     accent: {
       ring: 'ring-rose-300/60 dark:ring-rose-800',
       panel:
-        'border-amber-200/90 bg-gradient-to-b from-rose-50/90 via-amber-50/50 to-white dark:border-amber-900/50 dark:from-rose-950/40 dark:via-amber-950/20 dark:to-slate-900',
+        'border-amber-200/90 bg-gradient-to-b from-rose-50/90 via-amber-50/50 to-white dark:border-amber-900/50 dark:from-rose-950/40 dark:via-amber-950/20 dark:to-black',
       toggle: 'text-rose-700 dark:text-rose-300',
-      indicator: 'bg-white shadow-md ring-1 ring-rose-200/80 dark:bg-slate-900 dark:ring-rose-900',
+      indicator: 'bg-white shadow-md ring-1 ring-rose-200/80 dark:bg-black dark:ring-rose-900',
     },
   },
   {
@@ -53,9 +53,9 @@ const SECTIONS = [
     accent: {
       ring: 'ring-sky-300/60 dark:ring-sky-800',
       panel:
-        'border-indigo-200/90 bg-gradient-to-b from-sky-50/90 via-indigo-50/40 to-white dark:border-indigo-900/60 dark:from-sky-950/30 dark:via-indigo-950/20 dark:to-slate-900',
+        'border-indigo-200/90 bg-gradient-to-b from-sky-50/90 via-indigo-50/40 to-white dark:border-indigo-900/60 dark:from-sky-950/30 dark:via-indigo-950/20 dark:to-black',
       toggle: 'text-sky-700 dark:text-sky-300',
-      indicator: 'bg-white shadow-md ring-1 ring-sky-200/80 dark:bg-slate-900 dark:ring-sky-900',
+      indicator: 'bg-white shadow-md ring-1 ring-sky-200/80 dark:bg-black dark:ring-sky-900',
     },
   },
 ];
@@ -66,7 +66,7 @@ const STORE_FILTERS = [
     label: 'All',
     active: 'bg-slate-800 text-white ring-slate-900 dark:bg-slate-200 dark:text-slate-900',
     idle:
-      'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600',
+      'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 dark:bg-black dark:text-slate-200 dark:ring-slate-600',
   },
   {
     id: 'coles',
@@ -184,7 +184,7 @@ function PostcodeModal({ postcode, draft, onDraftChange, onSave, onClose, error 
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xs rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="w-full max-w-xs rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-700 dark:bg-black"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between gap-2">
@@ -216,7 +216,7 @@ function PostcodeModal({ postcode, draft, onDraftChange, onSave, onClose, error 
             value={draft}
             onChange={(event) => onDraftChange(event.target.value.replace(/\D/g, '').slice(0, 4))}
             placeholder={postcode}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-lg font-bold tracking-[0.2em] text-slate-900 outline-none ring-sky-300/0 focus:border-sky-400 focus:ring-2 focus:ring-sky-300/40 dark:border-slate-600 dark:bg-slate-950 dark:text-slate-100"
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-lg font-bold tracking-[0.2em] text-slate-900 outline-none ring-sky-300/0 focus:border-sky-400 focus:ring-2 focus:ring-sky-300/40 dark:border-slate-600 dark:bg-black dark:text-slate-100"
           />
         </label>
 
@@ -243,7 +243,7 @@ function PostcodeChip({ postcode, regionLabel, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/90 px-2.5 py-1.5 text-xs font-bold text-slate-700 ring-1 ring-slate-200/90 transition hover:bg-white hover:ring-sky-300 active:scale-[0.98] dark:bg-slate-900/90 dark:text-slate-200 dark:ring-slate-600 dark:hover:ring-sky-700"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/90 px-2.5 py-1.5 text-xs font-bold text-slate-700 ring-1 ring-slate-200/90 transition hover:bg-white hover:ring-sky-300 active:scale-[0.98] dark:bg-black/90 dark:text-slate-200 dark:ring-slate-600 dark:hover:ring-sky-700"
       aria-label={`Postcode ${postcode}. Tap to change your location.`}
       title={regionLabel ? `Flyers for ${regionLabel}` : 'Set your postcode'}
     >
@@ -258,7 +258,7 @@ function SectionToggle({ activeSection, onChange, dealsCount, cataloguesCount })
 
   return (
     <div
-      className="rounded-2xl bg-slate-100/90 p-1 ring-1 ring-slate-200/80 dark:bg-slate-800/90 dark:ring-slate-700"
+      className="rounded-2xl bg-slate-100/90 p-1 ring-1 ring-slate-200/80 dark:bg-black/90 dark:ring-slate-700"
       role="tablist"
       aria-label="Hot deals sections"
     >
@@ -303,7 +303,7 @@ function SectionToggle({ activeSection, onChange, dealsCount, cataloguesCount })
                     className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
                       active
                         ? 'bg-black/10 dark:bg-white/10'
-                        : 'bg-slate-200/80 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+                        : 'bg-slate-200/80 text-slate-600 dark:bg-zinc-900 dark:text-slate-300'
                     }`}
                   >
                     {count}
@@ -328,7 +328,7 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd }) {
   const dealPrice = formatPrice(deal.dealPrice);
 
   return (
-    <article className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-2xl border border-amber-200/60 bg-white shadow-sm dark:border-amber-900/40 dark:bg-slate-900">
+    <article className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-2xl border border-amber-200/60 bg-white shadow-sm dark:border-amber-900/40 dark:bg-black">
       <div className="p-3 pb-14">
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
           <span
@@ -399,14 +399,14 @@ function CatalogueCard({ catalogue }) {
 
   return (
     <article
-      className={`overflow-hidden rounded-2xl border border-slate-200/90 border-l-4 bg-white shadow-sm transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900 ${accent}`}
+      className={`overflow-hidden rounded-2xl border border-slate-200/90 border-l-4 bg-white shadow-sm transition hover:shadow-md dark:border-slate-700 dark:bg-black ${accent}`}
     >
       <div className="flex gap-3 p-3.5 sm:gap-4 sm:p-4">
         <div className="flex w-[4.5rem] shrink-0 flex-col gap-2 sm:w-20">
-          <div className="flex h-11 items-center justify-center rounded-xl bg-slate-50 p-1.5 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:ring-slate-700">
+          <div className="flex h-11 items-center justify-center rounded-xl bg-slate-50 p-1.5 ring-1 ring-slate-200/80 dark:bg-black dark:ring-slate-700">
             <StoreLogo store={catalogue.store} label={catalogue.storeLabel} className="text-[10px]" />
           </div>
-          <div className="relative h-24 overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">
+          <div className="relative h-24 overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-black dark:to-black">
             {catalogue.imageUrl ? (
               <img
                 src={catalogue.imageUrl}
@@ -441,7 +441,7 @@ function CatalogueCard({ catalogue }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 border-t border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+      <div className="grid grid-cols-2 gap-2 border-t border-slate-100 bg-slate-50/50 p-3 dark:border-slate-800 dark:bg-black/50">
         <button
           type="button"
           onClick={() => openExternalUrl(catalogue.externalLink)}
@@ -760,7 +760,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search deals by product, category, or store…"
-                className="w-full rounded-2xl border border-amber-200/80 bg-white py-3 pl-10 pr-4 text-sm font-medium text-slate-800 shadow-inner outline-none transition placeholder:text-slate-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/40 dark:border-amber-900/60 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-amber-700 dark:focus:ring-amber-700/40"
+                className="w-full rounded-2xl border border-amber-200/80 bg-white py-3 pl-10 pr-4 text-sm font-medium text-slate-800 shadow-inner outline-none transition placeholder:text-slate-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/40 dark:border-amber-900/60 dark:bg-black dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-amber-700 dark:focus:ring-amber-700/40"
               />
             </label>
 
@@ -790,7 +790,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
             )}
 
             {!loading && !error && filteredDeals.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-amber-300/80 bg-white/60 px-4 py-10 text-center dark:border-amber-900 dark:bg-slate-900/40">
+              <div className="rounded-2xl border border-dashed border-amber-300/80 bg-white/60 px-4 py-10 text-center dark:border-amber-900 dark:bg-black/40">
                 <p className="text-muted text-sm">{emptyMessage}</p>
               </div>
             )}
@@ -825,7 +825,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
             )}
 
             {!cataloguesLoading && orderedCatalogues.length === 0 && (
-              <p className="text-muted rounded-2xl border border-dashed border-indigo-300/80 bg-white/50 px-4 py-10 text-center text-sm dark:border-indigo-900 dark:bg-slate-900/40">
+              <p className="text-muted rounded-2xl border border-dashed border-indigo-300/80 bg-white/50 px-4 py-10 text-center text-sm dark:border-indigo-900 dark:bg-black/40">
                 No active catalogues this week — check back after Wednesday.
               </p>
             )}

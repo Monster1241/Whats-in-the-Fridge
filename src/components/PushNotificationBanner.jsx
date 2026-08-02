@@ -7,7 +7,7 @@ export function PushNotificationBanner({ title, body, onDismiss }) {
       aria-live="polite"
       className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex justify-center px-3 pt-[max(0.75rem,env(safe-area-inset-top))]"
     >
-      <div className="pointer-events-auto flex w-full max-w-lg gap-3 rounded-2xl border border-emerald-200/80 bg-white/95 p-3 shadow-lg backdrop-blur-md dark:border-emerald-800/60 dark:bg-slate-900/95">
+      <div className="pointer-events-auto flex w-full max-w-lg gap-3 rounded-2xl border border-emerald-200/80 bg-white/95 p-3 shadow-lg backdrop-blur-md dark:border-emerald-800/60 dark:bg-black/95">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
           <Bell className="h-5 w-5" aria-hidden />
         </div>

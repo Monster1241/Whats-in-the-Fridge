@@ -9,7 +9,7 @@ export function StorageCategoryToggle({ itemType = ITEM_TYPE.FOOD, value, onChan
 
   return (
     <div
-      className="grid w-full grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-slate-900"
+      className="grid w-full grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-600 dark:bg-black"
       role="group"
       aria-label={`${itemType} storage location`}
     >

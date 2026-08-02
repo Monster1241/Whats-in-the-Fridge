@@ -70,7 +70,7 @@ export function DealsFilterMenu({
         className={`inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition active:scale-[0.98] ${
           activeCount > 0
             ? 'border-rose-300 bg-rose-50 text-rose-800 ring-2 ring-rose-200 dark:border-rose-700 dark:bg-rose-950/50 dark:text-rose-200 dark:ring-rose-800'
-            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
+            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-600 dark:bg-black dark:text-slate-200'
         }`}
         aria-expanded={open}
         aria-controls={panelId}
@@ -90,7 +90,7 @@ export function DealsFilterMenu({
           id={panelId}
           role="dialog"
           aria-label="Filter deals"
-          className="absolute right-0 z-40 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-600 dark:bg-slate-900"
+          className="absolute right-0 z-40 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-600 dark:bg-black"
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-heading text-xs font-bold uppercase tracking-wide">Filter deals</p>
@@ -132,7 +132,7 @@ export function DealsFilterMenu({
                           type="checkbox"
                           checked={checked}
                           onChange={() => onToggleStore(id)}
-                          className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 dark:border-slate-500 dark:bg-slate-900"
+                          className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 dark:border-slate-500 dark:bg-black"
                         />
                         <span className="min-w-0 flex-1 text-sm font-medium text-slate-800 dark:text-slate-100">
                           {label}
@@ -172,7 +172,7 @@ export function DealsFilterMenu({
                           type="checkbox"
                           checked={checked}
                           onChange={() => onToggleDealType(id)}
-                          className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 dark:border-slate-500 dark:bg-slate-900"
+                          className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 dark:border-slate-500 dark:bg-black"
                         />
                         <span className="min-w-0 flex-1 text-sm font-medium text-slate-800 dark:text-slate-100">
                           {label}

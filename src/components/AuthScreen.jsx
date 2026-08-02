@@ -119,7 +119,7 @@ export function AuthScreen({
           <button
             type="button"
             onClick={copyCode}
-            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-white active:scale-[0.98] dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-200"
+            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-white active:scale-[0.98] dark:border-slate-600 dark:bg-black/80 dark:text-slate-200"
           >
             <Copy className="h-4 w-4" />
             {copied ? 'Copied!' : 'Copy code'}
@@ -384,7 +384,7 @@ export function AuthScreen({
           </form>
 
           <div
-            className="mt-4 rounded-xl border border-slate-200/70 bg-white/50 px-3.5 py-3 text-center backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-900/35"
+            className="mt-4 rounded-xl border border-slate-200/70 bg-white/50 px-3.5 py-3 text-center backdrop-blur-sm dark:border-slate-700/60 dark:bg-black/35"
             role="note"
           >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">

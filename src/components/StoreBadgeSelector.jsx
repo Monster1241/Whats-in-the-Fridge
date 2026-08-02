@@ -77,7 +77,7 @@ export function StoreBadgeSelector({ store, onSelect, disabled = false }) {
           id={listId}
           role="listbox"
           style={menuPos.style}
-          className={`touch-pan-y overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-900 ${
+          className={`touch-pan-y overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-black ${
             menuPos.openUp ? 'origin-bottom' : 'origin-top'
           }`}
           onTouchMove={(e) => e.stopPropagation()}
