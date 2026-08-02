@@ -246,6 +246,28 @@ export async function saveAppState(partial) {
   return parseJson(res);
 }
 
+export async function searchExternalRecipes(query) {
+  const res = await fetch(
+    `${API_BASE}/recipes/search?q=${encodeURIComponent(query)}`,
+  );
+  const data = await parseJson(res);
+  return data.meals ?? [];
+}
+
+export async function searchRecipesByIngredient(ingredient) {
+  const res = await fetch(
+    `${API_BASE}/recipes/by-ingredient?i=${encodeURIComponent(ingredient)}`,
+  );
+  const data = await parseJson(res);
+  return data.meals ?? [];
+}
+
+export async function lookupExternalRecipe(mealId) {
+  const res = await fetch(`${API_BASE}/recipes/lookup/${encodeURIComponent(mealId)}`);
+  const data = await parseJson(res);
+  return data.meal ?? null;
+}
+
 /**
  * @param {{ store?: string, category?: string, groupBy?: 'store'|'category' }} [filters]
  */

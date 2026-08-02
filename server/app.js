@@ -7,6 +7,7 @@ import { authRouter } from './routes/auth.js';
 import { householdRouter } from './routes/household.js';
 import { stateRouter } from './routes/state.js';
 import { dealsRouter } from './routes/deals.js';
+import { recipesRouter } from './routes/recipes.js';
 
 export function createApp() {
   const app = express();
@@ -27,6 +28,7 @@ export function createApp() {
   app.use('/api/household', householdRouter);
   app.use('/api/state', stateRouter);
   app.use('/api/deals', dealsRouter);
+  app.use('/api/recipes', recipesRouter);
 
   return app;
 }

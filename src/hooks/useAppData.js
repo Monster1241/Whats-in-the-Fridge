@@ -29,6 +29,7 @@ export function useAppData(enabled) {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [enabledModules, setEnabledModules] = useState({ ...DEFAULT_ENABLED_MODULES });
   const [savedIds, setSavedIds] = useState([]);
+  const [recipeLibrary, setRecipeLibrary] = useState([]);
   const [onboarding, setOnboarding] = useState({ dismissed: [] });
   const [restockHistory, setRestockHistory] = useState([]);
   const [householdCode, setHouseholdCode] = useState('');
@@ -38,9 +39,9 @@ export function useAppData(enabled) {
   const saveEpochRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const hasUnsyncedEditsRef = useRef(false);
-  const latestRef = useRef({ items, settings, savedIds, onboarding, restockHistory });
+  const latestRef = useRef({ items, settings, savedIds, recipeLibrary, onboarding, restockHistory });
 
-  latestRef.current = { items, settings, savedIds, onboarding, restockHistory };
+  latestRef.current = { items, settings, savedIds, recipeLibrary, onboarding, restockHistory };
 
   const applyState = useCallback((state) => {
     hasUnsyncedEditsRef.current = false;
@@ -50,6 +51,7 @@ export function useAppData(enabled) {
     setSettings({ ...DEFAULT_SETTINGS, ...state.settings });
     setEnabledModules(normalizeEnabledModules(state.enabledModules));
     setSavedIds(Array.isArray(state.savedRecipeIds) ? state.savedRecipeIds : []);
+    setRecipeLibrary(Array.isArray(state.recipeLibrary) ? state.recipeLibrary : []);
     setOnboarding(
       state.onboarding?.dismissed ? state.onboarding : { dismissed: [] },
     );
@@ -125,6 +127,7 @@ export function useAppData(enabled) {
         items: nextItems,
         settings: nextSettings,
         savedIds: nextSaved,
+        recipeLibrary: nextRecipeLibrary,
         onboarding: nextOnboarding,
         restockHistory: nextRestockHistory,
       } = latestRef.current;
@@ -134,6 +137,7 @@ export function useAppData(enabled) {
           items: nextItems,
           settings: nextSettings,
           savedRecipeIds: nextSaved,
+          recipeLibrary: nextRecipeLibrary,
           onboarding: nextOnboarding,
           restockHistory: nextRestockHistory,
         });
@@ -154,7 +158,7 @@ export function useAppData(enabled) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     };
-  }, [items, settings, savedIds, onboarding, restockHistory, loading, error, enabled]);
+  }, [items, settings, savedIds, recipeLibrary, onboarding, restockHistory, loading, error, enabled]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark');
@@ -175,6 +179,7 @@ export function useAppData(enabled) {
         items: snapshot.items,
         settings: snapshot.settings,
         savedRecipeIds: snapshot.savedIds,
+        recipeLibrary: snapshot.recipeLibrary,
         onboarding: snapshot.onboarding,
         restockHistory: snapshot.restockHistory,
       });
@@ -294,6 +299,14 @@ export function useAppData(enabled) {
     );
   }, []);
 
+  const rememberRecipe = useCallback((recipe) => {
+    if (!recipe?.id) return;
+    setRecipeLibrary((prev) => {
+      if (prev.some((entry) => entry.id === recipe.id)) return prev;
+      return [...prev, recipe];
+    });
+  }, []);
+
   return {
     loading,
     error,
@@ -310,7 +323,7 @@ export function useAppData(enabled) {
     enabledModules,
     updateEnabledModules,
     householdCode,
-    savedRecipes: { savedIds, isSaved, toggleSave },
+    savedRecipes: { savedIds, isSaved, toggleSave, recipeLibrary, rememberRecipe },
     onboarding: { isDismissed, dismiss: dismissOnboarding, resetOnboarding },
   };
 }

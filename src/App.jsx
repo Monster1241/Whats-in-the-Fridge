@@ -24,6 +24,7 @@ import { SubCategoryToggle } from './components/SubCategoryToggle.jsx';
 import { SubCategoryFilterMenu } from './components/SubCategoryFilterMenu.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
 import { WeeklyDealsFeed } from './components/WeeklyDealsFeed.jsx';
+import { RecipesView } from './components/RecipesView.jsx';
 import {
   defaultCategoryForItemType,
   getCategoriesForItemType,
@@ -61,7 +62,13 @@ import {
   SUBCATEGORY_OTHER,
 } from './inventory/subcategories.js';
 import { dealStoreToPreferred, mapDealToInventory } from './inventory/mapDealToInventory.js';
-import { findInventoryItem, getItemId, normalizeName } from './inventory/itemUtils.js';
+import {
+  findInventoryItem,
+  getItemId,
+  markItemBoughtFromShopping,
+  markItemOnShoppingList,
+  normalizeName,
+} from './inventory/itemUtils.js';
 import {
   getFrequentlyRestocked,
   recordRestockEvent,
@@ -105,11 +112,6 @@ import {
   X,
 } from 'lucide-react';
 
-const RECIPE_VIEW = {
-  MATCHED: 'matched',
-  SAVED: 'saved',
-};
-
 const MAIN_TAB_ORDER = ['fridge', 'shopping', 'deals', 'recipes', 'settings'];
 
 function getStepDirection(order, prevId, nextId) {
@@ -124,14 +126,6 @@ function flowEnterClass(direction, base = 'animate-flow') {
   if (direction < 0) return `${base}-back`;
   return `${base}-neutral`;
 }
-
-/** Minimum in-stock ingredients (Fresh / Expiring) to show a matched recipe. */
-const MIN_STOCKED_INGREDIENTS_FOR_RECIPE = 2;
-/** Target number of recipes on the Matched tab (fills with next-best main-ingredient matches). */
-const MIN_MATCHED_RECIPES_TO_SHOW = 4;
-
-const MAIN_INGREDIENT_PATTERN =
-  /chicken|beef|salmon|chorizo|egg|pork|mince|tofu|lentil|potato|noodle|shrimp|fish|turkey|lamb|sausage|bacon/i;
 
 const COLOR_LEGEND = [
   { swatch: 'bg-emerald-600', label: 'Emerald', desc: 'In stock · plentiful · primary actions' },
@@ -182,387 +176,6 @@ const STATUS_META = {
   },
 };
 
-const RECIPES = [
-  {
-    id: 'creamy-basil-chicken',
-    title: 'Creamy Basil Chicken',
-    prepTime: '35 min',
-    ingredients: [
-      'Chicken Thighs',
-      'Basil',
-      'Heavy Cream',
-      'Garlic',
-      'Onion',
-      'Olive Oil',
-    ],
-    instructions: [
-      'Season chicken thighs with salt and pepper. Sear in olive oil until golden, then set aside.',
-      'Sauté diced onion and minced garlic until soft. Pour in heavy cream and simmer 3–4 minutes.',
-      'Return chicken to the pan, tear in fresh basil, and simmer until cooked through.',
-      'Taste and adjust seasoning. Serve hot with rice or crusty bread.',
-    ],
-  },
-  {
-    id: 'chorizo-carbonara',
-    title: 'Chorizo Carbonara Pasta',
-    prepTime: '25 min',
-    ingredients: ['Chorizo', 'Pasta', 'Eggs', 'Parmesan', 'Garlic', 'Black Pepper'],
-    instructions: [
-      'Cook pasta in salted boiling water until al dente. Reserve 1 cup pasta water.',
-      'Brown sliced chorizo in a pan. Add minced garlic for 30 seconds.',
-      'Whisk eggs, grated Parmesan, and plenty of black pepper in a bowl.',
-      'Toss drained pasta with chorizo off the heat, then quickly mix in the egg mixture.',
-      'Loosen with pasta water until silky. Serve immediately with extra Parmesan.',
-    ],
-  },
-  {
-    id: 'spicy-stir-fry',
-    title: 'Spicy Veggie Stir-Fry',
-    prepTime: '20 min',
-    ingredients: [
-      'Bell Peppers',
-      'Broccoli',
-      'Soy Sauce',
-      'Ginger',
-      'Garlic',
-      'Rice',
-      'Chili Flakes',
-    ],
-    instructions: [
-      'Cook rice according to package directions.',
-      'Stir-fry broccoli and sliced bell peppers in hot oil over high heat for 4–5 minutes.',
-      'Add minced garlic, ginger, soy sauce, and chili flakes. Toss 1 minute more.',
-      'Serve over rice and finish with sesame oil if you have it.',
-    ],
-  },
-  {
-    id: 'greek-chicken-bowl',
-    title: 'Greek Chicken Power Bowl',
-    prepTime: '30 min',
-    ingredients: [
-      'Chicken Breast',
-      'Cucumber',
-      'Tomatoes',
-      'Feta',
-      'Olives',
-      'Lemon',
-      'Olive Oil',
-    ],
-    instructions: [
-      'Grill or pan-sear seasoned chicken breast until cooked through. Rest and slice.',
-      'Chop cucumber and tomatoes. Combine with olives and crumbled feta.',
-      'Whisk lemon juice, olive oil, salt, and pepper for a quick dressing.',
-      'Layer chicken over salad, drizzle dressing, and serve.',
-    ],
-  },
-  {
-    id: 'beef-tacos',
-    title: 'Weeknight Beef Tacos',
-    prepTime: '22 min',
-    ingredients: [
-      'Ground Beef',
-      'Taco Shells',
-      'Lettuce',
-      'Tomatoes',
-      'Cheddar',
-      'Sour Cream',
-      'Onion',
-    ],
-    instructions: [
-      'Brown ground beef with diced onion. Season with salt, pepper, and taco spices.',
-      'Warm taco shells in the oven or skillet.',
-      'Chop lettuce and tomatoes. Shred cheddar.',
-      'Fill shells with beef and toppings. Finish with sour cream.',
-    ],
-  },
-  {
-    id: 'salmon-lemon-dill',
-    title: 'Lemon Dill Salmon',
-    prepTime: '28 min',
-    ingredients: ['Salmon Fillet', 'Lemon', 'Dill', 'Butter', 'Asparagus', 'Garlic'],
-    instructions: [
-      'Pat salmon dry. Season with salt, pepper, lemon zest, and chopped dill.',
-      'Pan-sear or bake at 200°C / 400°F for 12–15 minutes until flaky.',
-      'Sauté asparagus with garlic in butter until tender-crisp.',
-      'Serve salmon over asparagus with lemon wedges and melted butter.',
-    ],
-  },
-  {
-    id: 'egg-fried-rice',
-    title: 'High-Protein Egg Fried Rice',
-    prepTime: '18 min',
-    ingredients: ['Eggs', 'Rice', 'Soy Sauce', 'Peas', 'Carrots', 'Sesame Oil', 'Green Onion'],
-    instructions: [
-      'Use day-old rice if possible. Scramble eggs in a hot wok, then set aside.',
-      'Stir-fry diced carrots and peas until bright. Add rice and break up clumps.',
-      'Return eggs, splash in soy sauce, and toss on high heat.',
-      'Finish with sesame oil and sliced green onion.',
-    ],
-  },
-  {
-    id: 'thai-holy-basil-chicken',
-    title: 'Thai Holy Basil Chicken (Pad Krapow)',
-    prepTime: '22 min',
-    cuisine: 'Asian',
-    ingredients: [
-      'Chicken Thighs',
-      'Basil',
-      'Garlic',
-      'Rice',
-      'Soy Sauce',
-      'Chili Flakes',
-      'Onion',
-    ],
-    instructions: [
-      'Cook jasmine or plain rice. Finely chop garlic and slice onion.',
-      'Mince or pound chicken thighs. Stir-fry garlic and onion in hot oil until fragrant.',
-      'Add chicken and cook through on high heat. Splash in soy sauce and chili flakes.',
-      'Tear in plenty of basil, toss 30 seconds, and serve over rice with a fried egg if you like.',
-    ],
-  },
-  {
-    id: 'teriyaki-chicken-bowl',
-    title: 'Teriyaki Chicken Rice Bowl',
-    prepTime: '28 min',
-    cuisine: 'Asian',
-    ingredients: [
-      'Chicken Breast',
-      'Rice',
-      'Soy Sauce',
-      'Ginger',
-      'Garlic',
-      'Sesame Oil',
-      'Green Onion',
-    ],
-    instructions: [
-      'Cook rice. Mix soy sauce, grated ginger, minced garlic, and a little honey or sugar for teriyaki glaze.',
-      'Pan-sear sliced chicken breast until golden. Brush with glaze and cook until sticky.',
-      'Steam or stir-fry broccoli or carrots on the side if you have them.',
-      'Serve chicken over rice, drizzle remaining glaze, and finish with sesame oil and green onion.',
-    ],
-  },
-  {
-    id: 'korean-bibimbap-bowl',
-    title: 'Korean Bibimbap-Style Bowl',
-    prepTime: '30 min',
-    cuisine: 'Asian',
-    ingredients: [
-      'Rice',
-      'Eggs',
-      'Beef Mince',
-      'Soy Sauce',
-      'Garlic',
-      'Carrots',
-      'Spinach',
-      'Sesame Oil',
-      'Chili Flakes',
-    ],
-    instructions: [
-      'Cook rice. Season beef mince with soy sauce, garlic, and sesame oil; cook in a hot pan until browned.',
-      'Quickly sauté julienned carrots and spinach (or any veg) with a pinch of salt.',
-      'Fry eggs sunny-side up. Arrange rice in bowls with veg and beef around the edges.',
-      'Top with egg, chili flakes, and extra sesame oil. Mix everything together before eating.',
-    ],
-  },
-  {
-    id: 'vietnamese-lemon-chicken',
-    title: 'Vietnamese-Style Lemon Chicken',
-    prepTime: '25 min',
-    cuisine: 'Asian',
-    ingredients: [
-      'Chicken Thighs',
-      'Lemon',
-      'Garlic',
-      'Ginger',
-      'Soy Sauce',
-      'Rice',
-      'Fish Sauce',
-      'Green Onion',
-    ],
-    instructions: [
-      'Marinate chicken thighs 15 minutes in lemon juice, fish sauce (or extra soy), garlic, and ginger.',
-      'Grill or pan-sear chicken until charred at the edges and cooked through. Rest and slice.',
-      'Cook rice. Warm any leftover marinade in the pan as a light sauce.',
-      'Serve chicken over rice with lemon wedges, sliced green onion, and herbs if you have them.',
-    ],
-  },
-  {
-    id: 'japanese-miso-salmon',
-    title: 'Miso-Ginger Glazed Salmon',
-    prepTime: '24 min',
-    cuisine: 'Asian',
-    ingredients: [
-      'Salmon Fillet',
-      'Miso Paste',
-      'Ginger',
-      'Soy Sauce',
-      'Rice',
-      'Garlic',
-      'Sesame Oil',
-    ],
-    instructions: [
-      'Whisk miso paste, grated ginger, soy sauce, and a little water into a smooth glaze.',
-      'Brush salmon fillets with glaze. Bake at 200°C / 400°F for 12–14 minutes or pan-sear skin-side down first.',
-      'Cook rice. Sauté garlic in sesame oil and toss with steamed greens if available.',
-      'Serve salmon over rice with extra glaze spooned on top.',
-    ],
-  },
-  {
-    id: 'nepali-chicken-curry',
-    title: 'Nepali Chicken Curry (Kukhura ko Tarkari)',
-    prepTime: '40 min',
-    cuisine: 'Nepali',
-    ingredients: [
-      'Chicken Thighs',
-      'Onion',
-      'Garlic',
-      'Ginger',
-      'Tomatoes',
-      'Turmeric',
-      'Cumin',
-      'Rice',
-      'Cilantro',
-    ],
-    instructions: [
-      'Blend or finely chop onion, garlic, ginger, and tomatoes into a rough paste (or chop small).',
-      'Brown chicken pieces in oil. Add turmeric and cumin; stir until fragrant.',
-      'Pour in the paste and simmer 20–25 minutes, adding a splash of water if it sticks.',
-      'Season with salt. Serve with steamed rice and fresh cilantro.',
-    ],
-  },
-  {
-    id: 'dal-bhat',
-    title: 'Dal Bhat (Lentil & Rice Plate)',
-    prepTime: '35 min',
-    cuisine: 'Nepali',
-    ingredients: [
-      'Red Lentils',
-      'Rice',
-      'Onion',
-      'Garlic',
-      'Ginger',
-      'Turmeric',
-      'Cumin',
-      'Tomatoes',
-      'Ghee',
-    ],
-    instructions: [
-      'Rinse lentils. Simmer with turmeric, chopped garlic, ginger, and water until soft (25–30 min).',
-      'In a small pan, fry cumin seeds in ghee (or oil) with diced onion until golden; stir into dal.',
-      'Cook rice separately. Dice tomatoes and stir into dal for the last 5 minutes.',
-      'Serve dal over rice — the classic Nepali comfort meal. Pickles or salad on the side if you have them.',
-    ],
-  },
-  {
-    id: 'nepali-potato-curry',
-    title: 'Nepali Potato Curry (Aloo Tarkari)',
-    prepTime: '30 min',
-    cuisine: 'Nepali',
-    ingredients: [
-      'Potatoes',
-      'Onion',
-      'Garlic',
-      'Ginger',
-      'Tomatoes',
-      'Turmeric',
-      'Cumin',
-      'Cilantro',
-      'Rice',
-    ],
-    instructions: [
-      'Peel and cube potatoes. Par-boil 8 minutes until just tender; drain.',
-      'Sauté onion, garlic, and ginger in oil. Add turmeric and cumin, then diced tomatoes.',
-      'Add potatoes and a little water. Simmer until saucy and potatoes are fully tender.',
-      'Garnish with cilantro and serve with rice or roti.',
-    ],
-  },
-  {
-    id: 'nepali-momo-soup',
-    title: 'Nepali Momo Jhol (Dumpling Soup)',
-    prepTime: '45 min',
-    cuisine: 'Nepali',
-    ingredients: [
-      'Chicken Mince',
-      'Wonton Wrappers',
-      'Onion',
-      'Garlic',
-      'Ginger',
-      'Tomatoes',
-      'Soy Sauce',
-      'Cilantro',
-      'Chili Flakes',
-    ],
-    instructions: [
-      'Mix chicken mince with finely chopped onion, garlic, ginger, soy sauce, and cilantro for filling.',
-      'Spoon filling onto wonton wrappers, pleat, and seal. Steam dumplings 10–12 minutes until cooked.',
-      'For jhol: blend tomatoes, ginger, garlic, and chili with water; simmer 10 minutes. Season with soy and lemon.',
-      'Pour warm jhol over steamed momos. Top with cilantro and serve immediately.',
-    ],
-  },
-  {
-    id: 'thukpa-noodle-soup',
-    title: 'Thukpa (Nepali Noodle Soup)',
-    prepTime: '35 min',
-    cuisine: 'Nepali',
-    ingredients: [
-      'Egg Noodles',
-      'Chicken Thighs',
-      'Onion',
-      'Garlic',
-      'Ginger',
-      'Tomatoes',
-      'Soy Sauce',
-      'Spinach',
-      'Cilantro',
-    ],
-    instructions: [
-      'Simmer sliced chicken in water with onion, garlic, and ginger for a simple broth (20 min).',
-      'Shred chicken back into the pot. Add diced tomatoes and soy sauce; simmer 5 minutes more.',
-      'Cook egg noodles separately. Divide noodles into bowls and ladle hot broth over.',
-      'Top with spinach (wilts in the bowl) and cilantro. Adjust salt and chili to taste.',
-    ],
-  },
-];
-
-function TipBanner({ title, children, onDismiss, accentClass = 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' }) {
-  return (
-    <div className={`mb-4 flex gap-3 rounded-xl border p-3 ${accentClass}`}>
-      <Info className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-      <div className="min-w-0 flex-1">
-        <p className="text-heading text-sm font-semibold">{title}</p>
-        <p className="text-muted mt-1 text-xs leading-relaxed">{children}</p>
-      </div>
-      <button
-        type="button"
-        onClick={onDismiss}
-        className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-white/60 dark:hover:bg-slate-800"
-        aria-label="Dismiss tip"
-      >
-        <X className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
-
-function ColorLegendCard() {
-  return (
-    <section className="surface-card mb-5 p-4">
-      <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Color guide</h2>
-      <p className="text-muted mb-3 text-sm">What each color means across the app.</p>
-      <ul className="space-y-2.5">
-        {COLOR_LEGEND.map((item) => (
-          <li key={item.label} className="flex items-start gap-3">
-            <span className={`mt-0.5 h-4 w-4 shrink-0 rounded-full ${item.swatch}`} aria-hidden />
-            <div>
-              <p className="text-heading text-sm font-semibold">{item.label}</p>
-              <p className="text-muted text-xs">{item.desc}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 function EmptyState({ icon: Icon, title, description }) {
   return (
@@ -572,223 +185,6 @@ function EmptyState({ icon: Icon, title, description }) {
       <p className="text-muted mx-auto mt-2 max-w-xs text-xs leading-relaxed">{description}</p>
     </div>
   );
-}
-
-function CollapsibleInstructions({ recipe }) {
-  const [open, setOpen] = useState(false);
-  const stepCount = recipe.instructions.length;
-
-  return (
-    <div className="surface-inset mb-4 p-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 text-left"
-        aria-expanded={open}
-      >
-        <span className="text-muted text-xs font-semibold uppercase tracking-wide">
-          Cooking instructions ({stepCount} steps)
-        </span>
-        {open ? (
-          <ChevronUp className="h-4 w-4 text-slate-500" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-slate-500" />
-        )}
-      </button>
-      {open && (
-        <ol className="mt-3 list-decimal space-y-2 border-t border-slate-200 pt-3 pl-5 text-sm leading-relaxed text-slate-700 dark:border-slate-600 dark:text-slate-300">
-          {recipe.instructions.map((step, index) => (
-            <li key={`${recipe.id}-step-${index}`}>{step}</li>
-          ))}
-        </ol>
-      )}
-      {!open && (
-        <p className="text-muted mt-2 text-xs">Tap to expand step-by-step directions.</p>
-      )}
-    </div>
-  );
-}
-
-function daysUntilExpiry(iso) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(`${iso}T12:00:00`);
-  expiry.setHours(0, 0, 0, 0);
-  return Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-}
-
-function isExpiringSoon(item) {
-  if (!item.expiryDate || isOnShoppingList(item)) return false;
-  return daysUntilExpiry(item.expiryDate) <= EXPIRING_SOON_DAYS;
-}
-
-function getDisplayStatus(item) {
-  return calculateItemStatus(item);
-}
-
-function groupByCategory(items, category, itemType, selectedSubCategories = null) {
-  const inCategory = items.filter(
-    (item) =>
-      item.category === category &&
-      item.itemType === itemType &&
-      isInStockInventory(item),
-  );
-  const filterBySub = (list) => {
-    if (!selectedSubCategories || selectedSubCategories.size === 0) return list;
-    return list.filter((item) =>
-      selectedSubCategories.has(item.subCategory || SUBCATEGORY_OTHER),
-    );
-  };
-
-  const expiring = filterBySub(
-    inCategory.filter(isExpiringSoon).sort(sortByUrgencyThenName),
-  );
-  const plentiful = filterBySub(
-    inCategory
-      .filter((item) => !isExpiringSoon(item))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-  );
-
-  return {
-    expiring,
-    plentiful,
-    expiringGroups: groupItemsBySubCategory(expiring, itemType, category),
-    plentifulGroups: groupItemsBySubCategory(plentiful, itemType, category),
-    subCategoryCounts: countItemsBySubCategory(inCategory, itemType, category),
-  };
-}
-
-function formatExpiryDate(iso) {
-  if (!iso) return null;
-  const d = new Date(`${iso}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function formatExpiryUrgency(item) {
-  if (!item.expiryDate) return null;
-  const days = daysUntilExpiry(item.expiryDate);
-  const dateLabel = formatExpiryDate(item.expiryDate);
-  if (days < 0) return `Expired ${dateLabel}`;
-  if (days === 0) return 'Expires today';
-  if (days === 1) return 'Expires tomorrow';
-  return `Expires in ${days} days (${dateLabel})`;
-}
-
-function sortByUrgencyThenName(a, b) {
-  if (a.expiryDate && b.expiryDate) {
-    const cmp = a.expiryDate.localeCompare(b.expiryDate);
-    if (cmp !== 0) return cmp;
-  } else if (a.expiryDate) return -1;
-  else if (b.expiryDate) return 1;
-  return a.name.localeCompare(b.name);
-}
-
-function findInventoryMatch(ingredientName, items) {
-  const needle = normalizeName(ingredientName);
-  return items.find(
-    (item) =>
-      item.itemType === ITEM_TYPE.FOOD && normalizeName(item.name) === needle,
-  );
-}
-
-function findStockedFoodMatch(ingredientName, items) {
-  const exact = findInventoryMatch(ingredientName, items);
-  if (exact && isInStockInventory(exact)) return exact;
-
-  const needle = normalizeName(ingredientName);
-  if (!needle) return null;
-
-  return items.find((item) => {
-    if (item.itemType !== ITEM_TYPE.FOOD || isOnShoppingList(item)) return false;
-    const itemName = normalizeName(item.name);
-    return itemName.includes(needle) || needle.includes(itemName);
-  });
-}
-
-function getRecipeMainIngredient(recipe) {
-  if (recipe.mainIngredient) return recipe.mainIngredient;
-  const protein = recipe.ingredients.find((ing) => MAIN_INGREDIENT_PATTERN.test(ing));
-  return protein ?? recipe.ingredients[0];
-}
-
-function isStockedIngredient(ingredientName, items) {
-  return Boolean(findStockedFoodMatch(ingredientName, items));
-}
-
-function itemTypeLabelEmoji(itemType) {
-  if (itemType === ITEM_TYPE.BABY) return '👶';
-  if (itemType === ITEM_TYPE.HOUSEHOLD) return '🕯️';
-  return '🍏';
-}
-
-function getAddItemHeading(category, itemType) {
-  const meta = getCategoryMeta(category, itemType);
-  if (itemType === ITEM_TYPE.FOOD && category === FOOD_CATEGORY.AMBIENT) {
-    return { title: 'Add to pantry', hint: 'Staples, spices, and shelf-stable goods' };
-  }
-  if (itemType === ITEM_TYPE.FOOD && category === FOOD_CATEGORY.FRESH) {
-    return { title: 'Add to fridge', hint: 'Dairy, meat, produce, and chilled items' };
-  }
-  if (itemType === ITEM_TYPE.FOOD && category === FOOD_CATEGORY.FREEZER) {
-    return { title: 'Add to freezer', hint: 'Frozen meals, veg, and desserts' };
-  }
-  if (meta) {
-    return { title: `Add to ${meta.label.toLowerCase()}`, hint: meta.subtitle };
-  }
-  return { title: 'Add an item', hint: 'Track what your household has in stock' };
-}
-
-function groupShoppingList(items, enabledModules) {
-  return items
-    .filter(
-      (item) =>
-        isOnShoppingList(item) && isItemTypeEnabled(enabledModules, item.itemType),
-    )
-    .sort((a, b) => {
-      const cat = a.category.localeCompare(b.category);
-      if (cat !== 0) return cat;
-      return a.name.localeCompare(b.name);
-    });
-}
-
-function analyzeRecipe(recipe, items) {
-  const have = [];
-  const need = [];
-
-  for (const ingredient of recipe.ingredients) {
-    const match = findInventoryMatch(ingredient, items);
-    if (!match || isOnShoppingList(match)) {
-      need.push(ingredient);
-    } else {
-      have.push({ name: ingredient, status: getDisplayStatus(match) });
-    }
-  }
-
-  const stockedCount = have.filter(
-    (entry) =>
-      entry.status === STATUS.FRESH ||
-      entry.status === STATUS.EXPIRING ||
-      entry.status === STATUS.ALMOST_FINISHED,
-  ).length;
-  const mainIngredient = getRecipeMainIngredient(recipe);
-  const hasMainIngredient = isStockedIngredient(mainIngredient, items);
-  const qualifiesForMatch =
-    hasMainIngredient && stockedCount >= MIN_STOCKED_INGREDIENTS_FOR_RECIPE;
-
-  return {
-    have,
-    need,
-    canCook: need.length === 0,
-    mainIngredient,
-    hasMainIngredient,
-    stockedCount,
-    qualifiesForMatch,
-  };
-}
-
-function recipeMatchesInventory(analysis) {
-  return analysis.qualifiesForMatch;
 }
 
 function StatusBadge({ status, onOpenPicker }) {
@@ -1794,12 +1190,11 @@ function InventoryView({
           return prev;
         }
         const next = [...prev];
-        next[existingIdx] = {
+        next[existingIdx] = markItemOnShoppingList({
           ...next[existingIdx],
-          status: STATUS.OUT,
           itemType: shopItemType,
           category: shopCategory,
-        };
+        });
         return next;
       }
       const consumption = buildConsumptionFields({
@@ -1845,7 +1240,7 @@ function InventoryView({
 
   const moveItemToShoppingList = (id) => {
     updateItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: STATUS.OUT } : item)),
+      prev.map((item) => (item.id === id ? markItemOnShoppingList(item) : item)),
     );
   };
 
@@ -1858,7 +1253,7 @@ function InventoryView({
           return {
             items: prev.map((entry) =>
               findInventoryItem([entry], target)
-                ? { ...entry, status: STATUS.OUT }
+                ? markItemOnShoppingList(entry)
                 : entry,
             ),
             restockFrom: target,
@@ -1911,12 +1306,11 @@ function InventoryView({
       );
       if (existingIdx >= 0) {
         const next = [...prev];
-        next[existingIdx] = {
+        next[existingIdx] = markItemOnShoppingList({
           ...next[existingIdx],
-          status: STATUS.OUT,
           category: entry.category,
           preferredStore: entry.preferredStore ?? next[existingIdx].preferredStore ?? null,
-        };
+        });
         return next;
       }
       const consumption = buildConsumptionFields({
@@ -1943,18 +1337,8 @@ function InventoryView({
   const markItemStocked = (id) => {
     const item = items.find((entry) => entry.id === id);
     if (item) rememberRestock(item);
-    const now = new Date().toISOString();
     updateItems((prev) =>
-      prev.map((entry) =>
-        entry.id === id
-          ? {
-              ...entry,
-              status: STATUS.FRESH,
-              stockedAt: now,
-              createdAt: now,
-            }
-          : entry,
-      ),
+      prev.map((entry) => (entry.id === id ? markItemBoughtFromShopping(entry) : entry)),
     );
   };
 
@@ -1992,7 +1376,7 @@ function InventoryView({
         const target = findInventoryItem(prev, item);
         if (!target) return prev;
         return prev.map((entry) =>
-          findInventoryItem([entry], target) ? { ...entry, status: STATUS.OUT } : entry,
+          findInventoryItem([entry], target) ? markItemOnShoppingList(entry) : entry,
         );
       }, { saveNow: true });
     },
@@ -2001,7 +1385,6 @@ function InventoryView({
 
   const handleSearchMarkStocked = useCallback(
     (item) => {
-      const now = new Date().toISOString();
       void patchItems(
         (prev) => {
           const target = findInventoryItem(prev, item);
@@ -2009,7 +1392,7 @@ function InventoryView({
           return {
             items: prev.map((entry) =>
               findInventoryItem([entry], target)
-                ? { ...entry, status: STATUS.FRESH, stockedAt: now, createdAt: now }
+                ? markItemBoughtFromShopping(entry)
                 : entry,
             ),
             restockFrom: target,
@@ -2483,370 +1866,6 @@ function InventoryView({
           onSave={(updates) => saveItemEdits(editingItem.id, updates)}
           onClose={() => setEditingItem(null)}
         />
-      )}
-    </div>
-  );
-}
-
-function RecipeCard({ recipe, analysis, isSaved, onToggleSave, onMarkCooked, onAddNeedToShoppingList }) {
-  const [showAddConfirm, setShowAddConfirm] = useState(false);
-
-  return (
-    <li className="surface-card p-4 shadow-lg">
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-heading text-lg font-bold">{recipe.title}</h2>
-          <p className="text-muted text-xs font-medium">
-            {recipe.cuisine ? `${recipe.cuisine} · ` : ''}Prep: {recipe.prepTime}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {analysis.canCook && (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
-              Ready!
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => onToggleSave(recipe.id)}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl border transition active:scale-95 ${
-              isSaved
-                ? 'border-violet-300 bg-violet-100 text-violet-700 dark:border-violet-700 dark:bg-violet-950/60 dark:text-violet-300'
-                : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-violet-300 hover:text-violet-600 dark:border-slate-600 dark:bg-slate-900 dark:hover:text-violet-400'
-            }`}
-            aria-label={isSaved ? 'Remove from saved recipes' : 'Save recipe'}
-            aria-pressed={isSaved}
-          >
-            <Bookmark className={`h-5 w-5 ${isSaved ? 'fill-current' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {analysis.have.length > 0 ? (
-        <div className="mb-3">
-          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
-            What you have
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {analysis.have.map((ing) => (
-              <span
-                key={ing.name}
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  ing.status === STATUS.EXPIRING
-                    ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700'
-                    : 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:ring-emerald-700'
-                }`}
-              >
-                {ing.name}
-              </span>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className="text-muted mb-3 text-xs">
-          Add matching ingredients in Fridge to see what you already have for this recipe.
-        </p>
-      )}
-
-      {analysis.need.length > 0 && (
-        <div className="mb-4">
-          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
-            What you need
-          </p>
-          <ul className="mb-3 flex flex-wrap gap-1.5">
-            {analysis.need.map((name) => (
-              <li
-                key={name}
-                className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:ring-rose-700"
-              >
-                {name}
-              </li>
-            ))}
-          </ul>
-          {showAddConfirm ? (
-            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950/40">
-              <p className="text-heading text-sm font-semibold">Add to shopping list?</p>
-              <p className="text-muted mt-1 text-xs leading-relaxed">
-                Add {analysis.need.length} missing ingredient
-                {analysis.need.length === 1 ? '' : 's'} from &ldquo;{recipe.title}&rdquo; to your
-                household shopping list.
-              </p>
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddConfirm(false)}
-                  className="flex-1 rounded-lg border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onAddNeedToShoppingList(analysis.need);
-                    setShowAddConfirm(false);
-                  }}
-                  className="flex-1 rounded-lg bg-sky-600 py-2.5 text-xs font-semibold text-white active:scale-[0.98]"
-                >
-                  Add all
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowAddConfirm(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 py-2.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 active:scale-[0.98] dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-950"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              Add all to shopping list
-            </button>
-          )}
-        </div>
-      )}
-
-      <CollapsibleInstructions recipe={recipe} />
-
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        <button
-          type="button"
-          onClick={() => onMarkCooked(recipe)}
-          className="surface-inset flex flex-1 items-center justify-center gap-2 py-3 text-sm font-semibold text-slate-800 transition hover:border-emerald-500 hover:text-emerald-700 active:scale-[0.98] dark:text-slate-200 dark:hover:border-emerald-600 dark:hover:text-emerald-400"
-        >
-          <ChefHat className="h-4 w-4" />
-          Cooked It!
-        </button>
-        <button
-          type="button"
-          onClick={() => onToggleSave(recipe.id)}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition active:scale-[0.98] ${
-            isSaved
-              ? 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-200'
-              : 'border-slate-200 text-slate-700 hover:border-violet-300 hover:text-violet-700 dark:border-slate-600 dark:text-slate-300 dark:hover:text-violet-400'
-          }`}
-        >
-          <Bookmark className={`h-4 w-4 ${isSaved ? 'fill-current' : ''}`} />
-          {isSaved ? 'Saved' : 'Save recipe'}
-        </button>
-      </div>
-    </li>
-  );
-}
-
-function DealsView({ items, updateItems }) {
-  const shoppingListNames = useMemo(
-    () =>
-      new Set(
-        items
-          .filter((item) => isOnShoppingList(item))
-          .map((item) => normalizeName(item.name)),
-      ),
-    [items],
-  );
-
-  const addDealToShoppingList = (deal) => {
-    const { itemType, category } = mapDealToInventory(deal);
-    const needle = normalizeName(deal.name);
-    const preferredStore = dealStoreToPreferred(deal.store);
-
-    updateItems((prev) => {
-      const existingIdx = prev.findIndex(
-        (item) => normalizeName(item.name) === needle && item.itemType === itemType,
-      );
-      if (existingIdx >= 0) {
-        const next = [...prev];
-        next[existingIdx] = {
-          ...next[existingIdx],
-          status: STATUS.OUT,
-          category,
-          preferredStore: preferredStore ?? next[existingIdx].preferredStore ?? null,
-        };
-        return next;
-      }
-      const consumption = buildConsumptionFields({ name: deal.name, itemType, category });
-      return [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          name: deal.name,
-          itemType,
-          status: STATUS.OUT,
-          category,
-          expiryDate: null,
-          preferredStore,
-          ...consumption,
-        },
-      ];
-    });
-  };
-
-  return (
-    <WeeklyDealsFeed onAddDeal={addDealToShoppingList} addedNames={shoppingListNames} />
-  );
-}
-
-function RecipesView({ items, updateItems, savedRecipes }) {
-  const { savedIds, isSaved, toggleSave } = savedRecipes;
-  const [recipeView, setRecipeView] = useState(RECIPE_VIEW.MATCHED);
-
-  const cookableRecipes = useMemo(() => {
-    const scored = RECIPES.map((recipe) => {
-      const analysis = analyzeRecipe(recipe, items);
-      return { recipe, analysis, score: analysis.stockedCount };
-    });
-
-    const strict = scored
-      .filter(({ analysis }) => recipeMatchesInventory(analysis))
-      .sort((a, b) => b.score - a.score);
-
-    if (strict.length >= MIN_MATCHED_RECIPES_TO_SHOW) {
-      return strict;
-    }
-
-    const shownIds = new Set(strict.map(({ recipe }) => recipe.id));
-    const filler = scored
-      .filter(
-        ({ recipe, analysis }) =>
-          !shownIds.has(recipe.id) &&
-          analysis.hasMainIngredient &&
-          analysis.stockedCount >= 1,
-      )
-      .sort((a, b) => b.score - a.score)
-      .slice(0, MIN_MATCHED_RECIPES_TO_SHOW - strict.length);
-
-    return [...strict, ...filler];
-  }, [items]);
-
-  const savedRecipeCards = useMemo(() => {
-    return savedIds
-      .map((id) => RECIPES.find((recipe) => recipe.id === id))
-      .filter(Boolean)
-      .map((recipe) => ({
-        recipe,
-        analysis: analyzeRecipe(recipe, items),
-      }))
-      .sort((a, b) => a.recipe.title.localeCompare(b.recipe.title));
-  }, [savedIds, items]);
-
-  const markCooked = (recipe) => {
-    updateItems((prev) => {
-      const next = [...prev];
-      for (const ingredient of recipe.ingredients) {
-        const idx = next.findIndex(
-          (item) => normalizeName(item.name) === normalizeName(ingredient),
-        );
-        if (idx >= 0) {
-          next[idx] = { ...next[idx], status: STATUS.OUT };
-        }
-      }
-      return next;
-    });
-  };
-
-  const addNeededToShoppingList = (neededIngredients) => {
-    updateItems((prev) => {
-      let next = [...prev];
-      for (const name of neededIngredients) {
-        const needle = normalizeName(name);
-        const idx = next.findIndex((item) => normalizeName(item.name) === needle);
-        if (idx >= 0) {
-          next[idx] = { ...next[idx], status: STATUS.OUT };
-          continue;
-        }
-        const classified = classifyItem(name);
-        const consumption = buildConsumptionFields({
-          name,
-          itemType: ITEM_TYPE.FOOD,
-          category: classified?.category ?? FOOD_CATEGORY.AMBIENT,
-        });
-        next.push({
-          id: crypto.randomUUID(),
-          name,
-          itemType: ITEM_TYPE.FOOD,
-          status: STATUS.OUT,
-          category: classified?.category ?? FOOD_CATEGORY.AMBIENT,
-          expiryDate: null,
-          ...consumption,
-        });
-      }
-      return next;
-    });
-  };
-
-  const list =
-    recipeView === RECIPE_VIEW.SAVED ? savedRecipeCards : cookableRecipes;
-
-  return (
-    <div className="pb-28">
-      <header className="mb-4">
-        <h1 className="text-heading text-2xl font-extrabold">What Can We Cook?</h1>
-        <p className="text-muted mt-1.5 text-sm">
-          {recipeView === RECIPE_VIEW.SAVED
-            ? 'Your bookmarked recipes — always available here'
-            : `Shows recipes when you have the main ingredient plus at least ${MIN_STOCKED_INGREDIENTS_FOR_RECIPE} items in stock`}
-        </p>
-      </header>
-
-      <div className="mb-5 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => setRecipeView(RECIPE_VIEW.MATCHED)}
-          className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition active:scale-[0.98] ${
-            recipeView === RECIPE_VIEW.MATCHED
-              ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
-              : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
-          }`}
-        >
-          <ChefHat className="h-4 w-4" />
-          Matched
-          {cookableRecipes.length > 0 && (
-            <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-              {cookableRecipes.length}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => setRecipeView(RECIPE_VIEW.SAVED)}
-          className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition active:scale-[0.98] ${
-            recipeView === RECIPE_VIEW.SAVED
-              ? 'border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950/50 dark:text-violet-300'
-              : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
-          }`}
-        >
-          <Bookmark className={`h-4 w-4 ${recipeView === RECIPE_VIEW.SAVED ? 'fill-current' : ''}`} />
-          Saved
-          {savedIds.length > 0 && (
-            <span className="rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-              {savedIds.length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {list.length === 0 ? (
-        <EmptyState
-          icon={recipeView === RECIPE_VIEW.SAVED ? Bookmark : ChefHat}
-          title={recipeView === RECIPE_VIEW.SAVED ? 'No saved recipes yet' : 'No recipes yet'}
-          description={
-            recipeView === RECIPE_VIEW.SAVED
-              ? 'Tap the bookmark on any recipe in “Matched” to save favourites for quick access.'
-              : `Stock the main ingredient for a recipe plus at least ${MIN_STOCKED_INGREDIENTS_FOR_RECIPE} of its items (Fresh or Expiring Soon) to see matches here.`
-          }
-        />
-      ) : (
-        <ul className="space-y-4">
-          {list.map(({ recipe, analysis }) => (
-            <RecipeCard
-              key={recipe.id}
-              recipe={recipe}
-              analysis={analysis}
-              isSaved={isSaved(recipe.id)}
-              onToggleSave={toggleSave}
-              onMarkCooked={markCooked}
-              onAddNeedToShoppingList={addNeededToShoppingList}
-            />
-          ))}
-        </ul>
       )}
     </div>
   );
@@ -4001,8 +3020,8 @@ export default function App() {
 
   return (
     <PushNotificationProvider enabled={auth.canUseApp}>
-    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
-      <main className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
+    <div className="app-shell mx-auto flex min-h-dvh max-w-lg flex-col">
+      <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
         <div key={activeTab} className={flowEnterClass(tabFlowDir, 'animate-page')}>
         {saveError && (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
