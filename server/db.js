@@ -499,7 +499,6 @@ export async function createHousehold(ownerUserId) {
     settings: { ...DEFAULT_SETTINGS },
     enabledModules: { ...DEFAULT_ENABLED_MODULES },
     savedRecipeIds: [],
-    recipeLibrary: [],
     onboarding: { dismissed: [] },
     restockHistory: [],
   };
@@ -535,7 +534,6 @@ export async function getHouseholdMeta(householdId) {
     settings: { ...DEFAULT_SETTINGS, ...doc.settings },
     enabledModules: normalizeEnabledModules(doc.enabledModules),
     savedRecipeIds: doc.savedRecipeIds ?? [],
-    recipeLibrary: Array.isArray(doc.recipeLibrary) ? doc.recipeLibrary : [],
     onboarding: doc.onboarding ?? { dismissed: [] },
     restockHistory: Array.isArray(doc.restockHistory) ? doc.restockHistory : [],
   };
@@ -565,7 +563,6 @@ export async function getHouseholdAppState(householdId) {
     settings: meta.settings,
     enabledModules: meta.enabledModules,
     savedRecipeIds: meta.savedRecipeIds,
-    recipeLibrary: meta.recipeLibrary,
     onboarding: meta.onboarding,
     restockHistory: meta.restockHistory,
     householdCode: meta.invite_code,
@@ -590,7 +587,6 @@ export async function updateHouseholdAppState(householdId, partial) {
     householdUpdate.enabledModules = validateEnabledModules(partial.enabledModules);
   }
   if (partial.savedRecipeIds !== undefined) householdUpdate.savedRecipeIds = partial.savedRecipeIds;
-  if (partial.recipeLibrary !== undefined) householdUpdate.recipeLibrary = partial.recipeLibrary;
   if (partial.onboarding !== undefined) householdUpdate.onboarding = partial.onboarding;
   if (partial.restockHistory !== undefined) householdUpdate.restockHistory = partial.restockHistory;
 
