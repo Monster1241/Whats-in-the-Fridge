@@ -134,7 +134,9 @@ function normalizeForMatch(name) {
 
 function matchesKeywords(normalized, keywords) {
   return keywords.some((keyword) => {
-    if (normalized.includes(keyword)) return true;
+    if (keyword.includes(' ')) {
+      return normalized.includes(keyword);
+    }
     return normalized.split(' ').some((word) => word === keyword || word.startsWith(keyword));
   });
 }
@@ -159,6 +161,9 @@ const SUBCATEGORY_RULES = [
       'cheddar',
       'feta',
       'ricotta',
+      'cottage',
+      'pouch',
+      'drinking yogurt',
     ],
   },
   {
@@ -182,6 +187,14 @@ const SUBCATEGORY_RULES = [
       'turkey',
       'ham',
       'prosciutto',
+      'barramundi',
+      'baramundi',
+      'barra',
+      'snapper',
+      'flathead',
+      'calamari',
+      'squid',
+      'tuna steak',
     ],
   },
   {
@@ -192,6 +205,8 @@ const SUBCATEGORY_RULES = [
       'apple',
       'banana',
       'orange',
+      'mandarin',
+      'clementine',
       'berry',
       'berries',
       'grape',
@@ -202,9 +217,12 @@ const SUBCATEGORY_RULES = [
       'plum',
       'lemon',
       'lime',
+      'grapefruit',
       'avocado',
       'kiwi',
       'pineapple',
+      'watermelon',
+      'rockmelon',
     ],
   },
   {
@@ -291,6 +309,9 @@ const SUBCATEGORY_RULES = [
       'cracker',
       'chip',
       'chips',
+      'crisps',
+      'popcorn',
+      'nacho',
       'ramen',
       'noodle',
       'snack',
@@ -372,7 +393,7 @@ const SUBCATEGORY_RULES = [
     itemType: ITEM_TYPE.HOUSEHOLD,
     category: HOUSEHOLD_CATEGORY.CLEANING,
     subCategory: 'Surface & Floor',
-    keywords: ['spray', 'wipe', 'disinfect', 'floor', 'glass', 'bleach', 'cleaner'],
+    keywords: ['spray', 'wipe', 'disinfect', 'floor', 'glass', 'bleach', 'cleaner', 'toilet', 'bathroom', 'oven', 'mould', 'mold', 'shower'],
   },
   {
     itemType: ITEM_TYPE.HOUSEHOLD,

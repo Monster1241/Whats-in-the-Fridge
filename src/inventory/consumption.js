@@ -16,9 +16,29 @@ const EXPIRING_SOON_DAYS = 3;
 /** @type {{ keywords: string[], days: number }[]} */
 const NAME_DURATION_RULES = [
   { keywords: ['milk'], days: 7 },
-  { keywords: ['chicken', 'beef', 'pork', 'mince', 'meat', 'salmon', 'chorizo', 'bacon', 'sausage'], days: 3 },
+  {
+    keywords: [
+      'barramundi',
+      'baramundi',
+      'snapper',
+      'flathead',
+      'prawn',
+      'shrimp',
+      'calamari',
+      'squid',
+      'fish fillet',
+      'tuna steak',
+      'seafood',
+    ],
+    days: 2,
+  },
+  {
+    keywords: ['chicken', 'beef', 'pork', 'lamb', 'mince', 'meat', 'salmon', 'chorizo', 'bacon', 'sausage', 'steak'],
+    days: 3,
+  },
   { keywords: ['napp', 'diaper'], days: 21 },
   { keywords: ['dishwashing tablet', 'dish tablet'], days: 30 },
+  { keywords: ['toilet cleaner', 'toilet bowl', 'bathroom cleaner', 'oven cleaner'], days: 120 },
   {
     keywords: [
       'salt',
@@ -36,8 +56,12 @@ const NAME_DURATION_RULES = [
   },
   { keywords: ['egg'], days: 14 },
   { keywords: ['bread'], days: 5 },
-  { keywords: ['yogurt'], days: 10 },
+  { keywords: ['yogurt', 'yoghurt', 'yogurt pouch', 'drinking yogurt'], days: 10 },
+  { keywords: ['cottage cheese'], days: 7 },
   { keywords: ['cheese'], days: 14 },
+  { keywords: ['orange', 'mandarin', 'clementine', 'grapefruit', 'lemon', 'lime'], days: 10 },
+  { keywords: ['potato', 'sweet potato', 'kumara'], days: 14 },
+  { keywords: ['potato chips', 'corn chips', 'tortilla chips', 'crisps', 'chips'], days: 21 },
   { keywords: ['toilet paper'], days: 21 },
   { keywords: ['laundry'], days: 30 },
 ];
@@ -66,6 +90,7 @@ function normalizeForMatch(name) {
     .trim()
     .toLowerCase()
     .replace(/['']/g, '')
+    .replace(/yoghurt/g, 'yogurt')
     .replace(/[^a-z0-9]+/g, ' ');
 }
 
@@ -81,9 +106,10 @@ export function getDefaultConsumptionDuration(name, itemType, category) {
 
   for (const rule of NAME_DURATION_RULES) {
     if (
-      rule.keywords.some(
-        (kw) => normalized.includes(kw) || normalized.split(' ').some((w) => w.startsWith(kw)),
-      )
+      rule.keywords.some((kw) => {
+        if (kw.includes(' ')) return normalized.includes(kw);
+        return normalized.split(' ').some((w) => w === kw || w.startsWith(kw));
+      })
     ) {
       return rule.days;
     }

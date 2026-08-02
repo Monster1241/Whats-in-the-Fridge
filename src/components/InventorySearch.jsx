@@ -7,6 +7,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { IconActionButton } from './IconActionButton.jsx';
 import { calculateItemStatus } from '../inventory/consumption.js';
 import { getCategoryMeta, isOnShoppingList, STATUS } from '../inventory/constants.js';
 import { inventorySearchKey, searchInventoryItems } from '../inventory/searchInventory.js';
@@ -128,9 +129,11 @@ export function InventorySearch({
                         <button
                           type="button"
                           onClick={() => onMoveToShopping(item)}
-                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white active:scale-[0.98]"
+                          className="icon-action-btn icon-action-btn--cart inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white active:scale-[0.98] hover:bg-sky-500 hover:text-white"
                         >
-                          <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
+                          <span className="icon-action-btn__glyph inline-flex">
+                            <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
+                          </span>
                           Need to buy
                         </button>
                       )}
@@ -142,14 +145,14 @@ export function InventorySearch({
                         <Pencil className="h-3.5 w-3.5" aria-hidden />
                         Edit
                       </button>
-                      <button
-                        type="button"
+                      <IconActionButton
+                        variant="delete"
                         onClick={() => onDelete(item)}
-                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 active:scale-[0.98] dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"
                       >
                         <Trash2 className="h-3.5 w-3.5" aria-hidden />
                         Remove
-                      </button>
+                      </IconActionButton>
                     </div>
                   </li>
                 );

@@ -17,6 +17,7 @@ import {
 } from './api.js';
 import { readStoredPostcode } from './inventory/postcodeStorage.js';
 import { InventorySearch } from './components/InventorySearch.jsx';
+import { IconActionButton } from './components/IconActionButton.jsx';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { SubCategoryToggle } from './components/SubCategoryToggle.jsx';
@@ -108,6 +109,21 @@ const RECIPE_VIEW = {
   MATCHED: 'matched',
   SAVED: 'saved',
 };
+
+const MAIN_TAB_ORDER = ['fridge', 'shopping', 'deals', 'recipes', 'settings'];
+
+function getStepDirection(order, prevId, nextId) {
+  const prev = order.indexOf(prevId);
+  const next = order.indexOf(nextId);
+  if (prev < 0 || next < 0 || prev === next) return 0;
+  return next > prev ? 1 : -1;
+}
+
+function flowEnterClass(direction, base = 'animate-flow') {
+  if (direction > 0) return `${base}-forward`;
+  if (direction < 0) return `${base}-back`;
+  return `${base}-neutral`;
+}
 
 /** Minimum in-stock ingredients (Fresh / Expiring) to show a matched recipe. */
 const MIN_STOCKED_INGREDIENTS_FOR_RECIPE = 2;
@@ -996,14 +1012,13 @@ function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt, onPreferre
               </p>
             )}
           </div>
-          <button
-            type="button"
+          <IconActionButton
+            variant="delete"
             onClick={() => onDelete(item.id)}
-            className={`shrink-0 rounded-lg p-2 text-slate-500 transition ${SHOPPING_ACCENT.hover}`}
             aria-label={`Remove ${item.name} from shopping list`}
           >
             <Trash2 className="h-4 w-4" />
-          </button>
+          </IconActionButton>
         </div>
 
         <div
@@ -1083,23 +1098,22 @@ function InventoryItemRow({
       <StatusBadge status={displayStatus} onOpenPicker={() => onOpenEditor(item)} />
       <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition sm:opacity-80 sm:group-hover:opacity-100">
         {onMoveToShopping && (
-          <button
-            type="button"
+          <IconActionButton
+            variant="cart"
             onClick={() => onMoveToShopping(item.id)}
-            className={`rounded-lg p-2 text-slate-500 transition ${SHOPPING_ACCENT.hover} hover:text-sky-700 dark:hover:text-sky-300`}
+            className="hover:text-sky-700 dark:hover:text-sky-300"
             aria-label={`Add ${item.name} to shopping list`}
           >
             <ShoppingCart className="h-4 w-4" />
-          </button>
+          </IconActionButton>
         )}
-        <button
-          type="button"
+        <IconActionButton
+          variant="delete"
           onClick={() => onDelete(item.id)}
-          className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950"
           aria-label={`Remove ${item.name}`}
         >
           <Trash2 className="h-4 w-4" />
-        </button>
+        </IconActionButton>
       </div>
     </li>
   );
@@ -1401,7 +1415,7 @@ function StorageLocationTabs({
   inventoryScope,
   onScopeChange,
   activeView,
-  onChange,
+  onCategoryChange,
 }) {
   const modules = getEnabledModuleList(enabledModules);
   const scopeItemType = getItemTypeForModule(inventoryScope);
@@ -1409,21 +1423,27 @@ function StorageLocationTabs({
 
   return (
     <div className="mb-5 space-y-2">
-      <div className={`grid gap-2 ${getModuleGridClass(modules.length)}`}>
+      <div
+        className={`scope-segment grid gap-2 ${getModuleGridClass(modules.length)}`}
+        role="tablist"
+        aria-label="Household modules"
+      >
         {modules.map((mod) => {
           const active = inventoryScope === mod.key;
           return (
             <button
               key={mod.key}
               type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => onScopeChange(mod.key)}
-              className={`rounded-xl border px-2 py-2.5 text-center text-sm font-bold transition active:scale-[0.98] ${
+              className={`scope-tab-btn rounded-xl border px-2 py-2.5 text-center text-sm font-bold active:scale-[0.98] ${
                 active
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500 dark:border-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-200 dark:ring-emerald-500'
+                  ? 'scope-tab-btn--active border-emerald-300 bg-emerald-50 text-emerald-900 ring-2 ring-emerald-500 dark:border-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-200 dark:ring-emerald-500'
                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400'
               }`}
             >
-              <span className="block text-base" aria-hidden>
+              <span className="scope-tab-btn__emoji block text-base" aria-hidden>
                 {mod.emoji}
               </span>
               <span className="text-heading mt-0.5 block text-[11px] leading-tight">{mod.label}</span>
@@ -1431,7 +1451,11 @@ function StorageLocationTabs({
           );
         })}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div
+        className="storage-segment grid grid-cols-3 gap-2"
+        role="tablist"
+        aria-label="Storage location"
+      >
         {categoryOptions.map((cat) => {
           const meta = getCategoryMeta(cat, scopeItemType);
           const active = activeView === cat;
@@ -1439,14 +1463,16 @@ function StorageLocationTabs({
             <button
               key={cat}
               type="button"
-              onClick={() => onChange(cat)}
-              className={`rounded-xl border px-2 py-3 text-center transition active:scale-[0.98] ${
+              role="tab"
+              aria-selected={active}
+              onClick={() => onCategoryChange(cat)}
+              className={`storage-tab-btn rounded-xl border px-2 py-3 text-center active:scale-[0.98] ${
                 active
-                  ? `${meta.tabActive} border-transparent ring-2 ring-offset-1 ring-slate-400/50 dark:ring-offset-slate-900`
+                  ? `storage-tab-btn--active ${meta.tabActive} border-transparent ring-2 ring-offset-1 ring-slate-400/50 dark:ring-offset-slate-900`
                   : `border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800 ${meta.tabIdle}`
               }`}
             >
-              <span className="text-lg" aria-hidden>
+              <span className="storage-tab-btn__emoji text-lg" aria-hidden>
                 {meta.emoji}
               </span>
               <p className="text-heading mt-1 text-xs font-bold">{meta.label}</p>
@@ -1473,6 +1499,7 @@ function InventoryView({
   const { isDismissed, dismiss } = onboarding;
   const defaultModuleKey = getDefaultModuleKey(enabledModules);
   const [inventoryScope, setInventoryScope] = useState(defaultModuleKey);
+  const [inventoryFlowDir, setInventoryFlowDir] = useState(0);
   const [draft, setDraft] = useState('');
   const [addItemType, setAddItemType] = useState(getItemTypeForModule(defaultModuleKey));
   const [addCategory, setAddCategory] = useState(getInitialCategoryForModule(defaultModuleKey));
@@ -1567,6 +1594,8 @@ function InventoryView({
   }, [enabledModules, inventoryScope, activeView, isShoppingPage]);
 
   const handleScopeChange = (nextModuleKey) => {
+    const moduleOrder = getEnabledModuleList(enabledModules).map((mod) => mod.key);
+    setInventoryFlowDir(getStepDirection(moduleOrder, inventoryScope, nextModuleKey));
     setInventoryScope(nextModuleKey);
     const nextType = getItemTypeForModule(nextModuleKey);
     if (!isShoppingPage) {
@@ -1579,6 +1608,12 @@ function InventoryView({
     setAddItemType(nextType);
     setAddCategory(nextCategory);
     setAddSubCategory(resolveSubCategory(draft, nextType, nextCategory));
+  };
+
+  const handleCategoryChange = (nextCategory) => {
+    const options = getCategoriesForItemType(scopeItemType);
+    setInventoryFlowDir(getStepDirection(options, activeView, nextCategory));
+    setActiveView(nextCategory);
   };
 
   const suggestAddExpiry = useCallback((name, itemType, category, subCategory) => {
@@ -2096,10 +2131,14 @@ function InventoryView({
           inventoryScope={inventoryScope}
           onScopeChange={handleScopeChange}
           activeView={activeView}
-          onChange={setActiveView}
+          onCategoryChange={handleCategoryChange}
         />
       )}
 
+      <div
+        key={isShoppingPage ? 'shopping' : `${inventoryScope}-${activeView}`}
+        className={flowEnterClass(isShoppingPage ? 0 : inventoryFlowDir, 'animate-inventory')}
+      >
       {isShoppingPage ? (
         <>
           {!isDismissed('shopping-tip') && (
@@ -2435,6 +2474,7 @@ function InventoryView({
           </>
         )
       )}
+      </div>
 
       {editingItem && (
         <ItemEditorSheet
@@ -3823,6 +3863,7 @@ const SPLASH_MIN_MS = 1400;
 export default function App() {
   const [splashPhase, setSplashPhase] = useState('active');
   const [activeTab, setActiveTab] = useState('fridge');
+  const [tabFlowDir, setTabFlowDir] = useState(0);
   const auth = useAuth();
 
   useEffect(() => {
@@ -3962,7 +4003,7 @@ export default function App() {
     <PushNotificationProvider enabled={auth.canUseApp}>
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
       <main className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
-        <div key={activeTab} className="animate-page-enter">
+        <div key={activeTab} className={flowEnterClass(tabFlowDir, 'animate-page')}>
         {saveError && (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
             Could not sync latest change. We will retry automatically on your next edit.
@@ -4040,7 +4081,10 @@ export default function App() {
               <button
                 key={id}
                 type="button"
-                onClick={() => setActiveTab(id)}
+                onClick={() => {
+                  setTabFlowDir(getStepDirection(MAIN_TAB_ORDER, activeTab, id));
+                  setActiveTab(id);
+                }}
                 className={`nav-tab-btn relative flex min-h-[64px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-bold transition-[color,transform] duration-200 active:scale-[0.96] sm:text-xs ${
                   active ? `nav-tab-btn--active ${accentStyles.text}` : 'text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
                 }`}

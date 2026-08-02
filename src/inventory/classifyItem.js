@@ -1,4 +1,8 @@
-import { FOOD_CATEGORY, ITEM_TYPE } from './constants.js';
+import {
+  FOOD_CATEGORY,
+  HOUSEHOLD_CATEGORY,
+  ITEM_TYPE,
+} from './constants.js';
 import { resolveSubCategory } from './subcategories.js';
 
 /** User-facing storage hints mapped to app food categories (Fresh = fridge, Ambient = pantry/spices). */
@@ -7,8 +11,12 @@ export const CLASSIFICATION_HINT = {
   SPICES: 'spices',
   PANTRY: 'pantry',
   FREEZER: 'freezer',
+  CLEANING: 'cleaning',
+  LAUNDRY: 'laundry',
+  BATHROOM: 'bathroom',
 };
 
+/** @type {Array<{ hint: string, category: string, itemType?: string, keywords: string[] }>} */
 const CLASSIFICATION_RULES = [
   {
     hint: CLASSIFICATION_HINT.FREEZER,
@@ -21,6 +29,89 @@ const CLASSIFICATION_RULES = [
       'freezer',
       'popsicle',
       'icy pole',
+      'frozen chips',
+      'frozen fish',
+      'frozen pizza',
+    ],
+  },
+  {
+    hint: CLASSIFICATION_HINT.PANTRY,
+    category: FOOD_CATEGORY.AMBIENT,
+    keywords: [
+      'potato chips',
+      'corn chips',
+      'tortilla chips',
+      'kettle chips',
+      'crisps',
+      'nachos',
+      'popcorn',
+      'rice crackers',
+      'muesli bar',
+    ],
+  },
+  {
+    hint: CLASSIFICATION_HINT.CLEANING,
+    category: HOUSEHOLD_CATEGORY.CLEANING,
+    itemType: ITEM_TYPE.HOUSEHOLD,
+    keywords: [
+      'toilet cleaner',
+      'toilet bowl',
+      'bathroom cleaner',
+      'shower cleaner',
+      'oven cleaner',
+      'floor cleaner',
+      'glass cleaner',
+      'window cleaner',
+      'drain cleaner',
+      'dishwashing',
+      'dishwasher',
+      'multi surface',
+      'disinfectant',
+      'bleach',
+      'mould remover',
+      'mold remover',
+      'sponge',
+      'dishcloth',
+      'garbage bag',
+      'bin bag',
+      'paper towel',
+      'aluminium foil',
+      'baking paper',
+      'antibacterial spray',
+    ],
+  },
+  {
+    hint: CLASSIFICATION_HINT.LAUNDRY,
+    category: HOUSEHOLD_CATEGORY.LAUNDRY,
+    itemType: ITEM_TYPE.HOUSEHOLD,
+    keywords: [
+      'laundry',
+      'fabric softener',
+      'stain remover',
+      'dryer sheet',
+      'washing powder',
+      'washing liquid',
+      'washing peg',
+      'lint roller',
+    ],
+  },
+  {
+    hint: CLASSIFICATION_HINT.BATHROOM,
+    category: HOUSEHOLD_CATEGORY.BATHROOM,
+    itemType: ITEM_TYPE.HOUSEHOLD,
+    keywords: [
+      'toilet',
+      'toilet paper',
+      'hand soap',
+      'shampoo',
+      'conditioner',
+      'body wash',
+      'toothpaste',
+      'deodorant',
+      'moisturiser',
+      'moisturizer',
+      'razor',
+      'tissue',
     ],
   },
   {
@@ -32,19 +123,68 @@ const CLASSIFICATION_RULES = [
       'cheese',
       'yogurt',
       'yoghurt',
+      'cottage',
+      'cottage cheese',
+      'yogurt pouch',
+      'yoghurt pouch',
+      'drinking yogurt',
       'chicken',
       'meat',
       'beef',
+      'lamb',
+      'pork',
+      'mince',
+      'sausage',
+      'bacon',
+      'chorizo',
+      'steak',
       'cream',
       'dip',
+      'hummus',
       'tofu',
-      'bacon',
       'salmon',
+      'barramundi',
+      'baramundi',
+      'barra',
+      'snapper',
+      'flathead',
       'prawn',
+      'shrimp',
+      'calamari',
+      'squid',
+      'fish fillet',
+      'tuna steak',
+      'seafood',
       'egg',
       'lettuce',
       'tomato',
       'broccoli',
+      'spinach',
+      'carrot',
+      'cucumber',
+      'mushroom',
+      'capsicum',
+      'bell pepper',
+      'zucchini',
+      'orange',
+      'mandarin',
+      'clementine',
+      'grapefruit',
+      'lemon',
+      'lime',
+      'apple',
+      'banana',
+      'berry',
+      'grape',
+      'avocado',
+      'potato',
+      'sweet potato',
+      'kumara',
+      'corn cob',
+      'ginger',
+      'basil',
+      'ham',
+      'prosciutto',
     ],
   },
   {
@@ -84,6 +224,13 @@ const CLASSIFICATION_RULES = [
       'tuna',
       'ramen',
       'noodle',
+      'chips',
+      'cracker',
+      'snack',
+      'stock',
+      'vinegar',
+      'honey',
+      'peanut butter',
     ],
   },
 ];
@@ -97,7 +244,15 @@ function normalizeForMatch(name) {
     .trim()
     .toLowerCase()
     .replace(/['']/g, '')
+    .replace(/yoghurt/g, 'yogurt')
     .replace(/[^a-z0-9]+/g, ' ');
+}
+
+function matchesKeyword(normalized, keyword) {
+  if (keyword.includes(' ')) {
+    return normalized.includes(keyword);
+  }
+  return normalized.split(' ').some((word) => word === keyword || word.startsWith(keyword));
 }
 
 /**
@@ -110,16 +265,14 @@ export function classifyItem(name) {
   if (!normalized) return null;
 
   for (const rule of CLASSIFICATION_RULES) {
-    const matched = rule.keywords.some((keyword) => {
-      if (normalized.includes(keyword)) return true;
-      return normalized.split(' ').some((word) => word === keyword || word.startsWith(keyword));
-    });
+    const matched = rule.keywords.some((keyword) => matchesKeyword(normalized, keyword));
     if (matched) {
+      const itemType = rule.itemType ?? ITEM_TYPE.FOOD;
       return {
         category: rule.category,
-        itemType: ITEM_TYPE.FOOD,
+        itemType,
         hint: rule.hint,
-        subCategory: resolveSubCategory(name, ITEM_TYPE.FOOD, rule.category),
+        subCategory: resolveSubCategory(name, itemType, rule.category),
       };
     }
   }

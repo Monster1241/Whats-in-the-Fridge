@@ -85,14 +85,14 @@ function inferFromOffCategoryTags(product) {
     return { category: FOOD_CATEGORY.FREEZER };
   }
   if (
-    /dairy|milk|cheese|yoghurt|yogurt|butter|cream|eggs|meat|fish|seafood|poultry|fresh/.test(
+    /dairy|milk|cheese|yoghurt|yogurt|butter|cream|eggs|meat|fish|seafood|poultry|fresh|barramundi|prawn/.test(
       tags,
     )
   ) {
     return { category: FOOD_CATEGORY.FRESH };
   }
   if (
-    /cleaning|detergent|laundry|household|shampoo|soap|toilet|paper-towel|dishwash/.test(
+    /cleaning|detergent|laundry|household|shampoo|soap|toilet|paper-towel|dishwash|bleach|disinfect|bathroom/.test(
       tags,
     )
   ) {
@@ -105,7 +105,7 @@ function inferFromOffCategoryTags(product) {
           : HOUSEHOLD_CATEGORY.CLEANING,
     };
   }
-  if (/pantry|pasta|rice|cereal|snack|beverage|drink|sauce|spice|condiment/.test(tags)) {
+  if (/pantry|pasta|rice|cereal|snack|beverage|drink|sauce|spice|condiment|chips|crisps|cracker/.test(tags)) {
     return { category: FOOD_CATEGORY.AMBIENT };
   }
   return null;
