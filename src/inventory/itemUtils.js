@@ -145,6 +145,26 @@ function preferSubCategory(a, b, itemType, category) {
   return aOk ?? bOk ?? SUBCATEGORY_OTHER;
 }
 
+/** Item returned to inventory after shopping — fresh batch, no carried-over expiry. */
+export function markItemBoughtFromShopping(item, now = new Date().toISOString()) {
+  return {
+    ...item,
+    status: STATUS.FRESH,
+    stockedAt: now,
+    createdAt: now,
+    expiryDate: null,
+  };
+}
+
+/** Item sent to shopping / restock list — old expiry no longer applies. */
+export function markItemOnShoppingList(item) {
+  return {
+    ...item,
+    status: STATUS.OUT,
+    expiryDate: null,
+  };
+}
+
 function mergeDuplicateItems(a, b) {
   const status =
     isOnShoppingList(a) || isOnShoppingList(b) ? STATUS.OUT : STATUS.FRESH;
@@ -161,7 +181,7 @@ function mergeDuplicateItems(a, b) {
     itemType,
     category,
     subCategory: preferSubCategory(a, b, itemType, category),
-    expiryDate: a.expiryDate || b.expiryDate || null,
+    expiryDate: status === STATUS.OUT ? null : a.expiryDate || b.expiryDate || null,
     preferredStore: a.preferredStore ?? b.preferredStore ?? null,
     consumptionDuration:
       (typeof a.consumptionDuration === 'number' && a.consumptionDuration > 0
