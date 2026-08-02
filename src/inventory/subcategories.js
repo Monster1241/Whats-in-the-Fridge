@@ -41,7 +41,6 @@ export const SUBCATEGORY_META = {
   Toiletries: { emoji: '🧼', label: 'Toiletries' },
   'Paper & Tissues': { emoji: '🧻', label: 'Paper & Tissues' },
   'Personal Care': { emoji: '💆', label: 'Personal Care' },
-  'Feminine Hygiene': { emoji: '🌸', label: 'Feminine Hygiene' },
   // Baby
   Nappies: { emoji: '📦', label: 'Nappies' },
   'Baby Formula & Food': { emoji: '🍼', label: 'Baby Formula & Food' },
@@ -87,7 +86,7 @@ const HOUSEHOLD_SUBCATEGORIES = {
     SUBCATEGORY_OTHER,
   ],
   [HOUSEHOLD_CATEGORY.LAUNDRY]: ['Detergent', 'Laundry Additives', SUBCATEGORY_OTHER],
-  [HOUSEHOLD_CATEGORY.BATHROOM]: ['Toiletries', 'Paper & Tissues', 'Personal Care', 'Feminine Hygiene', SUBCATEGORY_OTHER],
+  [HOUSEHOLD_CATEGORY.BATHROOM]: ['Toiletries', 'Paper & Tissues', 'Personal Care', SUBCATEGORY_OTHER],
 };
 
 const BABY_SUBCATEGORIES = {
@@ -479,27 +478,6 @@ const SUBCATEGORY_RULES = [
     category: HOUSEHOLD_CATEGORY.BATHROOM,
     subCategory: 'Personal Care',
     keywords: ['moistur', 'razor', 'mask', 'lotion', 'skincare', 'sunscreen'],
-  },
-  {
-    itemType: ITEM_TYPE.HOUSEHOLD,
-    category: HOUSEHOLD_CATEGORY.BATHROOM,
-    subCategory: 'Feminine Hygiene',
-    keywords: [
-      'sanitary pad',
-      'period pad',
-      'menstrual pad',
-      'panty liner',
-      'tampon',
-      'menstrual cup',
-      'period underwear',
-      'period undies',
-      'maternity pad',
-      'incontinence pad',
-      'continence pad',
-      'feminine wipe',
-      'sanitary bag',
-      'modibodi',
-    ],
   },
   // Baby
   {
