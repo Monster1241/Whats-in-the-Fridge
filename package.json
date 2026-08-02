@@ -11,8 +11,6 @@
     "dev:client": "vite",
     "dev:server": "node server/index.js",
     "build": "vite build",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "preview": "vite preview",
     "start": "node server/index.js",
     "refresh:grocery": "node tasks/refreshGroceryData.js",
@@ -40,7 +38,6 @@
     "concurrently": "^9.1.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
-    "vite": "^4.5.5",
-    "vitest": "^4.1.10"
+    "vite": "^4.5.5"
   }
 }

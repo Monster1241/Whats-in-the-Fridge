@@ -8,19 +8,8 @@ body,
   height: 100%;
 }
 
-html {
-  width: 100%;
-  overflow-x: hidden;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
-
 body {
   margin: 0;
-  width: 100%;
-  overflow-x: hidden;
-  overscroll-behavior-x: none;
-  touch-action: manipulation;
   background-color: #ffffff;
   color: #0f172a;
   font-family:
@@ -33,13 +22,6 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-}
-
-/* iOS Safari auto-zooms focused fields below 16px */
-input,
-textarea,
-select {
-  font-size: 16px;
 }
 
 .dark body {
@@ -69,7 +51,7 @@ select {
   }
 
   .input-field {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm shadow-slate-900/5 transition-[border-color,box-shadow,transform] duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:shadow-none;
+    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/5 transition-[border-color,box-shadow,transform] duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:shadow-none;
   }
 
   .btn-auth {

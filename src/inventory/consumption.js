@@ -60,12 +60,6 @@ const NAME_DURATION_RULES = [
   { keywords: ['cottage cheese'], days: 7 },
   { keywords: ['cheese'], days: 14 },
   { keywords: ['orange', 'mandarin', 'clementine', 'grapefruit', 'lemon', 'lime'], days: 10 },
-  {
-    keywords: ['strawberry', 'blueberry', 'raspberry', 'blackberry', 'berry', 'cranberry', 'cherry'],
-    days: 5,
-  },
-  { keywords: ['celery', 'asparagus'], days: 7 },
-  { keywords: ['cauliflower', 'broccoli', 'cabbage', 'bok choy', 'kale', 'spinach', 'lettuce'], days: 5 },
   { keywords: ['potato', 'sweet potato', 'kumara'], days: 14 },
   { keywords: ['potato chips', 'corn chips', 'tortilla chips', 'crisps', 'chips'], days: 21 },
   { keywords: ['toilet paper'], days: 21 },

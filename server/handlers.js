@@ -405,42 +405,6 @@ function sanitizeRestockHistory(history) {
     .slice(0, 50);
 }
 
-function sanitizeRecipeLibrary(library) {
-  if (!Array.isArray(library)) return [];
-  return library
-    .map((entry) => {
-      const id = String(entry?.id ?? '').trim().slice(0, 80);
-      const title = String(entry?.title ?? '').trim().slice(0, 160);
-      if (!id || !title) return null;
-      const ingredients = Array.isArray(entry?.ingredients)
-        ? entry.ingredients
-            .map((ing) => String(ing ?? '').trim().slice(0, 120))
-            .filter(Boolean)
-            .slice(0, 30)
-        : [];
-      const instructions = Array.isArray(entry?.instructions)
-        ? entry.instructions
-            .map((step) => String(step ?? '').trim().slice(0, 500))
-            .filter(Boolean)
-            .slice(0, 30)
-        : [];
-      return {
-        id,
-        title,
-        prepTime: String(entry?.prepTime ?? 'See instructions').trim().slice(0, 40),
-        cuisine: entry?.cuisine ? String(entry.cuisine).trim().slice(0, 48) : undefined,
-        category: entry?.category ? String(entry.category).trim().slice(0, 48) : undefined,
-        ingredients,
-        instructions,
-        source: entry?.source ? String(entry.source).trim().slice(0, 32) : undefined,
-        sourceUrl: entry?.sourceUrl ? String(entry.sourceUrl).trim().slice(0, 500) : undefined,
-        imageUrl: entry?.imageUrl ? String(entry.imageUrl).trim().slice(0, 500) : undefined,
-      };
-    })
-    .filter(Boolean)
-    .slice(0, 80);
-}
-
 function sanitizeConsumptionDuration(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return null;
@@ -528,7 +492,7 @@ export async function handlePutState(req, res) {
   if (!requireHouseholdSession(auth, res)) return;
 
   const householdId = getScopedHouseholdId(auth);
-  const { items, settings, enabledModules, savedRecipeIds, recipeLibrary, onboarding, restockHistory } =
+  const { items, settings, enabledModules, savedRecipeIds, onboarding, restockHistory } =
     req.body ?? {};
   const partial = {};
 
@@ -553,13 +517,6 @@ export async function handlePutState(req, res) {
       return;
     }
     partial.savedRecipeIds = savedRecipeIds;
-  }
-  if (recipeLibrary !== undefined) {
-    if (!Array.isArray(recipeLibrary)) {
-      res.status(400).json({ error: 'recipeLibrary must be an array' });
-      return;
-    }
-    partial.recipeLibrary = sanitizeRecipeLibrary(recipeLibrary);
   }
   if (onboarding !== undefined) partial.onboarding = onboarding;
   if (restockHistory !== undefined) {
