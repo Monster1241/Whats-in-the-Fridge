@@ -1,12 +1,16 @@
 import {
   BABY_CATEGORY,
+  BABY_CATEGORY_OPTIONS,
   defaultCategoryForItemType,
   FOOD_CATEGORY_OPTIONS,
   getCategoriesForItemType,
+  HOUSEHOLD_CATEGORY_OPTIONS,
   inferItemTypeFromCategory,
+  isOnShoppingList,
   ITEM_TYPE,
   LEGACY_BABY_CATEGORY_TISSUES,
   LEGACY_BABY_CATEGORY_WIPES,
+  normalizeInventoryStatus,
   STATUS,
 } from './constants.js';
 import { normalizePreferredStore } from './storeOptions.js';
@@ -42,11 +46,17 @@ export function matchesItemId(item, id) {
   return getItemId(item) === needle;
 }
 
+/** One row per household per normalized name + item type. */
+export function inventoryItemKey(item) {
+  return `${normalizeName(item?.name)}|${item?.itemType ?? ITEM_TYPE.FOOD}`;
+}
+
 /**
  * @param {Array<Record<string, unknown>>} items
  * @param {Record<string, unknown>|string} ref Item row or display name
+ * @param {string} [itemType] When ref is a string, scope duplicate lookup to this type
  */
-export function findInventoryItem(items, ref) {
+export function findInventoryItem(items, ref, itemType) {
   if (!ref) return null;
   const list = Array.isArray(items) ? items : [];
 
@@ -56,40 +66,116 @@ export function findInventoryItem(items, ref) {
       const byId = list.find((entry) => matchesItemId(entry, id));
       if (byId) return byId;
     }
+    itemType = ref.itemType ?? itemType;
   }
 
   const needle = normalizeName(typeof ref === 'string' ? ref : ref.name);
   if (!needle) return null;
-  const itemType = typeof ref === 'object' ? ref.itemType : undefined;
+  const resolvedType = itemType ?? (typeof ref === 'object' ? ref.itemType : undefined);
 
-  return (
-    list.find(
-      (entry) =>
-        normalizeName(entry.name) === needle &&
-        (!itemType || entry.itemType === itemType),
-    ) ?? null
-  );
+  if (resolvedType) {
+    return (
+      list.find(
+        (entry) =>
+          normalizeName(entry.name) === needle && entry.itemType === resolvedType,
+      ) ?? null
+    );
+  }
+
+  return list.find((entry) => normalizeName(entry.name) === needle) ?? null;
 }
 
-export function migrateItem(item) {
-  let itemType = ITEM_TYPE.FOOD;
-  if (item.itemType === ITEM_TYPE.HOUSEHOLD) itemType = ITEM_TYPE.HOUSEHOLD;
-  else if (item.itemType === ITEM_TYPE.BABY) itemType = ITEM_TYPE.BABY;
-  else if (!item.itemType) {
-    itemType = inferItemTypeFromCategory(item.category);
+function resolveLegacyCategory(category) {
+  if (category === LEGACY_BABY_CATEGORY_TISSUES) return BABY_CATEGORY.ESSENTIALS;
+  if (category === LEGACY_BABY_CATEGORY_WIPES) return BABY_CATEGORY.FOOD;
+  return category;
+}
+
+function resolveItemTypeAndCategory(item) {
+  const category = resolveLegacyCategory(item.category);
+
+  let itemType;
+  if (FOOD_CATEGORY_OPTIONS.includes(category)) {
+    itemType = ITEM_TYPE.FOOD;
+  } else if (HOUSEHOLD_CATEGORY_OPTIONS.includes(category)) {
+    itemType = ITEM_TYPE.HOUSEHOLD;
+  } else if (BABY_CATEGORY_OPTIONS.includes(category)) {
+    itemType = ITEM_TYPE.BABY;
+  } else if (item.itemType === ITEM_TYPE.HOUSEHOLD) {
+    itemType = ITEM_TYPE.HOUSEHOLD;
+  } else if (item.itemType === ITEM_TYPE.BABY) {
+    itemType = ITEM_TYPE.BABY;
+  } else if (item.itemType === ITEM_TYPE.FOOD) {
+    itemType = ITEM_TYPE.FOOD;
+  } else {
+    itemType = inferItemTypeFromCategory(category);
   }
-  let category = item.category;
-  if (category === LEGACY_BABY_CATEGORY_TISSUES) {
-    category = BABY_CATEGORY.ESSENTIALS;
-  }
-  if (category === LEGACY_BABY_CATEGORY_WIPES) {
-    category = BABY_CATEGORY.FOOD;
-  }
+
   const categoryOptions = getCategoriesForItemType(itemType);
   const resolvedCategory = categoryOptions.includes(category)
     ? category
     : defaultCategoryForItemType(itemType);
-  const status = item.status === STATUS.OUT ? STATUS.OUT : STATUS.FRESH;
+
+  return { itemType, category: resolvedCategory };
+}
+
+function hasProperCase(name) {
+  return /[A-Z]/.test(String(name || ''));
+}
+
+function preferDisplayName(a, b) {
+  if (hasProperCase(a.name) && !hasProperCase(b.name)) return a.name;
+  if (hasProperCase(b.name) && !hasProperCase(a.name)) return b.name;
+  return String(a.name || '').length >= String(b.name || '').length ? a.name : b.name;
+}
+
+function pickNewerStocked(a, b) {
+  const ta = new Date(a.stockedAt ?? a.createdAt ?? 0).getTime();
+  const tb = new Date(b.stockedAt ?? b.createdAt ?? 0).getTime();
+  return tb > ta ? b : a;
+}
+
+function mergeDuplicateItems(a, b) {
+  const status =
+    isOnShoppingList(a) || isOnShoppingList(b) ? STATUS.OUT : STATUS.FRESH;
+  const newer = pickNewerStocked(a, b);
+  const id = getItemId(a) || getItemId(b);
+
+  return {
+    ...newer,
+    ...(id ? { id } : {}),
+    name: preferDisplayName(a, b),
+    status,
+    itemType: a.itemType,
+    category: a.category,
+    expiryDate: a.expiryDate || b.expiryDate || null,
+    preferredStore: a.preferredStore ?? b.preferredStore ?? null,
+    consumptionDuration:
+      (typeof a.consumptionDuration === 'number' && a.consumptionDuration > 0
+        ? a.consumptionDuration
+        : null) ??
+      (typeof b.consumptionDuration === 'number' && b.consumptionDuration > 0
+        ? b.consumptionDuration
+        : null),
+    stockedAt: newer.stockedAt ?? newer.createdAt,
+    createdAt: newer.stockedAt ?? newer.createdAt,
+  };
+}
+
+export function dedupeInventoryItems(items) {
+  const byKey = new Map();
+  for (const item of items ?? []) {
+    if (!normalizeName(item?.name)) continue;
+    const key = inventoryItemKey(item);
+    const prev = byKey.get(key);
+    byKey.set(key, prev ? mergeDuplicateItems(prev, item) : item);
+  }
+  return [...byKey.values()];
+}
+
+export function migrateItem(item) {
+  const { itemType, category: resolvedCategory } = resolveItemTypeAndCategory(item);
+  const status = normalizeInventoryStatus(item.status);
   const consumptionDuration =
     typeof item.consumptionDuration === 'number' && item.consumptionDuration > 0
       ? item.consumptionDuration
@@ -113,5 +199,22 @@ export function migrateItem(item) {
 }
 
 export function migrateItems(items) {
-  return Array.isArray(items) ? items.map(migrateItem) : [];
+  if (!Array.isArray(items)) return [];
+  const migrated = items.map(migrateItem).filter((item) => normalizeName(item.name));
+  return dedupeInventoryItems(migrated);
+}
+
+function inventorySnapshot(items) {
+  return (items ?? [])
+    .map(
+      (item) =>
+        `${inventoryItemKey(item)}:${normalizeInventoryStatus(item.status)}:${item.category ?? ''}`,
+    )
+    .sort()
+    .join('\n');
+}
+
+/** True when migrate/dedupe would change what is stored on the server. */
+export function inventoryChangedByMigration(raw, migrated) {
+  return inventorySnapshot(raw) !== inventorySnapshot(migrated);
 }

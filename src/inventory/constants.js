@@ -133,6 +133,29 @@ export const STATUS = {
   OUT: 'out',
 };
 
+/** Canonical stored status — only `out` (shopping) or `fresh` (in inventory). */
+export function normalizeInventoryStatus(status) {
+  if (status == null || status === '') return STATUS.FRESH;
+  const value = String(status).trim().toLowerCase();
+  if (
+    value === STATUS.OUT ||
+    value === 'need to buy' ||
+    value === 'need_to_buy' ||
+    value === 'shopping'
+  ) {
+    return STATUS.OUT;
+  }
+  return STATUS.FRESH;
+}
+
+export function isOnShoppingList(item) {
+  return normalizeInventoryStatus(item?.status) === STATUS.OUT;
+}
+
+export function isInStockInventory(item) {
+  return !isOnShoppingList(item);
+}
+
 export function getCategoriesForItemType(itemType) {
   if (itemType === ITEM_TYPE.HOUSEHOLD) return HOUSEHOLD_CATEGORY_OPTIONS;
   if (itemType === ITEM_TYPE.BABY) return BABY_CATEGORY_OPTIONS;

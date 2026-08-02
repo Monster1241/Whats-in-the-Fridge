@@ -420,8 +420,13 @@ function sanitizeStockedAt(value) {
 
 function sanitizeInventoryItems(items) {
   const now = new Date().toISOString();
-  return items.map((item) => {
+  const normalized = items.map((item) => {
     const stockedAt = sanitizeStockedAt(item?.stockedAt ?? item?.createdAt) ?? now;
+    const rawStatus = item?.status;
+    const status =
+      rawStatus != null && String(rawStatus).trim().toLowerCase() === 'out'
+        ? 'out'
+        : 'fresh';
     return {
       id: item?.id,
       name: item?.name,
@@ -432,7 +437,7 @@ function sanitizeInventoryItems(items) {
             ? 'Baby'
             : 'Food',
       category: item?.category,
-      status: item?.status,
+      status,
       expiryDate: item?.expiryDate ?? null,
       preferredStore:
         item?.preferredStore === null || item?.preferredStore === undefined
@@ -443,6 +448,31 @@ function sanitizeInventoryItems(items) {
       createdAt: stockedAt,
     };
   });
+
+  const byKey = new Map();
+  for (const item of normalized) {
+    const name = String(item.name || '')
+      .trim()
+      .toLowerCase()
+      .replace(/['']/g, '')
+      .replace(/\s+/g, ' ');
+    if (!name) continue;
+    const key = `${name}|${item.itemType}`;
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, item);
+      continue;
+    }
+    byKey.set(key, {
+      ...prev,
+      ...item,
+      id: prev.id || item.id,
+      status: prev.status === 'out' || item.status === 'out' ? 'out' : 'fresh',
+      expiryDate: prev.expiryDate || item.expiryDate || null,
+      preferredStore: prev.preferredStore ?? item.preferredStore ?? null,
+    });
+  }
+  return [...byKey.values()];
 }
 
 export async function handleGetState(req, res) {

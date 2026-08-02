@@ -25,6 +25,8 @@ import {
   getCategoriesForItemType,
   getCategoryMeta,
   FOOD_CATEGORY,
+  isInStockInventory,
+  isOnShoppingList,
   ITEM_TYPE,
   STATUS,
 } from './inventory/constants.js';
@@ -589,7 +591,7 @@ function daysUntilExpiry(iso) {
 }
 
 function isExpiringSoon(item) {
-  if (!item.expiryDate || item.status === STATUS.OUT) return false;
+  if (!item.expiryDate || isOnShoppingList(item)) return false;
   return daysUntilExpiry(item.expiryDate) <= EXPIRING_SOON_DAYS;
 }
 
@@ -602,7 +604,7 @@ function groupByCategory(items, category, itemType) {
     (item) =>
       item.category === category &&
       item.itemType === itemType &&
-      item.status !== STATUS.OUT,
+      isInStockInventory(item),
   );
   const expiring = inCategory.filter(isExpiringSoon).sort(sortByUrgencyThenName);
   const plentiful = inCategory
@@ -647,13 +649,13 @@ function findInventoryMatch(ingredientName, items) {
 
 function findStockedFoodMatch(ingredientName, items) {
   const exact = findInventoryMatch(ingredientName, items);
-  if (exact && exact.status !== STATUS.OUT) return exact;
+  if (exact && isInStockInventory(exact)) return exact;
 
   const needle = normalizeName(ingredientName);
   if (!needle) return null;
 
   return items.find((item) => {
-    if (item.itemType !== ITEM_TYPE.FOOD || item.status === STATUS.OUT) return false;
+    if (item.itemType !== ITEM_TYPE.FOOD || isOnShoppingList(item)) return false;
     const itemName = normalizeName(item.name);
     return itemName.includes(needle) || needle.includes(itemName);
   });
@@ -679,7 +681,7 @@ function groupShoppingList(items, enabledModules) {
   return items
     .filter(
       (item) =>
-        item.status === STATUS.OUT && isItemTypeEnabled(enabledModules, item.itemType),
+        isOnShoppingList(item) && isItemTypeEnabled(enabledModules, item.itemType),
     )
     .sort((a, b) => {
       const cat = a.category.localeCompare(b.category);
@@ -694,7 +696,7 @@ function analyzeRecipe(recipe, items) {
 
   for (const ingredient of recipe.ingredients) {
     const match = findInventoryMatch(ingredient, items);
-    if (!match || match.status === STATUS.OUT) {
+    if (!match || isOnShoppingList(match)) {
       need.push(ingredient);
     } else {
       have.push({ name: ingredient, status: getDisplayStatus(match) });
@@ -742,7 +744,7 @@ function StatusBadge({ status, onOpenPicker }) {
 }
 
 function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
-  const [needToBuy, setNeedToBuy] = useState(item.status === STATUS.OUT);
+  const [needToBuy, setNeedToBuy] = useState(isOnShoppingList(item));
   const enabledTypes = getEnabledItemTypes(enabledModules);
   const initialType = enabledTypes.includes(item.itemType)
     ? item.itemType
@@ -994,7 +996,7 @@ function InventoryItemRow({
             {catMeta.emoji} {catMeta.label}
           </p>
         )}
-        {urgencyLabel && item.status !== STATUS.OUT && (
+        {urgencyLabel && isInStockInventory(item) && (
           <p
             className={`mt-0.5 flex items-center gap-1 text-xs ${
               isExpiringSoon(item) ? 'text-amber-700' : 'text-slate-600'
@@ -1409,6 +1411,7 @@ function InventoryView({
   const pingInFlightRef = useRef(false);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
+  const [duplicateNotice, setDuplicateNotice] = useState(null);
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
   const shoppingList = useMemo(
@@ -1435,6 +1438,12 @@ function InventoryView({
     if (isShoppingPage) return null;
     return groupByCategory(items, activeView, scopeItemType);
   }, [items, activeView, scopeItemType, isShoppingPage]);
+
+  useEffect(() => {
+    if (!duplicateNotice) return undefined;
+    const timer = setTimeout(() => setDuplicateNotice(null), 6000);
+    return () => clearTimeout(timer);
+  }, [duplicateNotice]);
 
   useEffect(() => {
     const resolved = resolveModuleKey(enabledModules, inventoryScope);
@@ -1550,9 +1559,17 @@ function InventoryView({
     e.preventDefault();
     const name = draft.trim();
     if (!name || name === BARCODE_LOOKUP_LOADING_TEXT) return;
-    const existing = items.find((i) => normalizeName(i.name) === normalizeName(name));
+    const existing = findInventoryItem(items, name, addItemType);
     if (existing) {
-      resetAddForm();
+      if (isOnShoppingList(existing)) {
+        setDuplicateNotice(
+          `"${existing.name}" is already on your shopping list. Open the Shopping tab to mark it bought.`,
+        );
+      } else {
+        setDuplicateNotice(
+          `"${existing.name}" is already in your ${existing.category} inventory.`,
+        );
+      }
       return;
     }
     const consumption = buildConsumptionFields({
@@ -1586,9 +1603,17 @@ function InventoryView({
     const name = shopDraft.trim();
     if (!name) return;
     const needle = normalizeName(name);
+    let duplicateAlreadyListed = false;
     updateItems((prev) => {
-      const existingIdx = prev.findIndex((i) => normalizeName(i.name) === needle);
+      const existingIdx = prev.findIndex(
+        (i) => normalizeName(i.name) === needle && i.itemType === shopItemType,
+      );
       if (existingIdx >= 0) {
+        const existing = prev[existingIdx];
+        if (isOnShoppingList(existing)) {
+          duplicateAlreadyListed = true;
+          return prev;
+        }
         const next = [...prev];
         next[existingIdx] = {
           ...next[existingIdx],
@@ -1616,6 +1641,9 @@ function InventoryView({
         },
       ];
     });
+    if (duplicateAlreadyListed) {
+      setDuplicateNotice(`"${name}" is already on your shopping list.`);
+    }
     setShopDraft('');
   };
 
@@ -1862,6 +1890,15 @@ function InventoryView({
         onDelete={handleSearchDelete}
         onEdit={setEditingItem}
       />
+
+      {duplicateNotice && (
+        <p
+          role="status"
+          className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium leading-snug text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          {duplicateNotice}
+        </p>
+      )}
 
       {!isShoppingPage && (
         <>
@@ -2333,7 +2370,7 @@ function DealsView({ items, updateItems }) {
     () =>
       new Set(
         items
-          .filter((item) => item.status === STATUS.OUT)
+          .filter((item) => isOnShoppingList(item))
           .map((item) => normalizeName(item.name)),
       ),
     [items],
@@ -3575,7 +3612,7 @@ export default function App() {
   } = useAppData(appReady);
 
   const navTabs = useMemo(() => {
-    const shoppingCount = items.filter((item) => item.status === STATUS.OUT).length;
+    const shoppingCount = items.filter((item) => isOnShoppingList(item)).length;
     const tabs = [
       { id: 'fridge', label: 'Fridge', icon: Refrigerator, accent: 'emerald' },
       {

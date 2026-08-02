@@ -1,4 +1,4 @@
-import { STATUS } from './constants.js';
+import { isOnShoppingList } from './constants.js';
 import { isItemTypeEnabled } from './modules.js';
 
 /** Items expiring within this window appear on the Kitchen Status banner. */
@@ -20,7 +20,7 @@ export function hoursUntilExpiryEnd(iso) {
  * @param {number} [expiringSoonDays]
  */
 export function isKitchenStatusItem(item, expiringSoonDays = 3) {
-  if (!item || item.status === STATUS.OUT || !item.expiryDate) return false;
+  if (!item || isOnShoppingList(item) || !item.expiryDate) return false;
 
   if (hoursUntilExpiryEnd(item.expiryDate) <= KITCHEN_STATUS_MAX_HOURS) {
     return true;

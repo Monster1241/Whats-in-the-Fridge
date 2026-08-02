@@ -1,4 +1,4 @@
-import { STATUS } from './constants.js';
+import { isOnShoppingList } from './constants.js';
 import { isItemTypeEnabled } from './modules.js';
 import { normalizeName } from './itemUtils.js';
 
@@ -50,7 +50,7 @@ export function recordRestockEvent(history, item) {
 export function getFrequentlyRestocked(history, items, enabledModules, limit = DEFAULT_SUGGESTION_LIMIT) {
   const onShoppingList = new Set(
     (items ?? [])
-      .filter((item) => item.status === STATUS.OUT)
+      .filter((item) => isOnShoppingList(item))
       .map((item) => restockHistoryKey(item)),
   );
 

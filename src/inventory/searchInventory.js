@@ -1,4 +1,4 @@
-import { STATUS } from './constants.js';
+import { isOnShoppingList } from './constants.js';
 import { isItemTypeEnabled } from './modules.js';
 import { getItemId, normalizeName } from './itemUtils.js';
 
@@ -35,8 +35,8 @@ export function searchInventoryItems(items, query, enabledModules, limit = 20) {
   return scored
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
-      if (a.item.status === STATUS.OUT && b.item.status !== STATUS.OUT) return 1;
-      if (b.item.status === STATUS.OUT && a.item.status !== STATUS.OUT) return -1;
+      if (isOnShoppingList(a.item) && !isOnShoppingList(b.item)) return 1;
+      if (isOnShoppingList(b.item) && !isOnShoppingList(a.item)) return -1;
       return a.item.name.localeCompare(b.item.name);
     })
     .slice(0, limit)

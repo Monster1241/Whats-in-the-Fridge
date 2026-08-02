@@ -8,7 +8,7 @@ import {
   X,
 } from 'lucide-react';
 import { calculateItemStatus } from '../inventory/consumption.js';
-import { getCategoryMeta, STATUS } from '../inventory/constants.js';
+import { getCategoryMeta, isOnShoppingList, STATUS } from '../inventory/constants.js';
 import { inventorySearchKey, searchInventoryItems } from '../inventory/searchInventory.js';
 
 const STATUS_LABELS = {
@@ -92,7 +92,7 @@ export function InventorySearch({
               {results.map((item) => {
                 const catMeta = getCategoryMeta(item.category, item.itemType);
                 const chip = getStatusChip(item);
-                const onShoppingList = item.status === STATUS.OUT;
+                const onShoppingList = isOnShoppingList(item);
 
                 return (
                   <li

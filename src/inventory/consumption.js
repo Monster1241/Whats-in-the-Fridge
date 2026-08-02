@@ -4,6 +4,7 @@ import {
   HOUSEHOLD_CATEGORY,
   ITEM_TYPE,
   STATUS,
+  isOnShoppingList,
 } from './constants.js';
 import { isItemTypeEnabled } from './modules.js';
 
@@ -118,7 +119,7 @@ function daysUntilExpiry(iso) {
 }
 
 function isExpiryUrgent(item, expiringSoonDays = EXPIRING_SOON_DAYS) {
-  if (!item?.expiryDate || item.status === STATUS.OUT) return false;
+  if (!item?.expiryDate || isOnShoppingList(item)) return false;
   return daysUntilExpiry(item.expiryDate) <= expiringSoonDays;
 }
 
@@ -138,7 +139,7 @@ export function getConsumptionProgress(item) {
  * @param {{ status: string, consumptionDuration?: number, stockedAt?: string, createdAt?: string, name?: string, itemType?: string, category?: string }} item
  */
 export function isAlmostFinished(item) {
-  if (!item || item.status === STATUS.OUT) return false;
+  if (!item || isOnShoppingList(item)) return false;
   return getConsumptionProgress(item) >= CONSUMPTION_ALERT_THRESHOLD;
 }
 
@@ -148,7 +149,7 @@ export function isAlmostFinished(item) {
  * @returns {string}
  */
 export function calculateItemStatus(item) {
-  if (!item || item.status === STATUS.OUT) return STATUS.OUT;
+  if (!item || isOnShoppingList(item)) return STATUS.OUT;
   if (isExpiryUrgent(item)) return STATUS.EXPIRING;
   if (isAlmostFinished(item)) return STATUS.ALMOST_FINISHED;
   return STATUS.FRESH;
@@ -188,7 +189,7 @@ export function filterPredictedLowItems(items, enabledModules) {
     .filter(
       (item) =>
         isItemTypeEnabled(enabledModules, item.itemType) &&
-        item.status !== STATUS.OUT &&
+        !isOnShoppingList(item) &&
         isAlmostFinished(item),
     )
     .sort((a, b) => getConsumptionProgress(b) - getConsumptionProgress(a));

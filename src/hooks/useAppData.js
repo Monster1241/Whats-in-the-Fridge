@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchAppState, saveAppState } from '../api.js';
-import { migrateItems } from '../inventory/itemUtils.js';
+import { migrateItems, inventoryChangedByMigration } from '../inventory/itemUtils.js';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules } from '../inventory/modules.js';
 import { recordRestockEvent } from '../inventory/restockHistory.js';
 
@@ -44,7 +44,9 @@ export function useAppData(enabled) {
 
   const applyState = useCallback((state) => {
     hasUnsyncedEditsRef.current = false;
-    setItems(migrateItems(state.items));
+    const migrated = migrateItems(state.items);
+    const needsPersist = inventoryChangedByMigration(state.items, migrated);
+    setItems(migrated);
     setSettings({ ...DEFAULT_SETTINGS, ...state.settings });
     setEnabledModules(normalizeEnabledModules(state.enabledModules));
     setSavedIds(Array.isArray(state.savedRecipeIds) ? state.savedRecipeIds : []);
@@ -53,6 +55,7 @@ export function useAppData(enabled) {
     );
     setRestockHistory(Array.isArray(state.restockHistory) ? state.restockHistory : []);
     setHouseholdCode(state.householdCode || state.inviteCode || '');
+    skipSaveRef.current = !needsPersist;
   }, []);
 
   const reload = useCallback(async () => {
