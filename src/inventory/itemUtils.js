@@ -28,6 +28,20 @@ export function normalizeName(value) {
     .replace(/\s+/g, ' ');
 }
 
+/** Stable id for inventory rows (client uuid or MongoDB _id). */
+export function getItemId(item) {
+  if (!item) return '';
+  const raw = item.id ?? item._id;
+  if (raw == null || raw === '') return '';
+  return typeof raw === 'string' ? raw : String(raw);
+}
+
+export function matchesItemId(item, id) {
+  const needle = String(id ?? '').trim();
+  if (!needle) return false;
+  return getItemId(item) === needle;
+}
+
 export function migrateItem(item) {
   let itemType = ITEM_TYPE.FOOD;
   if (item.itemType === ITEM_TYPE.HOUSEHOLD) itemType = ITEM_TYPE.HOUSEHOLD;
@@ -53,8 +67,11 @@ export function migrateItem(item) {
       : getDefaultConsumptionDuration(item.name ?? '', itemType, resolvedCategory);
   const stockedAt = backfillStockedAt(item, consumptionDuration);
 
+  const id = getItemId(item);
+
   return {
     ...item,
+    ...(id ? { id } : {}),
     itemType,
     category: resolvedCategory,
     status,

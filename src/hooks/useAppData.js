@@ -25,11 +25,14 @@ export function useAppData(enabled) {
   const skipSaveRef = useRef(true);
   const saveTimerRef = useRef(null);
   const saveEpochRef = useRef(0);
+  const saveInFlightRef = useRef(false);
+  const hasUnsyncedEditsRef = useRef(false);
   const latestRef = useRef({ items, settings, savedIds, onboarding, restockHistory });
 
   latestRef.current = { items, settings, savedIds, onboarding, restockHistory };
 
   const applyState = useCallback((state) => {
+    hasUnsyncedEditsRef.current = false;
     setItems(migrateItems(state.items));
     setSettings({ ...DEFAULT_SETTINGS, ...state.settings });
     setEnabledModules(normalizeEnabledModules(state.enabledModules));
@@ -94,6 +97,9 @@ export function useAppData(enabled) {
   useEffect(() => {
     if (!enabled) return undefined;
     const onFocus = () => {
+      if (hasUnsyncedEditsRef.current || saveTimerRef.current || saveInFlightRef.current) {
+        return;
+      }
       reload().catch(() => {});
     };
     window.addEventListener('focus', onFocus);
@@ -108,9 +114,11 @@ export function useAppData(enabled) {
       return undefined;
     }
 
+    hasUnsyncedEditsRef.current = true;
     const epoch = ++saveEpochRef.current;
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
+      saveTimerRef.current = null;
       const {
         items: nextItems,
         settings: nextSettings,
@@ -118,6 +126,7 @@ export function useAppData(enabled) {
         onboarding: nextOnboarding,
         restockHistory: nextRestockHistory,
       } = latestRef.current;
+      saveInFlightRef.current = true;
       try {
         await saveAppState({
           items: nextItems,
@@ -127,14 +136,22 @@ export function useAppData(enabled) {
           restockHistory: nextRestockHistory,
         });
         if (epoch !== saveEpochRef.current) return;
+        hasUnsyncedEditsRef.current = false;
         setSaveError(null);
       } catch (err) {
         if (epoch !== saveEpochRef.current) return;
         setSaveError(err.message || 'Failed to save to MongoDB.');
+      } finally {
+        if (epoch === saveEpochRef.current) {
+          saveInFlightRef.current = false;
+        }
       }
     }, SAVE_DELAY_MS);
 
-    return () => clearTimeout(saveTimerRef.current);
+    return () => {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    };
   }, [items, settings, savedIds, onboarding, restockHistory, loading, error, enabled]);
 
   useEffect(() => {
