@@ -3020,8 +3020,8 @@ export default function App() {
 
   return (
     <PushNotificationProvider enabled={auth.canUseApp}>
-    <div className="app-shell mx-auto flex min-h-dvh max-w-lg flex-col">
-      <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
+    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
+      <main className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
         <div key={activeTab} className={flowEnterClass(tabFlowDir, 'animate-page')}>
         {saveError && (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300">

@@ -2,27 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
-  width: 100%;
-  overflow-x: hidden;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-}
-
 html,
 body,
 #root {
   height: 100%;
-  min-height: 100%;
-  min-height: 100dvh;
 }
 
 body {
   margin: 0;
-  width: 100%;
-  overflow-x: hidden;
-  overscroll-behavior-x: none;
-  touch-action: manipulation;
   background-color: #ffffff;
   color: #0f172a;
   font-family:
@@ -37,13 +24,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* iOS Safari auto-zooms focused fields below 16px */
-input,
-textarea,
-select {
-  font-size: 16px;
-}
-
 .dark body {
   background-color: #020617;
   color: #f1f5f9;
@@ -51,7 +31,7 @@ select {
 
 @layer components {
   .app-shell {
-    @apply w-full max-w-lg overflow-x-hidden bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100;
   }
 
   .nav-bar {
@@ -71,7 +51,7 @@ select {
   }
 
   .input-field {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 shadow-sm shadow-slate-900/5 transition-[border-color,box-shadow,transform] duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:shadow-none;
+    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/5 transition-[border-color,box-shadow,transform] duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:shadow-none;
   }
 
   .btn-auth {
@@ -1390,7 +1370,6 @@ select {
 .auth-screen {
   position: relative;
   min-height: 100%;
-  min-height: 100dvh;
   overflow-x: hidden;
   background: linear-gradient(165deg, #f0fdf4 0%, #ecfdf5 28%, #fafafa 62%, #f8fafc 100%);
 }
