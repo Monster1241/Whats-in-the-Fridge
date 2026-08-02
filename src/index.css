@@ -12,6 +12,7 @@ html {
 html,
 body,
 #root {
+  height: 100%;
   min-height: 100%;
   min-height: 100dvh;
 }
@@ -1389,6 +1390,7 @@ select {
 .auth-screen {
   position: relative;
   min-height: 100%;
+  min-height: 100dvh;
   overflow-x: hidden;
   background: linear-gradient(165deg, #f0fdf4 0%, #ecfdf5 28%, #fafafa 62%, #f8fafc 100%);
 }
