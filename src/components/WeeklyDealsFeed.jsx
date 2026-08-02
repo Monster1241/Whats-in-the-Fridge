@@ -119,6 +119,67 @@ const CATALOGUE_ACCENT = {
 const DEAL_BADGE_FALLBACK =
   'bg-slate-700 text-white ring-slate-800 dark:bg-slate-600 dark:ring-slate-500';
 
+const FILTER_CHIP_BASE =
+  'inline-flex min-h-[2.5rem] shrink-0 items-center justify-center rounded-full px-3.5 text-xs font-bold ring-1 transition active:scale-[0.98] sm:px-4';
+
+function DealsFilterPanel({ storeFilter, onStoreChange, dealTypeFilter, onDealTypeChange }) {
+  return (
+    <div className="mb-4 space-y-4 rounded-2xl border border-amber-200/80 bg-white/85 p-3.5 shadow-sm dark:border-amber-900/50 dark:bg-slate-900/70">
+      <div className="space-y-2.5">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/70 dark:text-amber-200/80">
+          Store
+        </p>
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter deals by store">
+          {STORE_FILTERS.map((filter) => {
+            const active = storeFilter === filter.id;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onStoreChange(filter.id)}
+                className={`${FILTER_CHIP_BASE} ${active ? filter.active : filter.idle}`}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="h-px bg-amber-200/70 dark:bg-amber-900/40" aria-hidden />
+
+      <div className="space-y-2.5">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/70 dark:text-amber-200/80">
+          Deal type
+        </p>
+        <div
+          className="flex flex-wrap gap-2"
+          role="tablist"
+          aria-label="Filter deals by promotion type"
+        >
+          {DEAL_TYPE_SUB_FILTERS.map((filter) => {
+            const active = dealTypeFilter === filter.id;
+            return (
+              <button
+                key={filter.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => onDealTypeChange(filter.id)}
+                className={`${FILTER_CHIP_BASE} ${active ? filter.active : filter.idle}`}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function formatPrice(value) {
   if (value == null) return null;
   return `$${Number(value).toFixed(2)}`;
@@ -686,53 +747,12 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
               />
             </label>
 
-            <div
-              className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1"
-              role="tablist"
-              aria-label="Filter deals by store"
-            >
-              {STORE_FILTERS.map((filter) => {
-                const active = storeFilter === filter.id;
-                return (
-                  <button
-                    key={filter.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setStoreFilter(filter.id)}
-                    className={`shrink-0 rounded-full px-4 py-2.5 text-xs font-bold ring-1 transition active:scale-[0.98] ${
-                      active ? filter.active : filter.idle
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div
-              className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1"
-              role="tablist"
-              aria-label="Filter deals by promotion type"
-            >
-              {DEAL_TYPE_SUB_FILTERS.map((filter) => {
-                const active = dealTypeFilter === filter.id;
-                return (
-                  <button
-                    key={filter.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setDealTypeFilter(filter.id)}
-                    className={`shrink-0 rounded-lg px-3 py-2 text-[11px] font-bold ring-1 transition active:scale-[0.98] ${
-                      active ? filter.active : filter.idle
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                );
-              })}
-            </div>
+            <DealsFilterPanel
+              storeFilter={storeFilter}
+              onStoreChange={setStoreFilter}
+              dealTypeFilter={dealTypeFilter}
+              onDealTypeChange={setDealTypeFilter}
+            />
 
             {loading && (
               <div className="grid grid-cols-2 gap-3">
