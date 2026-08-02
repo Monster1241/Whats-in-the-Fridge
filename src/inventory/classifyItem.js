@@ -1,13 +1,28 @@
 import { FOOD_CATEGORY, ITEM_TYPE } from './constants.js';
+import { resolveSubCategory } from './subcategories.js';
 
 /** User-facing storage hints mapped to app food categories (Fresh = fridge, Ambient = pantry/spices). */
 export const CLASSIFICATION_HINT = {
   FRIDGE: 'fridge',
   SPICES: 'spices',
   PANTRY: 'pantry',
+  FREEZER: 'freezer',
 };
 
 const CLASSIFICATION_RULES = [
+  {
+    hint: CLASSIFICATION_HINT.FREEZER,
+    category: FOOD_CATEGORY.FREEZER,
+    keywords: [
+      'frozen',
+      'ice cream',
+      'gelato',
+      'sorbet',
+      'freezer',
+      'popsicle',
+      'icy pole',
+    ],
+  },
   {
     hint: CLASSIFICATION_HINT.FRIDGE,
     category: FOOD_CATEGORY.FRESH,
@@ -16,6 +31,7 @@ const CLASSIFICATION_RULES = [
       'butter',
       'cheese',
       'yogurt',
+      'yoghurt',
       'chicken',
       'meat',
       'beef',
@@ -23,6 +39,12 @@ const CLASSIFICATION_RULES = [
       'dip',
       'tofu',
       'bacon',
+      'salmon',
+      'prawn',
+      'egg',
+      'lettuce',
+      'tomato',
+      'broccoli',
     ],
   },
   {
@@ -38,7 +60,10 @@ const CLASSIFICATION_RULES = [
       'turmeric',
       'spice',
       'chili',
+      'chilli',
       'cinnamon',
+      'tajin',
+      'masala',
     ],
   },
   {
@@ -57,6 +82,8 @@ const CLASSIFICATION_RULES = [
       'oats',
       'biscuit',
       'tuna',
+      'ramen',
+      'noodle',
     ],
   },
 ];
@@ -74,9 +101,9 @@ function normalizeForMatch(name) {
 }
 
 /**
- * Match item title against fridge / spices / pantry keyword lists.
+ * Match item title against storage keyword lists.
  * @param {string} name
- * @returns {{ category: string, itemType: string, hint: string } | null}
+ * @returns {{ category: string, itemType: string, hint: string, subCategory: string } | null}
  */
 export function classifyItem(name) {
   const normalized = normalizeForMatch(name);
@@ -92,6 +119,7 @@ export function classifyItem(name) {
         category: rule.category,
         itemType: ITEM_TYPE.FOOD,
         hint: rule.hint,
+        subCategory: resolveSubCategory(name, ITEM_TYPE.FOOD, rule.category),
       };
     }
   }
@@ -103,7 +131,7 @@ export function classifyItem(name) {
  * Resolve storage category for intake (manual or barcode), preferring keyword match.
  * @param {string} name
  * @param {{ itemType?: string, category?: string }} [fallback]
- * @returns {{ itemType: string, category: string, classified: boolean, hint?: string }}
+ * @returns {{ itemType: string, category: string, subCategory: string, classified: boolean, hint?: string }}
  */
 export function resolveIntakeCategory(name, fallback = {}) {
   const classified = classifyItem(name);
@@ -111,14 +139,19 @@ export function resolveIntakeCategory(name, fallback = {}) {
     return {
       itemType: classified.itemType,
       category: classified.category,
+      subCategory: classified.subCategory,
       classified: true,
       hint: classified.hint,
     };
   }
 
+  const itemType = fallback.itemType ?? ITEM_TYPE.FOOD;
+  const category = fallback.category ?? FOOD_CATEGORY.FRESH;
+
   return {
-    itemType: fallback.itemType ?? ITEM_TYPE.FOOD,
-    category: fallback.category ?? FOOD_CATEGORY.FRESH,
+    itemType,
+    category,
+    subCategory: resolveSubCategory(name, itemType, category),
     classified: false,
   };
 }

@@ -13,6 +13,7 @@ import {
   normalizeInventoryStatus,
   STATUS,
 } from './constants.js';
+import { getSubcategoriesForCategory, resolveSubCategory, SUBCATEGORY_OTHER } from './subcategories.js';
 import { normalizePreferredStore } from './storeOptions.js';
 import { getDefaultConsumptionDuration } from './consumption.js';
 
@@ -135,19 +136,31 @@ function pickNewerStocked(a, b) {
   return tb > ta ? b : a;
 }
 
+function preferSubCategory(a, b, itemType, category) {
+  const allowed = getSubcategoriesForCategory(itemType, category);
+  const aOk = a.subCategory && allowed.includes(a.subCategory) ? a.subCategory : null;
+  const bOk = b.subCategory && allowed.includes(b.subCategory) ? b.subCategory : null;
+  if (aOk && aOk !== SUBCATEGORY_OTHER) return aOk;
+  if (bOk && bOk !== SUBCATEGORY_OTHER) return bOk;
+  return aOk ?? bOk ?? SUBCATEGORY_OTHER;
+}
+
 function mergeDuplicateItems(a, b) {
   const status =
     isOnShoppingList(a) || isOnShoppingList(b) ? STATUS.OUT : STATUS.FRESH;
   const newer = pickNewerStocked(a, b);
   const id = getItemId(a) || getItemId(b);
+  const itemType = a.itemType;
+  const category = a.category;
 
   return {
     ...newer,
     ...(id ? { id } : {}),
     name: preferDisplayName(a, b),
     status,
-    itemType: a.itemType,
-    category: a.category,
+    itemType,
+    category,
+    subCategory: preferSubCategory(a, b, itemType, category),
     expiryDate: a.expiryDate || b.expiryDate || null,
     preferredStore: a.preferredStore ?? b.preferredStore ?? null,
     consumptionDuration:
@@ -183,12 +196,18 @@ export function migrateItem(item) {
   const stockedAt = backfillStockedAt(item, consumptionDuration);
 
   const id = getItemId(item);
+  const allowedSubs = getSubcategoriesForCategory(itemType, resolvedCategory);
+  const subCategory =
+    item.subCategory && allowedSubs.includes(item.subCategory)
+      ? item.subCategory
+      : resolveSubCategory(item.name ?? '', itemType, resolvedCategory);
 
   return {
     ...item,
     ...(id ? { id } : {}),
     itemType,
     category: resolvedCategory,
+    subCategory,
     status,
     expiryDate: item.expiryDate ?? null,
     preferredStore: normalizePreferredStore(item.preferredStore),
@@ -208,7 +227,7 @@ function inventorySnapshot(items) {
   return (items ?? [])
     .map(
       (item) =>
-        `${inventoryItemKey(item)}:${normalizeInventoryStatus(item.status)}:${item.category ?? ''}`,
+        `${inventoryItemKey(item)}:${normalizeInventoryStatus(item.status)}:${item.category ?? ''}:${item.subCategory ?? ''}`,
     )
     .sort()
     .join('\n');

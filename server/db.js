@@ -618,6 +618,7 @@ export async function replaceInventoryForHousehold(householdId, items) {
           ? 'Baby'
           : 'Food',
     category: item.category,
+    subCategory: item.subCategory ?? null,
     status: item.status,
     expiryDate: item.expiryDate ?? null,
     preferredStore: item.preferredStore ?? null,

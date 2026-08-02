@@ -18,6 +18,7 @@ import { readStoredPostcode } from './inventory/postcodeStorage.js';
 import { InventorySearch } from './components/InventorySearch.jsx';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
+import { SubCategoryToggle } from './components/SubCategoryToggle.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
 import { WeeklyDealsFeed } from './components/WeeklyDealsFeed.jsx';
 import {
@@ -48,6 +49,14 @@ import {
 } from './inventory/modules.js';
 import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
 import { classifyItem } from './inventory/classifyItem.js';
+import {
+  countItemsBySubCategory,
+  getSubcategoriesForCategory,
+  getSubcategoryMeta,
+  groupItemsBySubCategory,
+  resolveSubCategory,
+  SUBCATEGORY_OTHER,
+} from './inventory/subcategories.js';
 import { dealStoreToPreferred, mapDealToInventory } from './inventory/mapDealToInventory.js';
 import { findInventoryItem, getItemId, normalizeName } from './inventory/itemUtils.js';
 import {
@@ -599,18 +608,34 @@ function getDisplayStatus(item) {
   return calculateItemStatus(item);
 }
 
-function groupByCategory(items, category, itemType) {
+function groupByCategory(items, category, itemType, subCategoryFilter = 'all') {
   const inCategory = items.filter(
     (item) =>
       item.category === category &&
       item.itemType === itemType &&
       isInStockInventory(item),
   );
-  const expiring = inCategory.filter(isExpiringSoon).sort(sortByUrgencyThenName);
-  const plentiful = inCategory
-    .filter((item) => !isExpiringSoon(item))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  return { expiring, plentiful };
+  const filterBySub = (list) =>
+    subCategoryFilter === 'all'
+      ? list
+      : list.filter((item) => (item.subCategory || SUBCATEGORY_OTHER) === subCategoryFilter);
+
+  const expiring = filterBySub(
+    inCategory.filter(isExpiringSoon).sort(sortByUrgencyThenName),
+  );
+  const plentiful = filterBySub(
+    inCategory
+      .filter((item) => !isExpiringSoon(item))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  );
+
+  return {
+    expiring,
+    plentiful,
+    expiringGroups: groupItemsBySubCategory(expiring, itemType, category),
+    plentifulGroups: groupItemsBySubCategory(plentiful, itemType, category),
+    subCategoryCounts: countItemsBySubCategory(inCategory, itemType, category),
+  };
 }
 
 function formatExpiryDate(iso) {
@@ -751,6 +776,9 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
     : enabledTypes[0] ?? ITEM_TYPE.FOOD;
   const [itemType, setItemType] = useState(initialType);
   const [category, setCategory] = useState(item.category);
+  const [subCategory, setSubCategory] = useState(
+    item.subCategory ?? resolveSubCategory(item.name, item.itemType, item.category),
+  );
   const [hasExpiry, setHasExpiry] = useState(Boolean(item.expiryDate));
   const [expiryDate, setExpiryDate] = useState(item.expiryDate ?? '');
   const expiringHint = !needToBuy && hasExpiry && expiryDate && isExpiringSoon({
@@ -763,8 +791,17 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
     setItemType(nextType);
     const options = getCategoriesForItemType(nextType);
     if (!options.includes(category)) {
-      setCategory(defaultCategoryForItemType(nextType));
+      const nextCategory = defaultCategoryForItemType(nextType);
+      setCategory(nextCategory);
+      setSubCategory(resolveSubCategory(item.name, nextType, nextCategory));
+      return;
     }
+    setSubCategory(resolveSubCategory(item.name, nextType, category));
+  };
+
+  const handleCategoryChange = (nextCategory) => {
+    setCategory(nextCategory);
+    setSubCategory(resolveSubCategory(item.name, itemType, nextCategory));
   };
 
   const handleSave = () => {
@@ -772,6 +809,7 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
       status: needToBuy ? STATUS.OUT : STATUS.FRESH,
       itemType,
       category,
+      subCategory,
       expiryDate: hasExpiry && expiryDate ? expiryDate : null,
     });
     onClose();
@@ -829,7 +867,15 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
           Storage
         </p>
         <div className="mb-4">
-          <StorageCategoryToggle itemType={itemType} value={category} onChange={setCategory} />
+          <StorageCategoryToggle itemType={itemType} value={category} onChange={handleCategoryChange} />
+        </div>
+        <div className="mb-4">
+          <SubCategoryToggle
+            itemType={itemType}
+            category={category}
+            value={subCategory}
+            onChange={setSubCategory}
+          />
         </div>
 
         <label className="surface-inset mb-3 flex cursor-pointer items-center gap-2 px-3 py-3 text-sm text-slate-700 dark:text-slate-300">
@@ -986,11 +1032,17 @@ function InventoryItemRow({
 }) {
   const urgencyLabel = formatExpiryUrgency(item);
   const catMeta = getCategoryMeta(item.category, item.itemType);
+  const subMeta = getSubcategoryMeta(item.subCategory, item.itemType, item.category);
   const displayStatus = getDisplayStatus(item);
   return (
     <li className="surface-row group flex items-center gap-2 px-3 py-2.5">
       <div className="min-w-0 flex-1">
         <p className="text-heading truncate text-sm font-medium">{item.name}</p>
+        {item.subCategory && item.subCategory !== SUBCATEGORY_OTHER && (
+          <p className="text-muted mt-0.5 text-[10px] font-semibold">
+            {subMeta.emoji} {subMeta.label}
+          </p>
+        )}
         {showCategory && catMeta && (
           <p className="mt-0.5 text-xs text-slate-500">
             {catMeta.emoji} {catMeta.label}
@@ -1301,7 +1353,7 @@ function FrequentlyRestockedSection({ suggestions, onAdd }) {
   );
 }
 
-function InventorySection({ title, emoji, accent, itemCount, children, emptyText }) {
+function InventorySection({ title, emoji, accent, itemCount, children, emptyText, grouped = false }) {
   return (
     <section className="mb-5">
       <h2 className={`mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider ${accent}`}>
@@ -1309,13 +1361,65 @@ function InventorySection({ title, emoji, accent, itemCount, children, emptyText
         {title}
       </h2>
       {itemCount > 0 ? (
-        <ul className="space-y-2">{children}</ul>
+        grouped ? (
+          <div className="space-y-4">{children}</div>
+        ) : (
+          <ul className="space-y-2">{children}</ul>
+        )
       ) : (
         <p className="surface-inset border-dashed px-3 py-4 text-center text-xs text-slate-500 dark:text-slate-400">
           {emptyText}
         </p>
       )}
     </section>
+  );
+}
+
+function SubCategoryFilterRow({ itemType, category, activeFilter, onChange, counts }) {
+  const options = getSubcategoriesForCategory(itemType, category);
+  const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+  if (total === 0) return null;
+
+  return (
+    <div className="mb-4 rounded-2xl border border-slate-200/80 bg-white/70 p-3 dark:border-slate-600 dark:bg-slate-900/50">
+      <p className="text-muted mb-2 text-[10px] font-bold uppercase tracking-wider">Browse by type</p>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by sub-category">
+        <button
+          type="button"
+          onClick={() => onChange('all')}
+          className={`inline-flex min-h-[2.25rem] items-center rounded-full px-3 text-xs font-bold ring-1 transition active:scale-[0.98] ${
+            activeFilter === 'all'
+              ? 'bg-slate-800 text-white ring-slate-900 dark:bg-slate-200 dark:text-slate-900'
+              : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600'
+          }`}
+          aria-pressed={activeFilter === 'all'}
+        >
+          All ({total})
+        </button>
+        {options.map((sub) => {
+          const count = counts.get(sub) ?? 0;
+          if (count === 0) return null;
+          const meta = getSubcategoryMeta(sub, itemType, category);
+          const active = activeFilter === sub;
+          return (
+            <button
+              key={sub}
+              type="button"
+              onClick={() => onChange(sub)}
+              className={`inline-flex min-h-[2.25rem] items-center gap-1 rounded-full px-3 text-xs font-bold ring-1 transition active:scale-[0.98] ${
+                active
+                  ? 'bg-emerald-600 text-white ring-emerald-700'
+                  : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-600'
+              }`}
+              aria-pressed={active}
+            >
+              <span aria-hidden>{meta.emoji}</span>
+              {meta.label} ({count})
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -1399,12 +1503,16 @@ function InventoryView({
   const [draft, setDraft] = useState('');
   const [addItemType, setAddItemType] = useState(getItemTypeForModule(defaultModuleKey));
   const [addCategory, setAddCategory] = useState(getInitialCategoryForModule(defaultModuleKey));
+  const [addSubCategory, setAddSubCategory] = useState(() =>
+    resolveSubCategory('', getItemTypeForModule(defaultModuleKey), getInitialCategoryForModule(defaultModuleKey)),
+  );
   const [addExpiry, setAddExpiry] = useState(false);
   const [addExpiryDate, setAddExpiryDate] = useState('');
   const [shopDraft, setShopDraft] = useState('');
   const [shopItemType, setShopItemType] = useState(getItemTypeForModule(defaultModuleKey));
   const [shopCategory, setShopCategory] = useState(getInitialCategoryForModule(defaultModuleKey));
   const [activeView, setActiveView] = useState(getInitialCategoryForModule(defaultModuleKey));
+  const [subCategoryFilter, setSubCategoryFilter] = useState('all');
   const [editingItem, setEditingItem] = useState(null);
   const [pingBusy, setPingBusy] = useState(false);
   const [pingFeedback, setPingFeedback] = useState(null);
@@ -1436,8 +1544,12 @@ function InventoryView({
 
   const categoryGrouped = useMemo(() => {
     if (isShoppingPage) return null;
-    return groupByCategory(items, activeView, scopeItemType);
-  }, [items, activeView, scopeItemType, isShoppingPage]);
+    return groupByCategory(items, activeView, scopeItemType, subCategoryFilter);
+  }, [items, activeView, scopeItemType, isShoppingPage, subCategoryFilter]);
+
+  useEffect(() => {
+    setSubCategoryFilter('all');
+  }, [activeView, inventoryScope]);
 
   useEffect(() => {
     if (!duplicateNotice) return undefined;
@@ -1467,14 +1579,19 @@ function InventoryView({
         setActiveView(defaultCategoryForItemType(nextType));
       }
     }
+    const nextCategory = defaultCategoryForItemType(nextType);
     setAddItemType(nextType);
-    setAddCategory(defaultCategoryForItemType(nextType));
+    setAddCategory(nextCategory);
+    setAddSubCategory(resolveSubCategory(draft, nextType, nextCategory));
   };
 
   const applySuggestion = (entry, target) => {
+    const sub =
+      entry.subCategory ?? resolveSubCategory(entry.name, entry.itemType, entry.category);
     if (target === 'add') {
       setAddItemType(entry.itemType);
       setAddCategory(entry.category);
+      setAddSubCategory(sub);
       if (entry.itemType !== ITEM_TYPE.FOOD) {
         setAddExpiry(false);
         setAddExpiryDate('');
@@ -1491,17 +1608,23 @@ function InventoryView({
       if (!trimmed || trimmed === BARCODE_LOOKUP_LOADING_TEXT) return;
 
       const hit = classifyItem(trimmed);
-      if (!hit) return;
+      if (!hit) {
+        if (target === 'add') {
+          setAddSubCategory(resolveSubCategory(trimmed, addItemType, addCategory));
+        }
+        return;
+      }
 
       if (target === 'add') {
         setAddItemType(ITEM_TYPE.FOOD);
         setAddCategory(hit.category);
+        setAddSubCategory(hit.subCategory);
       } else {
         setShopItemType(ITEM_TYPE.FOOD);
         setShopCategory(hit.category);
       }
     },
-    [],
+    [addCategory, addItemType],
   );
 
   const handleDraftChange = useCallback(
@@ -1532,6 +1655,10 @@ function InventoryView({
       name: result.name,
       itemType: classified?.itemType ?? result.itemType,
       category: classified?.category ?? result.category,
+      subCategory:
+        classified?.subCategory ??
+        result.subCategory ??
+        resolveSubCategory(result.name, result.itemType, result.category),
     };
 
     applySuggestion(entry, 'add');
@@ -1550,7 +1677,9 @@ function InventoryView({
   const resetAddForm = () => {
     setDraft('');
     setAddItemType(scopeItemType);
-    setAddCategory(defaultCategoryForItemType(scopeItemType));
+    const nextCategory = defaultCategoryForItemType(scopeItemType);
+    setAddCategory(nextCategory);
+    setAddSubCategory(resolveSubCategory('', scopeItemType, nextCategory));
     setAddExpiry(false);
     setAddExpiryDate('');
   };
@@ -1585,6 +1714,7 @@ function InventoryView({
         itemType: addItemType,
         status: STATUS.FRESH,
         category: addCategory,
+        subCategory: addSubCategory,
         expiryDate:
           addItemType === ITEM_TYPE.FOOD && addExpiry && addExpiryDate ? addExpiryDate : null,
         ...consumption,
@@ -2105,9 +2235,18 @@ function InventoryView({
                     <StorageCategoryToggle
                       itemType={addItemType}
                       value={addCategory}
-                      onChange={setAddCategory}
+                      onChange={(nextCategory) => {
+                        setAddCategory(nextCategory);
+                        setAddSubCategory(resolveSubCategory(draft, addItemType, nextCategory));
+                      }}
                     />
                   </div>
+                  <SubCategoryToggle
+                    itemType={addItemType}
+                    category={addCategory}
+                    value={addSubCategory}
+                    onChange={setAddSubCategory}
+                  />
                   <div>
                     <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
                       Item type
@@ -2120,8 +2259,10 @@ function InventoryView({
                           key={mod.key}
                           type="button"
                           onClick={() => {
+                            const nextCategory = defaultCategoryForItemType(mod.itemType);
                             setAddItemType(mod.itemType);
-                            setAddCategory(defaultCategoryForItemType(mod.itemType));
+                            setAddCategory(nextCategory);
+                            setAddSubCategory(resolveSubCategory(draft, mod.itemType, nextCategory));
                             if (mod.itemType !== ITEM_TYPE.FOOD) {
                               setAddExpiry(false);
                               setAddExpiryDate('');
@@ -2170,21 +2311,40 @@ function InventoryView({
               — {getCategoryMeta(activeView, scopeItemType)?.subtitle}
             </p>
 
+            <SubCategoryFilterRow
+              itemType={scopeItemType}
+              category={activeView}
+              activeFilter={subCategoryFilter}
+              onChange={setSubCategoryFilter}
+              counts={categoryGrouped.subCategoryCounts}
+            />
+
             <InventorySection
               title={`Expiring Soon (within ${EXPIRING_SOON_DAYS} days)`}
               emoji="🟠"
               accent="text-amber-600"
               itemCount={categoryGrouped.expiring.length}
               emptyText="Nothing urgent in this location — add an expiry date to track."
+              grouped
             >
-              {categoryGrouped.expiring.map((item) => (
-                <InventoryItemRow
-                  key={item.id}
-                  item={item}
-                  onOpenEditor={setEditingItem}
-                  onDelete={(id) => deleteItem(id, { trackHistory: true })}
-                  onMoveToShopping={moveItemToShoppingList}
-                />
+              {categoryGrouped.expiringGroups.map((group) => (
+                <div key={`expiring-${group.subCategory}`}>
+                  <h3 className="text-muted mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
+                    <span aria-hidden>{group.meta.emoji}</span>
+                    {group.meta.label}
+                  </h3>
+                  <ul className="space-y-2">
+                    {group.items.map((item) => (
+                      <InventoryItemRow
+                        key={item.id}
+                        item={item}
+                        onOpenEditor={setEditingItem}
+                        onDelete={(id) => deleteItem(id, { trackHistory: true })}
+                        onMoveToShopping={moveItemToShoppingList}
+                      />
+                    ))}
+                  </ul>
+                </div>
               ))}
             </InventorySection>
 
@@ -2194,15 +2354,26 @@ function InventoryView({
               accent="text-emerald-600"
               itemCount={categoryGrouped.plentiful.length}
               emptyText="No plentiful items here yet — add something above."
+              grouped
             >
-              {categoryGrouped.plentiful.map((item) => (
-                <InventoryItemRow
-                  key={item.id}
-                  item={item}
-                  onOpenEditor={setEditingItem}
-                  onDelete={(id) => deleteItem(id, { trackHistory: true })}
-                  onMoveToShopping={moveItemToShoppingList}
-                />
+              {categoryGrouped.plentifulGroups.map((group) => (
+                <div key={`plentiful-${group.subCategory}`}>
+                  <h3 className="text-muted mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
+                    <span aria-hidden>{group.meta.emoji}</span>
+                    {group.meta.label}
+                  </h3>
+                  <ul className="space-y-2">
+                    {group.items.map((item) => (
+                      <InventoryItemRow
+                        key={item.id}
+                        item={item}
+                        onOpenEditor={setEditingItem}
+                        onDelete={(id) => deleteItem(id, { trackHistory: true })}
+                        onMoveToShopping={moveItemToShoppingList}
+                      />
+                    ))}
+                  </ul>
+                </div>
               ))}
             </InventorySection>
           </>

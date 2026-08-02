@@ -27,6 +27,8 @@ export function searchInventoryItems(items, query, enabledModules, limit = 20) {
       const words = needle.split(' ').filter(Boolean);
       if (words.length > 1 && words.every((w) => name.includes(w))) score = 50;
     }
+    const subNeedle = normalizeName(item.subCategory ?? '');
+    if (score === 0 && subNeedle && subNeedle.includes(needle)) score = 40;
     if (score === 0) continue;
 
     scored.push({ item, score });

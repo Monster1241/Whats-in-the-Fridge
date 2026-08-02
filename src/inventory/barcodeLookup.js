@@ -69,6 +69,7 @@ export async function lookupBarcode(barcode) {
         name,
         itemType: intake.itemType,
         category: intake.category,
+        subCategory: intake.subCategory,
       };
     }
   }

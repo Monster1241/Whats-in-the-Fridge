@@ -104,6 +104,7 @@ export function InventorySearch({
                         <p className="text-heading text-sm font-bold leading-snug">{item.name}</p>
                         <p className="text-muted mt-0.5 text-xs">
                           {catMeta ? `${catMeta.emoji} ${catMeta.label}` : item.itemType}
+                          {item.subCategory ? ` · ${item.subCategory}` : ''}
                           {item.itemType ? ` · ${item.itemType}` : ''}
                         </p>
                       </div>

@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Camera } from 'lucide-react';
 import { filterItemSuggestions } from '../inventory/itemSuggestions.js';
 import { getCategoryMeta } from '../inventory/constants.js';
+import { getSubcategoryMeta } from '../inventory/subcategories.js';
 import {
   BARCODE_LOOKUP_LOADING_TEXT,
   BARCODE_UNKNOWN_PLACEHOLDER,
@@ -151,6 +152,11 @@ export function ItemTypeahead({
             >
               {matches.map((entry, index) => {
                 const meta = getCategoryMeta(entry.category, entry.itemType);
+                const subMeta = getSubcategoryMeta(
+                  entry.subCategory,
+                  entry.itemType,
+                  entry.category,
+                );
                 const active = index === highlight;
                 return (
                   <li key={`${entry.name}-${entry.category}`} role="presentation">
@@ -166,7 +172,12 @@ export function ItemTypeahead({
                           : 'text-slate-800 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800'
                       }`}
                     >
-                      <span className="font-medium">{entry.name}</span>
+                      <span className="min-w-0">
+                        <span className="block font-medium">{entry.name}</span>
+                        <span className="text-muted mt-0.5 block text-[10px] font-semibold">
+                          {subMeta.emoji} {subMeta.label}
+                        </span>
+                      </span>
                       <span className="text-muted shrink-0 text-[10px] font-semibold uppercase tracking-wide">
                         {entry.itemType === 'Household' ? '🏠' : entry.itemType === 'Baby' ? '👶' : '🍽️'}{' '}
                         {meta?.label ?? entry.category}

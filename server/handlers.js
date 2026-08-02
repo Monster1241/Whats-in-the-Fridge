@@ -437,6 +437,7 @@ function sanitizeInventoryItems(items) {
             ? 'Baby'
             : 'Food',
       category: item?.category,
+      subCategory: item?.subCategory ?? null,
       status,
       expiryDate: item?.expiryDate ?? null,
       preferredStore:

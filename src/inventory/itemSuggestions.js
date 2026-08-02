@@ -5,8 +5,17 @@ import {
   ITEM_TYPE,
 } from './constants.js';
 import { isItemTypeEnabled } from './modules.js';
+import { resolveSubCategory } from './subcategories.js';
 
-/** @typedef {{ name: string, itemType: 'Food'|'Household'|'Baby', category: string }} ItemSuggestion */
+/** @typedef {{ name: string, itemType: 'Food'|'Household'|'Baby', category: string, subCategory?: string }} ItemSuggestion */
+
+export function enrichSuggestion(entry) {
+  return {
+    ...entry,
+    subCategory:
+      entry.subCategory ?? resolveSubCategory(entry.name, entry.itemType, entry.category),
+  };
+}
 
 /** @type {ItemSuggestion[]} */
 export const ITEM_SUGGESTIONS = [
@@ -187,5 +196,5 @@ export function filterItemSuggestions(query, enabledModules, limit = 8) {
     return aName.localeCompare(bName);
   });
 
-  return ranked.slice(0, limit);
+  return ranked.slice(0, limit).map(enrichSuggestion);
 }
