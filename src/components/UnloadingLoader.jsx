@@ -39,14 +39,45 @@ export function UnloadingLoader({ size = 'md', className = '' }) {
           ))}
         </div>
 
-        <div className="unload-loader__shelf" aria-hidden>
-          <div className="unload-loader__shelf-bracket unload-loader__shelf-bracket--left" />
-          <div className="unload-loader__shelf-board">
-            <span className="unload-loader__shelf-slot unload-loader__shelf-slot--1">🥛</span>
-            <span className="unload-loader__shelf-slot unload-loader__shelf-slot--2">🍞</span>
-            <span className="unload-loader__shelf-slot unload-loader__shelf-slot--3">🥚</span>
+        <div className="unload-loader__pantry" aria-hidden>
+          <div className="unload-loader__pantry-unit">
+            <div className="unload-loader__pantry-back" />
+            <div className="unload-loader__pantry-glow" />
+
+            <div className="unload-loader__pantry-tier unload-loader__pantry-tier--top">
+              <div className="unload-loader__pantry-plank">
+                <span className="unload-loader__pantry-plank-edge" />
+              </div>
+            </div>
+
+            <div className="unload-loader__pantry-tier unload-loader__pantry-tier--main">
+              <div
+                className="unload-loader__pantry-plank unload-loader__pantry-plank--active"
+                style={{ animationDelay: '0s' }}
+              >
+                <span className="unload-loader__pantry-plank-edge" />
+              </div>
+              <div className="unload-loader__pantry-slots">
+                {GROCERY_ITEMS.map((item, index) => (
+                  <div key={item.id} className="unload-loader__pantry-slot">
+                    <span
+                      className="unload-loader__pantry-pad"
+                      style={{ animationDelay: item.delay }}
+                    />
+                    <span
+                      className={`unload-loader__shelf-slot unload-loader__shelf-slot--${index + 1}`}
+                      style={{ animationDelay: item.delay }}
+                    >
+                      {item.emoji}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <span className="unload-loader__pantry-bracket unload-loader__pantry-bracket--left" />
+            <span className="unload-loader__pantry-bracket unload-loader__pantry-bracket--right" />
           </div>
-          <div className="unload-loader__shelf-bracket unload-loader__shelf-bracket--right" />
           <span className="unload-loader__shelf-label">Pantry</span>
         </div>
       </div>
