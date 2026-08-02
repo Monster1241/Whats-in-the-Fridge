@@ -24,6 +24,7 @@ export function useAppData(enabled) {
 
   const skipSaveRef = useRef(true);
   const saveTimerRef = useRef(null);
+  const saveEpochRef = useRef(0);
   const latestRef = useRef({ items, settings, savedIds, onboarding, restockHistory });
 
   latestRef.current = { items, settings, savedIds, onboarding, restockHistory };
@@ -107,6 +108,7 @@ export function useAppData(enabled) {
       return undefined;
     }
 
+    const epoch = ++saveEpochRef.current;
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       const {
@@ -117,23 +119,23 @@ export function useAppData(enabled) {
         restockHistory: nextRestockHistory,
       } = latestRef.current;
       try {
-        const state = await saveAppState({
+        await saveAppState({
           items: nextItems,
           settings: nextSettings,
           savedRecipeIds: nextSaved,
           onboarding: nextOnboarding,
           restockHistory: nextRestockHistory,
         });
-        skipSaveRef.current = true;
-        applyState(state);
+        if (epoch !== saveEpochRef.current) return;
         setSaveError(null);
       } catch (err) {
+        if (epoch !== saveEpochRef.current) return;
         setSaveError(err.message || 'Failed to save to MongoDB.');
       }
     }, SAVE_DELAY_MS);
 
     return () => clearTimeout(saveTimerRef.current);
-  }, [items, settings, savedIds, onboarding, restockHistory, loading, error, enabled, applyState]);
+  }, [items, settings, savedIds, onboarding, restockHistory, loading, error, enabled]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark');

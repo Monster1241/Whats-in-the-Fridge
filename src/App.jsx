@@ -1071,6 +1071,9 @@ function KitchenStatusCard({ item, onFinished, onRestock }) {
   );
 }
 
+const PREDICTED_LOW_ACTION_BTN =
+  'touch-manipulation relative z-10 select-none transition active:scale-[0.98]';
+
 function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
   const urgencyLabel = getConsumptionUrgencyLabel(item);
   const catMeta = getCategoryMeta(item.category, item.itemType);
@@ -1088,11 +1091,12 @@ function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
           </p>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="relative z-10 grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={() => onRestock(item.id)}
-          className={`flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-xl py-2.5 text-xs font-bold text-white transition active:scale-[0.98] ${SHOPPING_ACCENT.btn}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          className={`flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-xl py-2.5 text-xs font-bold text-white ${PREDICTED_LOW_ACTION_BTN} ${SHOPPING_ACCENT.btn}`}
         >
           <ShoppingCart className="h-5 w-5" aria-hidden />
           Restock
@@ -1100,7 +1104,8 @@ function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
         <button
           type="button"
           onClick={() => onStillGotIt(item.id)}
-          className="flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-orange-300 bg-orange-50 py-2.5 text-xs font-bold text-orange-900 transition active:scale-[0.98] hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-950/50 dark:text-orange-200 dark:hover:bg-orange-950"
+          onPointerDown={(e) => e.stopPropagation()}
+          className={`flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-orange-300 bg-orange-50 py-2.5 text-xs font-bold text-orange-900 hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-950/50 dark:text-orange-200 dark:hover:bg-orange-950 ${PREDICTED_LOW_ACTION_BTN}`}
         >
           <Check className="h-5 w-5" aria-hidden />
           Still Got It
@@ -1109,7 +1114,8 @@ function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
       <button
         type="button"
         onClick={() => onDelete(item.id)}
-        className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+        onPointerDown={(e) => e.stopPropagation()}
+        className={`flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 ${PREDICTED_LOW_ACTION_BTN}`}
       >
         <Trash2 className="h-3.5 w-3.5" aria-hidden />
         Delete — I&apos;m done with this
@@ -1137,7 +1143,7 @@ function PredictedLowBanner({ items, onRestock, onStillGotIt, onDelete }) {
           {items.length}
         </span>
       </div>
-      <div className="touch-pan-x flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory">
+      <div className="flex gap-3 overflow-x-auto overscroll-x-contain pb-1 snap-x snap-mandatory [-webkit-overflow-scrolling:touch]">
         {items.map((item) => (
           <PredictedLowCard
             key={item.id}
@@ -1621,20 +1627,41 @@ function InventoryView({
     );
   };
 
-  const resetConsumptionTimer = (id) => {
-    const now = new Date().toISOString();
-    updateItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, stockedAt: now, createdAt: now, status: STATUS.FRESH } : item,
-      ),
-    );
-  };
+  const predictiveRestock = useCallback(
+    (id) => {
+      const item = items.find((entry) => entry.id === id);
+      updateItems((prev) =>
+        prev.map((entry) => (entry.id === id ? { ...entry, status: STATUS.OUT } : entry)),
+      );
+      if (item) {
+        updateRestockHistory((prev) => recordRestockEvent(prev, item));
+      }
+    },
+    [items, updateItems, updateRestockHistory],
+  );
 
-  const predictiveRestock = (id) => {
-    const item = items.find((entry) => entry.id === id);
-    if (item) rememberRestock(item);
-    moveItemToShoppingList(id);
-  };
+  const resetConsumptionTimer = useCallback(
+    (id) => {
+      const now = new Date().toISOString();
+      updateItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, stockedAt: now, createdAt: now, status: STATUS.FRESH } : item,
+        ),
+      );
+    },
+    [updateItems],
+  );
+
+  const predictiveDelete = useCallback(
+    (id) => {
+      const item = items.find((entry) => entry.id === id);
+      updateItems((prev) => prev.filter((entry) => entry.id !== id));
+      if (item) {
+        updateRestockHistory((prev) => recordRestockEvent(prev, item));
+      }
+    },
+    [items, updateItems, updateRestockHistory],
+  );
 
   const addRestockEntryToShoppingList = (entry) => {
     const needle = normalizeName(entry.name);
@@ -1737,7 +1764,7 @@ function InventoryView({
             items={predictedLowItems}
             onRestock={predictiveRestock}
             onStillGotIt={resetConsumptionTimer}
-            onDelete={(id) => deleteItem(id, { trackHistory: true })}
+            onDelete={predictiveDelete}
           />
           {!isDismissed('kitchen-status') && (
             <KitchenStatusBanner
