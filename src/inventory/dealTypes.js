@@ -48,3 +48,12 @@ export function matchesDealTypeSubFilter(deal, filterId) {
   if (!filter || !filter.types) return true;
   return filter.types.includes(deal.dealType);
 }
+
+/** @param {Set<string>} selectedFilterIds */
+export function matchesDealTypesSelection(deal, selectedFilterIds) {
+  if (!selectedFilterIds || selectedFilterIds.size === 0) return true;
+  for (const filterId of selectedFilterIds) {
+    if (matchesDealTypeSubFilter(deal, filterId)) return true;
+  }
+  return false;
+}

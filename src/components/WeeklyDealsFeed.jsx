@@ -12,7 +12,12 @@ import {
 } from 'lucide-react';
 import { fetchStoreCatalogues, fetchWeeklyDeals } from '../api.js';
 import { StoreLogo } from './StoreLogo.jsx';
-import { DEAL_TYPE_SUB_FILTERS, matchesDealTypeSubFilter } from '../inventory/dealTypes.js';
+import { DealsFilterMenu } from './DealsFilterMenu.jsx';
+import {
+  DEAL_TYPE_SUB_FILTERS,
+  matchesDealTypeSubFilter,
+  matchesDealTypesSelection,
+} from '../inventory/dealTypes.js';
 import { normalizeName } from '../inventory/itemUtils.js';
 import {
   isValidAustralianPostcode,
@@ -119,66 +124,8 @@ const CATALOGUE_ACCENT = {
 const DEAL_BADGE_FALLBACK =
   'bg-slate-700 text-white ring-slate-800 dark:bg-slate-600 dark:ring-slate-500';
 
-const FILTER_CHIP_BASE =
-  'inline-flex min-h-[2.5rem] shrink-0 items-center justify-center rounded-full px-3.5 text-xs font-bold ring-1 transition active:scale-[0.98] sm:px-4';
-
-function DealsFilterPanel({ storeFilter, onStoreChange, dealTypeFilter, onDealTypeChange }) {
-  return (
-    <div className="mb-4 space-y-4 rounded-2xl border border-amber-200/80 bg-white/85 p-3.5 shadow-sm dark:border-amber-900/50 dark:bg-slate-900/70">
-      <div className="space-y-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/70 dark:text-amber-200/80">
-          Store
-        </p>
-        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter deals by store">
-          {STORE_FILTERS.map((filter) => {
-            const active = storeFilter === filter.id;
-            return (
-              <button
-                key={filter.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => onStoreChange(filter.id)}
-                className={`${FILTER_CHIP_BASE} ${active ? filter.active : filter.idle}`}
-              >
-                {filter.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="h-px bg-amber-200/70 dark:bg-amber-900/40" aria-hidden />
-
-      <div className="space-y-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-900/70 dark:text-amber-200/80">
-          Deal type
-        </p>
-        <div
-          className="flex flex-wrap gap-2"
-          role="tablist"
-          aria-label="Filter deals by promotion type"
-        >
-          {DEAL_TYPE_SUB_FILTERS.map((filter) => {
-            const active = dealTypeFilter === filter.id;
-            return (
-              <button
-                key={filter.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => onDealTypeChange(filter.id)}
-                className={`${FILTER_CHIP_BASE} ${active ? filter.active : filter.idle}`}
-              >
-                {filter.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
+const STORE_FILTER_OPTIONS = STORE_FILTERS.filter((filter) => filter.id !== 'all');
+const DEAL_TYPE_FILTER_OPTIONS = DEAL_TYPE_SUB_FILTERS.filter((filter) => filter.id !== 'all');
 
 function formatPrice(value) {
   if (value == null) return null;
@@ -525,8 +472,8 @@ function CatalogueCard({ catalogue }) {
  */
 export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const [activeSection, setActiveSection] = useState(() => readStoredDealsSection());
-  const [storeFilter, setStoreFilter] = useState('all');
-  const [dealTypeFilter, setDealTypeFilter] = useState('all');
+  const [selectedStores, setSelectedStores] = useState(() => new Set());
+  const [selectedDealTypes, setSelectedDealTypes] = useState(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [postcode, setPostcode] = useState(() => readStoredPostcode());
   const [regionLabel, setRegionLabel] = useState('');
@@ -555,12 +502,11 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
 
   const activeSectionMeta = SECTIONS.find((section) => section.id === activeSection) ?? SECTIONS[0];
 
-  const loadDeals = useCallback(async (store) => {
+  const loadDeals = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = store && store !== 'all' ? { store } : {};
-      const data = await fetchWeeklyDeals(params);
+      const data = await fetchWeeklyDeals({});
       setDeals(data.deals ?? []);
     } catch (err) {
       setDeals([]);
@@ -571,8 +517,31 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   }, []);
 
   useEffect(() => {
-    loadDeals(storeFilter);
-  }, [storeFilter, loadDeals]);
+    loadDeals();
+  }, [loadDeals]);
+
+  const toggleStoreFilter = useCallback((storeId) => {
+    setSelectedStores((prev) => {
+      const next = new Set(prev);
+      if (next.has(storeId)) next.delete(storeId);
+      else next.add(storeId);
+      return next;
+    });
+  }, []);
+
+  const toggleDealTypeFilter = useCallback((typeId) => {
+    setSelectedDealTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(typeId)) next.delete(typeId);
+      else next.add(typeId);
+      return next;
+    });
+  }, []);
+
+  const clearDealFilters = useCallback(() => {
+    setSelectedStores(new Set());
+    setSelectedDealTypes(new Set());
+  }, []);
 
   const loadCatalogues = useCallback(async (currentPostcode) => {
     setCataloguesLoading(true);
@@ -615,17 +584,51 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
-  const filteredDeals = useMemo(() => {
+  const searchMatchedDeals = useMemo(() => {
+    if (!normalizedSearch) return deals;
     return deals.filter((deal) => {
-      if (!matchesDealTypeSubFilter(deal, dealTypeFilter)) return false;
-      if (!normalizedSearch) return true;
       const haystack = [deal.name, deal.category, deal.storeLabel, deal.dealType, deal.savingsText]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [deals, dealTypeFilter, normalizedSearch]);
+  }, [deals, normalizedSearch]);
+
+  const storeCounts = useMemo(() => {
+    const counts = new Map();
+    for (const option of STORE_FILTER_OPTIONS) {
+      counts.set(option.id, 0);
+    }
+    for (const deal of searchMatchedDeals) {
+      counts.set(deal.store, (counts.get(deal.store) ?? 0) + 1);
+    }
+    return counts;
+  }, [searchMatchedDeals]);
+
+  const dealTypeCounts = useMemo(() => {
+    const counts = new Map();
+    for (const option of DEAL_TYPE_FILTER_OPTIONS) {
+      counts.set(option.id, 0);
+    }
+    for (const deal of searchMatchedDeals) {
+      if (selectedStores.size > 0 && !selectedStores.has(deal.store)) continue;
+      for (const option of DEAL_TYPE_FILTER_OPTIONS) {
+        if (matchesDealTypeSubFilter(deal, option.id)) {
+          counts.set(option.id, (counts.get(option.id) ?? 0) + 1);
+        }
+      }
+    }
+    return counts;
+  }, [searchMatchedDeals, selectedStores]);
+
+  const filteredDeals = useMemo(() => {
+    return searchMatchedDeals.filter((deal) => {
+      if (selectedStores.size > 0 && !selectedStores.has(deal.store)) return false;
+      if (!matchesDealTypesSelection(deal, selectedDealTypes)) return false;
+      return true;
+    });
+  }, [searchMatchedDeals, selectedStores, selectedDealTypes]);
 
   const orderedCatalogues = useMemo(() => {
     const byStore = Object.fromEntries(catalogues.map((entry) => [entry.store, entry]));
@@ -664,18 +667,17 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   };
 
   const emptyMessage = useMemo(() => {
-    const typeLabel =
-      DEAL_TYPE_SUB_FILTERS.find((entry) => entry.id === dealTypeFilter)?.label ?? 'these filters';
     if (normalizedSearch) {
       return `No deals match "${searchQuery.trim()}". Try another search or filter.`;
     }
     if (deals.length === 0) {
-      if (storeFilter === 'all') return 'No weekly deals right now — check back after Wednesday.';
-      const label = STORE_FILTERS.find((entry) => entry.id === storeFilter)?.label ?? 'This store';
-      return `No active deals at ${label} this week.`;
+      return 'No weekly deals right now — check back after Wednesday.';
     }
-    return `No ${typeLabel === 'Show All' ? 'matching' : typeLabel.toLowerCase()} deals for this selection.`;
-  }, [storeFilter, dealTypeFilter, deals.length, normalizedSearch, searchQuery]);
+    if (selectedStores.size > 0 || selectedDealTypes.size > 0) {
+      return 'No deals match your filters. Try clearing filters or selecting different options.';
+    }
+    return 'No matching deals for this selection.';
+  }, [deals.length, normalizedSearch, searchQuery, selectedStores.size, selectedDealTypes.size]);
 
   const dealsCount = loading ? 0 : filteredDeals.length;
   const cataloguesCount = cataloguesLoading ? 0 : orderedCatalogues.length;
@@ -716,18 +718,33 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
         aria-labelledby={`hot-deals-tab-${activeSection}`}
         className={`rounded-3xl border-2 p-4 shadow-sm transition-opacity duration-300 ${activeSectionMeta.accent.panel} ${activeSectionMeta.accent.ring} ring-1`}
       >
-        <div className="mb-4">
-          <h2 className="text-heading text-base font-extrabold leading-snug tracking-tight sm:text-lg">
-            {activeSection === 'deals'
-              ? '🔥 Featured Super Savers & Item Specials'
-              : '📖 Full Digital Weekly Catalogues'}
-          </h2>
-          <p className="text-muted mt-1 text-xs leading-relaxed">
-            {activeSectionMeta.description}
-            {activeSection === 'catalogues' && regionLabel && (
-              <span className="text-heading font-semibold"> · {regionLabel} ({postcode})</span>
-            )}
-          </p>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-heading text-base font-extrabold leading-snug tracking-tight sm:text-lg">
+              {activeSection === 'deals'
+                ? '🔥 Featured Super Savers & Item Specials'
+                : '📖 Full Digital Weekly Catalogues'}
+            </h2>
+            <p className="text-muted mt-1 text-xs leading-relaxed">
+              {activeSectionMeta.description}
+              {activeSection === 'catalogues' && regionLabel && (
+                <span className="text-heading font-semibold"> · {regionLabel} ({postcode})</span>
+              )}
+            </p>
+          </div>
+          {activeSection === 'deals' && !loading && deals.length > 0 && (
+            <DealsFilterMenu
+              storeOptions={STORE_FILTER_OPTIONS}
+              dealTypeOptions={DEAL_TYPE_FILTER_OPTIONS}
+              selectedStores={selectedStores}
+              selectedDealTypes={selectedDealTypes}
+              onToggleStore={toggleStoreFilter}
+              onToggleDealType={toggleDealTypeFilter}
+              onClear={clearDealFilters}
+              storeCounts={storeCounts}
+              dealTypeCounts={dealTypeCounts}
+            />
+          )}
         </div>
 
         {activeSection === 'deals' && (
@@ -747,13 +764,6 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
               />
             </label>
 
-            <DealsFilterPanel
-              storeFilter={storeFilter}
-              onStoreChange={setStoreFilter}
-              dealTypeFilter={dealTypeFilter}
-              onDealTypeChange={setDealTypeFilter}
-            />
-
             {loading && (
               <div className="grid grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, index) => (
@@ -771,7 +781,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
                 <p className="text-sm font-semibold text-rose-800 dark:text-rose-200">{error}</p>
                 <button
                   type="button"
-                  onClick={() => loadDeals(storeFilter)}
+                  onClick={() => loadDeals()}
                   className="mt-3 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-rose-500"
                 >
                   Try again
