@@ -42,6 +42,35 @@ export function matchesItemId(item, id) {
   return getItemId(item) === needle;
 }
 
+/**
+ * @param {Array<Record<string, unknown>>} items
+ * @param {Record<string, unknown>|string} ref Item row or display name
+ */
+export function findInventoryItem(items, ref) {
+  if (!ref) return null;
+  const list = Array.isArray(items) ? items : [];
+
+  if (typeof ref !== 'string') {
+    const id = getItemId(ref);
+    if (id) {
+      const byId = list.find((entry) => matchesItemId(entry, id));
+      if (byId) return byId;
+    }
+  }
+
+  const needle = normalizeName(typeof ref === 'string' ? ref : ref.name);
+  if (!needle) return null;
+  const itemType = typeof ref === 'object' ? ref.itemType : undefined;
+
+  return (
+    list.find(
+      (entry) =>
+        normalizeName(entry.name) === needle &&
+        (!itemType || entry.itemType === itemType),
+    ) ?? null
+  );
+}
+
 export function migrateItem(item) {
   let itemType = ITEM_TYPE.FOOD;
   if (item.itemType === ITEM_TYPE.HOUSEHOLD) itemType = ITEM_TYPE.HOUSEHOLD;

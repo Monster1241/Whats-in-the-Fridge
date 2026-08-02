@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchAppState, saveAppState } from '../api.js';
 import { migrateItems } from '../inventory/itemUtils.js';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules } from '../inventory/modules.js';
+import { recordRestockEvent } from '../inventory/restockHistory.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'light',
@@ -9,6 +10,16 @@ export const DEFAULT_SETTINGS = {
 };
 
 const SAVE_DELAY_MS = 400;
+
+function resolvePatchResult(result, prevItems) {
+  if (result && typeof result === 'object' && Array.isArray(result.items)) {
+    return {
+      items: result.items,
+      restockFrom: result.restockFrom ?? null,
+    };
+  }
+  return { items: result, restockFrom: null };
+}
 
 export function useAppData(enabled) {
   const [loading, setLoading] = useState(enabled);
@@ -95,18 +106,6 @@ export function useAppData(enabled) {
   }, [applyState, enabled]);
 
   useEffect(() => {
-    if (!enabled) return undefined;
-    const onFocus = () => {
-      if (hasUnsyncedEditsRef.current || saveTimerRef.current || saveInFlightRef.current) {
-        return;
-      }
-      reload().catch(() => {});
-    };
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [reload, enabled]);
-
-  useEffect(() => {
     if (!enabled || loading || error) return undefined;
 
     if (skipSaveRef.current) {
@@ -166,6 +165,82 @@ export function useAppData(enabled) {
     setRestockHistory((prev) => (typeof updater === 'function' ? updater(prev) : updater));
   }, []);
 
+  const persistSnapshot = useCallback(async (snapshot, epoch) => {
+    saveInFlightRef.current = true;
+    try {
+      await saveAppState({
+        items: snapshot.items,
+        settings: snapshot.settings,
+        savedRecipeIds: snapshot.savedIds,
+        onboarding: snapshot.onboarding,
+        restockHistory: snapshot.restockHistory,
+      });
+      if (epoch !== saveEpochRef.current) return;
+      hasUnsyncedEditsRef.current = false;
+      setSaveError(null);
+    } catch (err) {
+      if (epoch !== saveEpochRef.current) return;
+      setSaveError(err.message || 'Failed to save to MongoDB.');
+      throw err;
+    } finally {
+      if (epoch === saveEpochRef.current) {
+        saveInFlightRef.current = false;
+      }
+    }
+  }, []);
+
+  /**
+   * Apply an inventory patch and optionally save immediately (used for banner actions).
+   * @param {(prev: unknown[]) => unknown[] | { items: unknown[], restockFrom?: object }} recipe
+   * @param {{ saveNow?: boolean }} [options]
+   */
+  const patchItems = useCallback(
+    async (recipe, { saveNow = false } = {}) => {
+      const prevItems = latestRef.current.items;
+      const raw = typeof recipe === 'function' ? recipe(prevItems) : recipe;
+      const { items: nextItems, restockFrom } = resolvePatchResult(raw, prevItems);
+      if (!Array.isArray(nextItems) || nextItems === prevItems) return false;
+
+      let nextRestock = latestRef.current.restockHistory;
+      if (restockFrom) {
+        nextRestock = recordRestockEvent(nextRestock, restockFrom);
+      }
+
+      const snapshot = {
+        ...latestRef.current,
+        items: nextItems,
+        restockHistory: nextRestock,
+      };
+      latestRef.current = snapshot;
+
+      if (saveNow) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+        skipSaveRef.current = true;
+      }
+
+      setItems(nextItems);
+      if (restockFrom) {
+        setRestockHistory(nextRestock);
+      }
+
+      if (!saveNow) {
+        hasUnsyncedEditsRef.current = true;
+        return true;
+      }
+
+      hasUnsyncedEditsRef.current = true;
+      const epoch = ++saveEpochRef.current;
+      try {
+        await persistSnapshot(snapshot, epoch);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [persistSnapshot],
+  );
+
   const updateSettings = useCallback((updater) => {
     setSettings((prev) => (typeof updater === 'function' ? updater(prev) : updater));
   }, []);
@@ -224,6 +299,7 @@ export function useAppData(enabled) {
     reload,
     items,
     updateItems,
+    patchItems,
     restockHistory,
     updateRestockHistory,
     settings,

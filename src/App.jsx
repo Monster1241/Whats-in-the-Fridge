@@ -48,7 +48,7 @@ import {
 import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
 import { classifyItem } from './inventory/classifyItem.js';
 import { dealStoreToPreferred, mapDealToInventory } from './inventory/mapDealToInventory.js';
-import { getItemId, matchesItemId, normalizeName } from './inventory/itemUtils.js';
+import { findInventoryItem, getItemId, normalizeName } from './inventory/itemUtils.js';
 import {
   getFrequentlyRestocked,
   recordRestockEvent,
@@ -1075,7 +1075,6 @@ const PREDICTED_LOW_ACTION_BTN =
   'touch-manipulation relative z-10 select-none transition active:scale-[0.98]';
 
 function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
-  const itemId = getItemId(item);
   const urgencyLabel = getConsumptionUrgencyLabel(item);
   const catMeta = getCategoryMeta(item.category, item.itemType);
 
@@ -1095,7 +1094,7 @@ function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
       <div className="relative z-10 grid grid-cols-2 gap-2">
         <button
           type="button"
-          onClick={() => onRestock(itemId)}
+          onClick={() => onRestock(item)}
           className={`flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-xl py-2.5 text-xs font-bold text-white ${PREDICTED_LOW_ACTION_BTN} ${SHOPPING_ACCENT.btn}`}
         >
           <ShoppingCart className="h-5 w-5" aria-hidden />
@@ -1103,7 +1102,7 @@ function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
         </button>
         <button
           type="button"
-          onClick={() => onStillGotIt(itemId)}
+          onClick={() => onStillGotIt(item)}
           className={`flex min-h-[3rem] flex-col items-center justify-center gap-0.5 rounded-xl border-2 border-orange-300 bg-orange-50 py-2.5 text-xs font-bold text-orange-900 hover:bg-orange-100 dark:border-orange-700 dark:bg-orange-950/50 dark:text-orange-200 dark:hover:bg-orange-950 ${PREDICTED_LOW_ACTION_BTN}`}
         >
           <Check className="h-5 w-5" aria-hidden />
@@ -1112,7 +1111,7 @@ function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
       </div>
       <button
         type="button"
-        onClick={() => onDelete(itemId)}
+        onClick={() => onDelete(item)}
         className={`flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40 ${PREDICTED_LOW_ACTION_BTN}`}
       >
         <Trash2 className="h-3.5 w-3.5" aria-hidden />
@@ -1122,39 +1121,34 @@ function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
   );
 }
 
-function PredictedLowBanner({ items, onRestock, onStillGotIt, onDelete }) {
-  const [hiddenIds, setHiddenIds] = useState(() => new Set());
+function PredictedLowBanner({ items, onRestock, onStillGotIt, onDelete, onDismiss }) {
+  const [pendingKeys, setPendingKeys] = useState(() => new Set());
 
-  useEffect(() => {
-    const currentIds = new Set(items.map((item) => getItemId(item)).filter(Boolean));
-    setHiddenIds((prev) => {
-      const next = new Set([...prev].filter((id) => currentIds.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [items]);
-
-  const visibleItems = useMemo(
-    () => items.filter((item) => !hiddenIds.has(getItemId(item))),
-    [items, hiddenIds],
+  const itemKey = useCallback(
+    (item) => `${getItemId(item)}|${normalizeName(item.name)}|${item.itemType}`,
+    [],
   );
 
-  const runAction = useCallback((fn, id) => {
-    const normalizedId = String(id ?? '').trim();
-    if (!normalizedId) return;
-    setHiddenIds((prev) => {
-      const next = new Set(prev);
-      next.add(normalizedId);
-      return next;
-    });
-    fn(normalizedId);
-  }, []);
+  const visibleItems = useMemo(
+    () => items.filter((item) => !pendingKeys.has(itemKey(item))),
+    [items, pendingKeys, itemKey],
+  );
+
+  const runAction = useCallback(
+    (fn, item) => {
+      const key = itemKey(item);
+      setPendingKeys((prev) => new Set(prev).add(key));
+      fn(item);
+    },
+    [itemKey],
+  );
 
   if (visibleItems.length === 0) return null;
 
   return (
     <section className="mb-4 rounded-2xl border-2 border-orange-300 bg-gradient-to-br from-orange-50 to-amber-50/90 p-4 dark:border-orange-700 dark:from-orange-950/40 dark:to-amber-950/30">
       <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-heading flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-orange-900 dark:text-orange-200">
             <FlaskConical className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden />
             Predicted to be Running Low
@@ -1163,18 +1157,29 @@ function PredictedLowBanner({ items, onRestock, onStillGotIt, onDelete }) {
             Based on how long items usually last in your household (~85% of typical supply used).
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
-          {visibleItems.length}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
+            {visibleItems.length}
+          </span>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded-lg p-1.5 text-slate-500 transition hover:bg-white/70 hover:text-slate-800 dark:hover:bg-orange-950 dark:hover:text-slate-200"
+            aria-label="Hide Predicted to be Running Low section"
+            title="Hide"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
       </div>
       <div className="flex gap-3 overflow-x-auto overscroll-x-contain pb-1 snap-x snap-mandatory [-webkit-overflow-scrolling:touch]">
         {visibleItems.map((item) => (
           <PredictedLowCard
-            key={getItemId(item)}
+            key={itemKey(item)}
             item={item}
-            onRestock={(id) => runAction(onRestock, id)}
-            onStillGotIt={(id) => runAction(onStillGotIt, id)}
-            onDelete={(id) => runAction(onDelete, id)}
+            onRestock={(entry) => runAction(onRestock, entry)}
+            onStillGotIt={(entry) => runAction(onStillGotIt, entry)}
+            onDelete={(entry) => runAction(onDelete, entry)}
           />
         ))}
       </div>
@@ -1399,6 +1404,7 @@ function StorageLocationTabs({
 function InventoryView({
   items,
   updateItems,
+  patchItems,
   restockHistory,
   updateRestockHistory,
   onboarding,
@@ -1652,52 +1658,57 @@ function InventoryView({
   };
 
   const predictiveRestock = useCallback(
-    (id) => {
-      let restockTarget = null;
-      updateItems((prev) => {
-        const target = prev.find((entry) => matchesItemId(entry, id));
-        if (!target) return prev;
-        restockTarget = target;
-        return prev.map((entry) =>
-          matchesItemId(entry, id) ? { ...entry, status: STATUS.OUT } : entry,
-        );
-      });
-      if (restockTarget) {
-        updateRestockHistory((prev) => recordRestockEvent(prev, restockTarget));
-      }
+    (item) => {
+      void patchItems(
+        (prev) => {
+          const target = findInventoryItem(prev, item);
+          if (!target) return prev;
+          return {
+            items: prev.map((entry) =>
+              findInventoryItem([entry], target)
+                ? { ...entry, status: STATUS.OUT }
+                : entry,
+            ),
+            restockFrom: target,
+          };
+        },
+        { saveNow: true },
+      );
     },
-    [updateItems, updateRestockHistory],
+    [patchItems],
   );
 
   const resetConsumptionTimer = useCallback(
-    (id) => {
+    (item) => {
       const now = new Date().toISOString();
-      updateItems((prev) => {
-        if (!prev.some((entry) => matchesItemId(entry, id))) return prev;
-        return prev.map((item) =>
-          matchesItemId(item, id)
-            ? { ...item, stockedAt: now, createdAt: now, status: STATUS.FRESH }
-            : item,
+      void patchItems((prev) => {
+        const target = findInventoryItem(prev, item);
+        if (!target) return prev;
+        return prev.map((entry) =>
+          findInventoryItem([entry], target)
+            ? { ...entry, stockedAt: now, createdAt: now, status: STATUS.FRESH }
+            : entry,
         );
-      });
+      }, { saveNow: true });
     },
-    [updateItems],
+    [patchItems],
   );
 
   const predictiveDelete = useCallback(
-    (id) => {
-      let restockTarget = null;
-      updateItems((prev) => {
-        const target = prev.find((entry) => matchesItemId(entry, id));
-        if (!target) return prev;
-        restockTarget = target;
-        return prev.filter((entry) => !matchesItemId(entry, id));
-      });
-      if (restockTarget) {
-        updateRestockHistory((prev) => recordRestockEvent(prev, restockTarget));
-      }
+    (item) => {
+      void patchItems(
+        (prev) => {
+          const target = findInventoryItem(prev, item);
+          if (!target) return prev;
+          return {
+            items: prev.filter((entry) => !findInventoryItem([entry], target)),
+            restockFrom: target,
+          };
+        },
+        { saveNow: true },
+      );
     },
-    [updateItems, updateRestockHistory],
+    [patchItems],
   );
 
   const addRestockEntryToShoppingList = (entry) => {
@@ -1797,12 +1808,15 @@ function InventoryView({
 
       {!isShoppingView(activeView) && (
         <>
-          <PredictedLowBanner
-            items={predictedLowItems}
-            onRestock={predictiveRestock}
-            onStillGotIt={resetConsumptionTimer}
-            onDelete={predictiveDelete}
-          />
+          {!isDismissed('predicted-low') && (
+            <PredictedLowBanner
+              items={predictedLowItems}
+              onRestock={predictiveRestock}
+              onStillGotIt={resetConsumptionTimer}
+              onDelete={predictiveDelete}
+              onDismiss={() => dismiss('predicted-low')}
+            />
+          )}
           {!isDismissed('kitchen-status') && (
             <KitchenStatusBanner
               items={kitchenStatusItems}
@@ -2522,7 +2536,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       steps: [
         'Share your invite code so someone can join the same fridge.',
         'Everyone in the household sees the same inventory and shopping list.',
-        'Enable push notifications below so shopping pings reach your partner.',
+        'Enable push notifications below to get alerts when food is expiring soon.',
       ],
     },
     {
@@ -2654,8 +2668,8 @@ function PushNotificationsSettings() {
         Push notifications
       </h2>
       <p className="text-muted mb-3 text-sm">
-        Get alerts for household updates. Works when the app is open (banner) or in the
-        background (system notification).
+        Get notified when food in your fridge is expiring soon. Works when the app is open
+        (banner) or in the background (system notification).
       </p>
       <p className="text-muted mb-3 text-xs">
         Status: <span className="font-semibold text-slate-700 dark:text-slate-300">{statusLabel}</span>
@@ -3490,6 +3504,7 @@ export default function App() {
     reload,
     items,
     updateItems,
+    patchItems,
     restockHistory,
     updateRestockHistory,
     settings,
@@ -3603,6 +3618,7 @@ export default function App() {
           <InventoryView
             items={items}
             updateItems={updateItems}
+            patchItems={patchItems}
             restockHistory={restockHistory}
             updateRestockHistory={updateRestockHistory}
             onboarding={onboarding}
