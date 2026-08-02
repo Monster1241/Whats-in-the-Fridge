@@ -26,32 +26,32 @@ body {
 
 .dark body {
   background-color: #000000;
-  color: #f1f5f9;
+  color: #e4e4e7;
 }
 
 @layer components {
   .app-shell {
-    @apply bg-white text-slate-900 dark:bg-black dark:text-slate-100;
+    @apply bg-white text-slate-900 dark:bg-dm-canvas dark:text-zinc-100;
   }
 
   .nav-bar {
-    @apply border-t border-slate-200/80 bg-white/90 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-zinc-800/80 dark:bg-black/95 dark:shadow-[0_-8px_32px_rgba(0,0,0,0.55)];
+    @apply border-t border-slate-200/80 bg-white/90 shadow-[0_-8px_32px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-dm-canvas/90 dark:shadow-dm-nav;
   }
 
   .surface-card {
-    @apply rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow duration-200 dark:border-zinc-800 dark:bg-black;
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm transition-[border-color,box-shadow] duration-200 dark:border-white/10 dark:bg-dm-card dark:shadow-dm-card dark:hover:border-white/[0.14];
   }
 
   .surface-row {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-black;
+    @apply rounded-xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-dm-card dark:shadow-dm-card;
   }
 
   .surface-inset {
-    @apply rounded-xl border border-slate-200 bg-slate-50 dark:border-zinc-800 dark:bg-black/80;
+    @apply rounded-xl border border-slate-200 bg-slate-50 dark:border-white/[0.06] dark:bg-dm-inset;
   }
 
   .input-field {
-    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/5 transition-[border-color,box-shadow,transform] duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-zinc-700 dark:bg-black dark:text-slate-100 dark:placeholder:text-slate-500 dark:shadow-none;
+    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm shadow-slate-900/5 transition-[border-color,box-shadow,transform] duration-200 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-white/10 dark:bg-dm-raised dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:shadow-dm-raised dark:focus:border-emerald-500/70 dark:focus:ring-emerald-500/25;
   }
 
   .btn-auth {
@@ -59,15 +59,15 @@ body {
   }
 
   .auth-card {
-    @apply rounded-2xl border border-white/60 bg-white/80 p-5 shadow-xl shadow-slate-900/10 backdrop-blur-xl dark:border-zinc-800/60 dark:bg-black/80 dark:shadow-black/30;
+    @apply rounded-2xl border border-white/60 bg-white/80 p-5 shadow-xl shadow-slate-900/10 backdrop-blur-xl dark:border-emerald-500/15 dark:bg-dm-card dark:shadow-dm-card;
   }
 
   .glass-pill {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-white/50 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur-md dark:border-zinc-700/50 dark:bg-black/70 dark:text-slate-200;
+    @apply inline-flex items-center gap-1.5 rounded-full border border-white/50 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-dm-raised dark:text-zinc-200;
   }
 
   .text-muted {
-    @apply text-slate-600 dark:text-slate-400;
+    @apply text-slate-600 dark:text-zinc-400;
   }
 
   .text-heading {
@@ -79,7 +79,7 @@ body {
   }
 
   .container-gradient {
-    @apply bg-gradient-to-b from-white to-[#D0FE1D] dark:from-black dark:to-black;
+    @apply bg-gradient-to-b from-white to-[#D0FE1D] dark:from-dm-canvas dark:to-dm-canvas;
   }
 }
 
@@ -127,7 +127,9 @@ body {
 
 /* App splash + unloading loader (cart → pantry) */
 .dark .app-splash {
-  background: #000000;
+  background:
+    radial-gradient(ellipse 90% 55% at 50% -15%, rgb(16 185 129 / 0.14), transparent 55%),
+    #000000;
 }
 
 .app-splash {
@@ -1375,7 +1377,9 @@ body {
 }
 
 .dark .auth-screen {
-  background: #000000;
+  background:
+    radial-gradient(ellipse 85% 50% at 50% -18%, rgb(16 185 129 / 0.12), transparent 52%),
+    #000000;
 }
 
 .dark .auth-screen__mesh,

@@ -14,7 +14,7 @@ export const DEAL_TYPE_SUB_FILTERS = [
     label: 'Show All',
     types: null,
     active: 'bg-slate-700 text-white ring-slate-800 dark:bg-slate-600',
-    idle: 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50 dark:bg-black dark:text-slate-300 dark:ring-slate-600',
+    idle: 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50 dark:bg-dm-raised dark:text-zinc-300 dark:ring-white/10',
   },
   {
     id: 'halfPrice',

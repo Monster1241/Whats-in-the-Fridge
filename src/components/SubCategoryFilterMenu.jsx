@@ -65,7 +65,7 @@ export function SubCategoryFilterMenu({
         className={`inline-flex min-h-[2.5rem] items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition active:scale-[0.98] ${
           activeCount > 0
             ? 'border-emerald-300 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-200 dark:border-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-200 dark:ring-emerald-800'
-            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-600 dark:bg-black dark:text-slate-200'
+            : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-600 dark:bg-dm-card dark:text-slate-200'
         }`}
         aria-expanded={open}
         aria-controls={panelId}
@@ -85,7 +85,7 @@ export function SubCategoryFilterMenu({
           id={panelId}
           role="dialog"
           aria-label="Filter by item type"
-          className="absolute right-0 z-40 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-600 dark:bg-black"
+          className="absolute right-0 z-40 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl dark:border-slate-600 dark:bg-dm-card"
         >
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-heading text-xs font-bold uppercase tracking-wide">Show types</p>
@@ -126,7 +126,7 @@ export function SubCategoryFilterMenu({
                       type="checkbox"
                       checked={checked}
                       onChange={() => onToggle(sub)}
-                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-black"
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-dm-card"
                     />
                     <span className="min-w-0 flex-1 text-sm font-medium text-slate-800 dark:text-slate-100">
                       <span className="mr-1" aria-hidden>
