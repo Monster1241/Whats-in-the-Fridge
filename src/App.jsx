@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppSplashScreen } from './components/AppSplashScreen.jsx';
+import { UnloadingLoader } from './components/UnloadingLoader.jsx';
 import { AuthScreen } from './components/AuthScreen.jsx';
 import { VerifyEmailScreen } from './components/VerifyEmailScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
@@ -3768,9 +3769,7 @@ function LoadingScreen({ message }) {
       <div className="auth-screen__mesh" aria-hidden />
       <div className="auth-screen__orb auth-screen__orb--a" aria-hidden />
       <div className="mx-auto flex min-h-full max-w-lg flex-col items-center justify-center px-6">
-        <div className="loading-orbit-mini mb-5" aria-hidden>
-          <div className="loading-orbit-mini__ring" />
-        </div>
+        <UnloadingLoader size="sm" className="mb-5" />
         <p className="text-heading animate-fade-in text-center text-sm font-semibold">{message}</p>
       </div>
     </div>
