@@ -15,7 +15,7 @@ import {
   removeHouseholdMember,
 } from './api.js';
 import { readStoredPostcode } from './inventory/postcodeStorage.js';
-import { InventorySearch } from './components/InventorySearch.jsx';
+import { ExpiryDatePicker } from './components/ExpiryDatePicker';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { SubCategoryToggle } from './components/SubCategoryToggle.jsx';
@@ -920,11 +920,10 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
               Set expiry date
             </label>
             {hasExpiry && (
-              <input
-                type="date"
+              <ExpiryDatePicker
                 value={expiryDate}
-                onChange={(e) => setExpiryDate(e.target.value)}
-                className="input-field mb-3"
+                onChange={setExpiryDate}
+                className="mb-3"
               />
             )}
           </>
@@ -2343,12 +2342,7 @@ function InventoryView({
                   </label>
                   )}
                   {addItemType === ITEM_TYPE.FOOD && addExpiry && (
-                    <input
-                      type="date"
-                      value={addExpiryDate}
-                      onChange={(e) => setAddExpiryDate(e.target.value)}
-                      className="input-field"
-                    />
+                    <ExpiryDatePicker value={addExpiryDate} onChange={setAddExpiryDate} />
                   )}
                 </>
               )}
