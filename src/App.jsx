@@ -704,6 +704,23 @@ function itemTypeLabelEmoji(itemType) {
   return '🍏';
 }
 
+function getAddItemHeading(category, itemType) {
+  const meta = getCategoryMeta(category, itemType);
+  if (itemType === ITEM_TYPE.FOOD && category === FOOD_CATEGORY.AMBIENT) {
+    return { title: 'Add to pantry', hint: 'Staples, spices, and shelf-stable goods' };
+  }
+  if (itemType === ITEM_TYPE.FOOD && category === FOOD_CATEGORY.FRESH) {
+    return { title: 'Add to fridge', hint: 'Dairy, meat, produce, and chilled items' };
+  }
+  if (itemType === ITEM_TYPE.FOOD && category === FOOD_CATEGORY.FREEZER) {
+    return { title: 'Add to freezer', hint: 'Frozen meals, veg, and desserts' };
+  }
+  if (meta) {
+    return { title: `Add to ${meta.label.toLowerCase()}`, hint: meta.subtitle };
+  }
+  return { title: 'Add an item', hint: 'Track what your household has in stock' };
+}
+
 function groupShoppingList(items, enabledModules) {
   return items
     .filter(
@@ -1505,6 +1522,16 @@ function InventoryView({
     setSubCategoryFilters(new Set());
   }, [activeView, inventoryScope]);
 
+  useEffect(() => {
+    if (isShoppingPage) return;
+    setAddCategory(activeView);
+  }, [activeView, isShoppingPage]);
+
+  const addItemHeading = useMemo(
+    () => getAddItemHeading(addCategory, addItemType),
+    [addCategory, addItemType],
+  );
+
   const toggleSubCategoryFilter = useCallback((subCategory) => {
     setSubCategoryFilters((prev) => {
       const next = new Set(prev);
@@ -2167,6 +2194,12 @@ function InventoryView({
         categoryGrouped && (
           <>
             <form onSubmit={addItem} className="surface-card mb-4 space-y-3 p-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                  {addItemHeading.title}
+                </p>
+                <p className="text-muted mt-0.5 text-xs leading-relaxed">{addItemHeading.hint}</p>
+              </div>
               <div className="relative flex gap-2">
                 <ItemTypeahead
                   value={draft}
@@ -2288,34 +2321,36 @@ function InventoryView({
               />
             </div>
 
-            <InventorySection
-              title={`Expiring Soon (within ${EXPIRING_SOON_DAYS} days)`}
-              emoji="🟠"
-              accent="text-amber-600"
-              itemCount={categoryGrouped.expiring.length}
-              emptyText="Nothing urgent in this location — add an expiry date to track."
-              grouped
-            >
-              {categoryGrouped.expiringGroups.map((group) => (
-                <div key={`expiring-${group.subCategory}`}>
-                  <h3 className="text-muted mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
-                    <span aria-hidden>{group.meta.emoji}</span>
-                    {group.meta.label}
-                  </h3>
-                  <ul className="space-y-2">
-                    {group.items.map((item) => (
-                      <InventoryItemRow
-                        key={item.id}
-                        item={item}
-                        onOpenEditor={setEditingItem}
-                        onDelete={(id) => deleteItem(id, { trackHistory: true })}
-                        onMoveToShopping={moveItemToShoppingList}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </InventorySection>
+            {categoryGrouped.expiring.length > 0 && (
+              <InventorySection
+                title={`Expiring Soon (within ${EXPIRING_SOON_DAYS} days)`}
+                emoji="🟠"
+                accent="text-amber-600"
+                itemCount={categoryGrouped.expiring.length}
+                emptyText=""
+                grouped
+              >
+                {categoryGrouped.expiringGroups.map((group) => (
+                  <div key={`expiring-${group.subCategory}`}>
+                    <h3 className="text-muted mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
+                      <span aria-hidden>{group.meta.emoji}</span>
+                      {group.meta.label}
+                    </h3>
+                    <ul className="space-y-2">
+                      {group.items.map((item) => (
+                        <InventoryItemRow
+                          key={item.id}
+                          item={item}
+                          onOpenEditor={setEditingItem}
+                          onDelete={(id) => deleteItem(id, { trackHistory: true })}
+                          onMoveToShopping={moveItemToShoppingList}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </InventorySection>
+            )}
 
             <InventorySection
               title="Plentiful"
