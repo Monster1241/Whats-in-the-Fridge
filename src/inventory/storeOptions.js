@@ -34,7 +34,7 @@ const STORE_BADGE_STYLES = {
 };
 
 const DEFAULT_BADGE_STYLE =
-  'bg-white/70 text-sky-800 ring-sky-200/80 dark:bg-dm-raised/80 dark:text-sky-200 dark:ring-sky-500/30';
+  'bg-lm-raised/80 text-sky-800 ring-sky-200/80 dark:bg-dm-raised/80 dark:text-sky-200 dark:ring-sky-500/30';
 
 export function isValidPreferredStore(store) {
   return PREFERRED_STORE_OPTIONS.includes(store);

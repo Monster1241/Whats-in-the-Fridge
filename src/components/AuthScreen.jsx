@@ -119,7 +119,7 @@ export function AuthScreen({
           <button
             type="button"
             onClick={copyCode}
-            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 bg-white/80 px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-white active:scale-[0.98] dark:border-slate-600 dark:bg-dm-card/90 dark:text-slate-200"
+            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/80 bg-lm-raised/80 px-4 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-white active:scale-[0.98] dark:border-slate-600 dark:bg-dm-card/90 dark:text-slate-200"
           >
             <Copy className="h-4 w-4" />
             {copied ? 'Copied!' : 'Copy code'}

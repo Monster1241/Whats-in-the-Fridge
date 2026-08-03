@@ -179,7 +179,7 @@ export function ItemTypeahead({
             <ul
               id={listId}
               role="listbox"
-              className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-dm-card"
+              className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-black/[0.08] bg-lm-raised py-1 shadow-lg dark:border-slate-600 dark:bg-dm-card"
             >
               {matches.map((entry, index) => {
                 const meta = getCategoryMeta(entry.category, entry.itemType);
