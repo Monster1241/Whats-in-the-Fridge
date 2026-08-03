@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   BookOpen,
   Check,
   Download,
@@ -137,6 +138,29 @@ function formatValidityRange(validFrom, validTo) {
   const from = new Date(validFrom).toLocaleDateString('en-AU', opts);
   const to = new Date(validTo).toLocaleDateString('en-AU', opts);
   return `${from} – ${to}`;
+}
+
+function formatDealExpiry(expiresAt) {
+  if (!expiresAt) return null;
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('en-AU', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function getDealSavings(deal) {
+  const dealPrice = Number(deal.dealPrice);
+  const originalPrice = Number(deal.originalPrice);
+  if (!Number.isFinite(dealPrice) || !Number.isFinite(originalPrice) || originalPrice <= dealPrice) {
+    return null;
+  }
+  const amount = originalPrice - dealPrice;
+  const percent = Math.round((amount / originalPrice) * 100);
+  return { amount, percent };
 }
 
 function openExternalUrl(url) {
@@ -311,7 +335,7 @@ function SectionToggle({ activeSection, onChange, dealsCount, cataloguesCount })
                 )}
               </span>
               <span className="hidden text-[10px] font-medium opacity-80 sm:inline">
-                {section.id === 'deals' ? 'Tap + to add to list' : 'Live & PDF flyers'}
+                {section.id === 'deals' ? 'Tap card for details · + to add' : 'Live & PDF flyers'}
               </span>
             </button>
           );
@@ -321,7 +345,7 @@ function SectionToggle({ activeSection, onChange, dealsCount, cataloguesCount })
   );
 }
 
-function WeeklyDealCard({ deal, showAddedFeedback, onAdd }) {
+function WeeklyDealCard({ deal, showAddedFeedback, onAdd, onOpen }) {
   const storeBadge = STORE_BADGE_STYLES[deal.store] ?? 'bg-slate-700 text-white';
   const dealBadgeStyle = getDealTypeBadgeStyle(deal);
   const original = formatPrice(deal.originalPrice);
@@ -329,7 +353,12 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd }) {
 
   return (
     <article className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-2xl border border-amber-200/60 bg-lm-card shadow-lm-card dark:border-amber-900/40 dark:bg-dm-card">
-      <div className="p-3 pb-14">
+      <button
+        type="button"
+        onClick={() => onOpen(deal)}
+        className="flex flex-1 flex-col rounded-2xl p-3 pb-14 text-left transition-colors hover:bg-amber-50/50 active:bg-amber-100/40 dark:hover:bg-amber-950/20 dark:active:bg-amber-950/30"
+        aria-label={`View details for ${deal.name}`}
+      >
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
           <span
             className={`inline-flex max-w-full items-center rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 shadow-sm ${dealBadgeStyle}`}
@@ -361,11 +390,14 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd }) {
             <p className="text-muted pb-0.5 text-sm font-medium line-through">{original}</p>
           )}
         </div>
-      </div>
+      </button>
 
       <button
         type="button"
-        onClick={() => onAdd(deal)}
+        onClick={(event) => {
+          event.stopPropagation();
+          onAdd(deal);
+        }}
         disabled={showAddedFeedback}
         className={`deal-add-btn absolute bottom-3 right-3 flex h-12 min-w-[3rem] items-center justify-center gap-1 rounded-2xl px-3 text-sm font-bold shadow-lg transition-all duration-200 active:scale-95 disabled:cursor-default ${
           showAddedFeedback
@@ -389,6 +421,128 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd }) {
         )}
       </button>
     </article>
+  );
+}
+
+function WeeklyDealDetail({ deal, showAddedFeedback, onAdd, onBack }) {
+  const storeBadge = STORE_BADGE_STYLES[deal.store] ?? 'bg-slate-700 text-white';
+  const dealBadgeStyle = getDealTypeBadgeStyle(deal);
+  const original = formatPrice(deal.originalPrice);
+  const dealPrice = formatPrice(deal.dealPrice);
+  const savings = getDealSavings(deal);
+  const expiryLabel = formatDealExpiry(deal.expiresAt);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onBack();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
+  return (
+    <div className="animate-in fade-in duration-200">
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-heading mb-4 inline-flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm font-bold transition hover:bg-black/5 active:scale-[0.98] dark:hover:bg-white/10"
+      >
+        <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
+        Back to deals
+      </button>
+
+      <article className="overflow-hidden rounded-2xl border border-amber-200/70 bg-lm-card shadow-lm-card dark:border-amber-900/50 dark:bg-dm-card">
+        <div className="border-b border-amber-200/50 bg-gradient-to-b from-amber-50/80 to-transparent p-4 dark:border-amber-900/40 dark:from-amber-950/30">
+          <div className="flex items-start gap-3">
+            <StoreLogo
+              store={deal.store}
+              label={deal.storeLabel}
+              className="h-14 w-14 shrink-0 rounded-2xl ring-2 ring-white/80 dark:ring-slate-800"
+              imgClassName="rounded-2xl"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`inline-flex max-w-full items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 shadow-sm ${dealBadgeStyle}`}
+                >
+                  {deal.dealType}
+                </span>
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${storeBadge}`}
+                >
+                  {deal.storeLabel}
+                </span>
+              </div>
+              {deal.savingsText && (
+                <p className="mt-2 text-sm font-semibold leading-snug text-rose-700 dark:text-rose-400">
+                  {deal.savingsText}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 p-4 sm:p-5">
+          <div>
+            <h2 className="text-heading text-xl font-extrabold leading-snug tracking-tight sm:text-2xl">
+              {deal.name}
+            </h2>
+            <p className="text-muted mt-2 text-xs font-semibold uppercase tracking-wide">
+              {deal.category}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200/60 bg-lm-inset p-4 dark:border-amber-900/40 dark:bg-dm-inset">
+            <p className="text-muted text-xs font-semibold uppercase tracking-wide">Deal price</p>
+            <div className="mt-2 flex flex-wrap items-end gap-3">
+              <p className="text-heading text-4xl font-extrabold leading-none">{dealPrice}</p>
+              {original && (
+                <p className="text-muted pb-1 text-lg font-medium line-through">{original}</p>
+              )}
+            </div>
+            {savings && (
+              <p className="mt-2 text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                You save {formatPrice(savings.amount)} ({savings.percent}% off)
+              </p>
+            )}
+          </div>
+
+          {expiryLabel && (
+            <p className="text-muted text-xs font-medium">
+              Offer valid until <span className="text-heading font-semibold">{expiryLabel}</span>
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onAdd(deal)}
+            disabled={showAddedFeedback}
+            className={`deal-add-btn flex w-full min-h-[3.25rem] items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold shadow-lg transition-all duration-200 active:scale-[0.98] disabled:cursor-default ${
+              showAddedFeedback
+                ? 'deal-add-btn--confirmed bg-emerald-600 text-white shadow-emerald-900/30'
+                : 'bg-sky-600 text-white shadow-sky-900/30 hover:bg-sky-500'
+            }`}
+            aria-label={
+              showAddedFeedback
+                ? `${deal.name} added to shopping list`
+                : `Add ${deal.name} to shopping list`
+            }
+          >
+            {showAddedFeedback ? (
+              <>
+                <Check className="deal-add-btn__icon h-5 w-5 shrink-0" strokeWidth={2.5} aria-hidden />
+                Added to shopping list
+              </>
+            ) : (
+              <>
+                <Plus className="h-5 w-5 shrink-0" strokeWidth={2.5} aria-hidden />
+                Add to shopping list
+              </>
+            )}
+          </button>
+        </div>
+      </article>
+    </div>
   );
 }
 
@@ -486,10 +640,12 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const [cataloguesLoading, setCataloguesLoading] = useState(true);
   const [error, setError] = useState(null);
   const [flashAddedIds, setFlashAddedIds] = useState(() => new Set());
+  const [selectedDeal, setSelectedDeal] = useState(null);
   const flashTimersRef = useRef(new Map());
 
   const handleSectionChange = useCallback((section) => {
     setActiveSection(section);
+    setSelectedDeal(null);
     writeStoredDealsSection(section);
   }, []);
 
@@ -732,7 +888,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
               )}
             </p>
           </div>
-          {activeSection === 'deals' && !loading && deals.length > 0 && (
+          {activeSection === 'deals' && !loading && deals.length > 0 && !selectedDeal && (
             <DealsFilterMenu
               storeOptions={STORE_FILTER_OPTIONS}
               dealTypeOptions={DEAL_TYPE_FILTER_OPTIONS}
@@ -749,6 +905,15 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
 
         {activeSection === 'deals' && (
           <>
+            {selectedDeal ? (
+              <WeeklyDealDetail
+                deal={selectedDeal}
+                showAddedFeedback={showAddedFeedback(selectedDeal)}
+                onAdd={handleAdd}
+                onBack={() => setSelectedDeal(null)}
+              />
+            ) : (
+              <>
             <label className="relative mb-4 block">
               <span className="sr-only">Search deals</span>
               <Search
@@ -803,9 +968,12 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
                 deal={deal}
                 showAddedFeedback={showAddedFeedback(deal)}
                 onAdd={handleAdd}
+                onOpen={setSelectedDeal}
               />
                 ))}
               </div>
+            )}
+              </>
             )}
           </>
         )}
