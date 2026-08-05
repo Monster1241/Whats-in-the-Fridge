@@ -387,7 +387,6 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [aiRecipes, setAiRecipes] = useState(() => loadCachedAiRecipes());
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
-  const [aiRateLimited, setAiRateLimited] = useState(false);
   const [cravingInput, setCravingInput] = useState('');
   const [selectedQuickTag, setSelectedQuickTag] = useState('');
   const [remixingId, setRemixingId] = useState(null);
@@ -395,9 +394,9 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [remixError, setRemixError] = useState('');
 
   const handleGenerateAiRecipes = useCallback(async () => {
+    if (isAiLoading) return;
     setIsAiLoading(true);
     setAiError('');
-    setAiRateLimited(false);
     try {
       const data = await fetchAiRecipeMatches({
         cravings: cravingInput,
@@ -411,32 +410,18 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         setAiError(AI_EMPTY_MESSAGE);
       }
     } catch (err) {
-      if (err?.status === 429) {
-        const message = toUserFacingAiError(
-          err.message ||
-            "You've reached your limit of 5 AI recommendations. Try again in 15 minutes.",
-        );
-        if (/daily ai limit/i.test(message)) {
-          setAiRateLimited(false);
-          setAiError(message);
-        } else {
-          setAiRateLimited(true);
-          setAiError(message);
-        }
+      const message = toUserFacingAiError(
+        err?.message || 'Could not generate AI recommendations.',
+      );
+      if (/not authenticated|unauthorized/i.test(message)) {
+        setAiError('Please sign in to use AI recommendations.');
       } else {
-        const message = toUserFacingAiError(
-          err?.message || 'Could not generate AI recommendations.',
-        );
-        if (/not authenticated|unauthorized/i.test(message)) {
-          setAiError('Please sign in to use AI recommendations.');
-        } else {
-          setAiError(message);
-        }
+        setAiError(message);
       }
     } finally {
       setIsAiLoading(false);
     }
-  }, [cravingInput, selectedQuickTag, mergeRecipeLibrary]);
+  }, [cravingInput, selectedQuickTag, mergeRecipeLibrary, isAiLoading]);
 
   const handleRemix = useCallback(
     async (recipe, mode) => {
@@ -875,33 +860,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </p>
       )}
 
-      {recipeView === RECIPE_VIEW.MATCHED && aiRateLimited && !isAiLoading && (
-        <div
-          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 dark:border-amber-800 dark:bg-amber-950/40"
-          role="alert"
-        >
-          <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
-            Pantry Chef is resting! You can generate 5 new AI recommendations every 15 minutes.
-          </p>
-          {aiError && (
-            <p className="mt-1.5 text-sm text-amber-900/90 dark:text-amber-200/90">{aiError}</p>
-          )}
-          <button
-            type="button"
-            onClick={() => {
-              setRecipeView(RECIPE_VIEW.SAVED);
-              setAiRateLimited(false);
-              setAiError('');
-            }}
-            className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-violet-700 underline-offset-2 hover:underline dark:text-violet-300"
-          >
-            <Bookmark className="h-4 w-4" aria-hidden />
-            Browse Saved Recipes
-          </button>
-        </div>
-      )}
-
-      {recipeView === RECIPE_VIEW.MATCHED && aiError && !aiRateLimited && !isAiLoading && (
+      {recipeView === RECIPE_VIEW.MATCHED && aiError && !isAiLoading && (
         <p
           className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
           role="alert"

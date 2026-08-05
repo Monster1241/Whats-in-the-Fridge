@@ -88,7 +88,7 @@ export function toFriendlyGeminiError(err) {
   }
 
   if (isGeminiQuotaError(err)) {
-    const friendly = new Error('Daily AI limit reached. Please try again tomorrow.');
+    const friendly = new Error('Daily Google AI quota reached. Please try again tomorrow.');
     friendly.status = 429;
     return friendly;
   }

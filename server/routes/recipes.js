@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import { asyncRoute } from '../routeUtils.js';
 import { requireAuth } from '../middleware/auth.js';
-import { aiRecipeMatchLimiter } from '../rateLimit.js';
 import { generateAILiveMatches, remixRecipe } from '../controllers/aiRecipe.js';
 import { sendError } from '../http.js';
 import { toFriendlyGeminiError, isGeminiQuotaError } from '../errors.js';
 
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
+
+export const GOOGLE_AI_QUOTA_ERROR =
+  'Daily Google AI quota reached. Please try again tomorrow.';
 
 async function fetchTheMealDb(path) {
   const res = await fetch(`${THEMEALDB_BASE}${path}`);
@@ -63,7 +65,6 @@ recipesRouter.get(
 recipesRouter.post(
   '/ai-match',
   requireAuth,
-  aiRecipeMatchLimiter, // skipped for local dev — see server/rateLimit.js
   async (req, res) => {
     try {
       await generateAILiveMatches(req, res);
@@ -71,7 +72,7 @@ recipesRouter.post(
       console.error('=== GEMINI API ERROR DETAILS ===');
       console.error(error);
       if (isGeminiQuotaError(error)) {
-        res.status(429).json({ error: 'Daily AI limit reached. Please try again tomorrow.' });
+        res.status(429).json({ error: GOOGLE_AI_QUOTA_ERROR });
         return;
       }
       sendError(res, toFriendlyGeminiError(error), 'AI recipe matching failed');
@@ -82,7 +83,6 @@ recipesRouter.post(
 recipesRouter.post(
   '/remix',
   requireAuth,
-  aiRecipeMatchLimiter,
   async (req, res) => {
     try {
       await remixRecipe(req, res);
@@ -90,7 +90,7 @@ recipesRouter.post(
       console.error('=== GEMINI REMIX ERROR DETAILS ===');
       console.error(error);
       if (isGeminiQuotaError(error)) {
-        res.status(429).json({ error: 'Daily AI limit reached. Please try again tomorrow.' });
+        res.status(429).json({ error: GOOGLE_AI_QUOTA_ERROR });
         return;
       }
       sendError(res, toFriendlyGeminiError(error), 'Recipe remix failed');
