@@ -318,6 +318,119 @@ function getAddItemHeading(category, itemType) {
   return { title: 'Add an item', hint: 'Track what your household has in stock' };
 }
 
+const DUPLICATE_INPUT_RING =
+  'ring-2 ring-amber-300/45 border-amber-300/70 dark:ring-amber-700/35 dark:border-amber-800/50';
+
+function DuplicateInventoryHint({ item, context = 'pantry' }) {
+  if (!item) return null;
+
+  const categoryMeta = getCategoryMeta(item.category, item.itemType);
+  const storageLabel = categoryMeta?.label?.toLowerCase() ?? item.category;
+  const statusLabel = (STATUS_META[getDisplayStatus(item)]?.label ?? 'In stock').toLowerCase();
+
+  if (isOnShoppingList(item)) {
+    return (
+      <p
+        role="status"
+        className="animate-fade-in flex items-start gap-2 rounded-xl border border-amber-200/60 bg-amber-50/40 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100"
+      >
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+        <span>
+          <span className="font-semibold">{item.name}</span> is already on your shopping list.
+          {context === 'pantry' ? ' Mark it bought in Shopping when you restock.' : ''}
+        </span>
+      </p>
+    );
+  }
+
+  return (
+    <p
+      role="status"
+      className="animate-fade-in flex items-start gap-2 rounded-xl border border-amber-200/60 bg-amber-50/40 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100"
+    >
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+      <span>
+        You already have <span className="font-semibold">{item.name}</span> in{' '}
+        {storageLabel} ({statusLabel}).
+        {context === 'pantry' ? ' Tap the item below to update it instead.' : ''}
+      </span>
+    </p>
+  );
+}
+
+const STORAGE_LIST_HEADER_ACCENTS = {
+  [FOOD_CATEGORY.AMBIENT]: {
+    panel:
+      'border-amber-200/90 bg-gradient-to-r from-amber-50 via-amber-50/80 to-white shadow-sm ring-1 ring-amber-200/50 dark:border-amber-900/55 dark:from-amber-950/50 dark:via-amber-950/30 dark:to-dm-card dark:ring-amber-900/40',
+    title: 'text-amber-950 dark:text-amber-50',
+    subtitle: 'text-amber-800/90 dark:text-amber-200/90',
+    hint: 'text-amber-700/80 dark:text-amber-300/75',
+    bar: 'border-l-amber-500',
+  },
+  [FOOD_CATEGORY.FRESH]: {
+    panel:
+      'border-sky-200/90 bg-gradient-to-r from-sky-50 via-sky-50/80 to-white shadow-sm ring-1 ring-sky-200/50 dark:border-sky-900/55 dark:from-sky-950/50 dark:via-sky-950/30 dark:to-dm-card dark:ring-sky-900/40',
+    title: 'text-sky-950 dark:text-sky-50',
+    subtitle: 'text-sky-800/90 dark:text-sky-200/90',
+    hint: 'text-sky-700/80 dark:text-sky-300/75',
+    bar: 'border-l-sky-500',
+  },
+  [FOOD_CATEGORY.FREEZER]: {
+    panel:
+      'border-cyan-200/90 bg-gradient-to-r from-cyan-50 via-cyan-50/80 to-white shadow-sm ring-1 ring-cyan-200/50 dark:border-cyan-900/55 dark:from-cyan-950/50 dark:via-cyan-950/30 dark:to-dm-card dark:ring-cyan-900/40',
+    title: 'text-cyan-950 dark:text-cyan-50',
+    subtitle: 'text-cyan-800/90 dark:text-cyan-200/90',
+    hint: 'text-cyan-700/80 dark:text-cyan-300/75',
+    bar: 'border-l-cyan-500',
+  },
+};
+
+const DEFAULT_LIST_HEADER_ACCENT = {
+  panel:
+    'border-emerald-200/90 bg-gradient-to-r from-emerald-50 via-emerald-50/80 to-white shadow-sm ring-1 ring-emerald-200/50 dark:border-emerald-900/55 dark:from-emerald-950/50 dark:via-emerald-950/30 dark:to-dm-card dark:ring-emerald-900/40',
+  title: 'text-emerald-950 dark:text-emerald-50',
+  subtitle: 'text-emerald-800/90 dark:text-emerald-200/90',
+  hint: 'text-emerald-700/80 dark:text-emerald-300/75',
+  bar: 'border-l-emerald-500',
+};
+
+function getStorageListHeaderAccent(category, itemType) {
+  if (itemType === ITEM_TYPE.FOOD && STORAGE_LIST_HEADER_ACCENTS[category]) {
+    return STORAGE_LIST_HEADER_ACCENTS[category];
+  }
+  return DEFAULT_LIST_HEADER_ACCENT;
+}
+
+function InventorySectionHeader({ category, itemType, children }) {
+  const meta = getCategoryMeta(category, itemType);
+  if (!meta) return null;
+  const accent = getStorageListHeaderAccent(category, itemType);
+
+  return (
+    <div
+      className={`mb-4 flex items-center justify-between gap-3 rounded-2xl border-2 border-l-[5px] px-4 py-3.5 ${accent.bar} ${accent.panel}`}
+    >
+      <div className="min-w-0 flex-1">
+        <h2
+          className={`flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-extrabold leading-tight tracking-tight sm:text-lg ${accent.title}`}
+        >
+          <span className="text-xl leading-none" aria-hidden>
+            {meta.emoji}
+          </span>
+          <span>{meta.label}</span>
+          <span className={`text-sm font-bold sm:text-base ${accent.subtitle}`}>
+            — {meta.subtitle}
+          </span>
+        </h2>
+        <p className={`mt-1 text-[10px] font-bold uppercase tracking-wider ${accent.hint}`}>
+          Showing this storage area
+        </p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function groupShoppingList(items, enabledModules) {
   return items
     .filter(
@@ -1059,7 +1172,6 @@ function InventoryView({
   const pingInFlightRef = useRef(false);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
-  const [duplicateNotice, setDuplicateNotice] = useState(null);
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
   const shoppingList = useMemo(
@@ -1101,6 +1213,19 @@ function InventoryView({
     [addCategory, addItemType],
   );
 
+  const addDuplicateMatch = useMemo(() => {
+    const name = draft.trim();
+    if (!name || name === BARCODE_LOOKUP_LOADING_TEXT) return null;
+    return findInventoryItem(items, name, addItemType);
+  }, [draft, items, addItemType]);
+
+  const shopListDuplicate = useMemo(() => {
+    const name = shopDraft.trim();
+    if (!name) return null;
+    const existing = findInventoryItem(items, name, shopItemType);
+    return existing && isOnShoppingList(existing) ? existing : null;
+  }, [shopDraft, items, shopItemType]);
+
   const toggleSubCategoryFilter = useCallback((subCategory) => {
     setSubCategoryFilters((prev) => {
       const next = new Set(prev);
@@ -1113,12 +1238,6 @@ function InventoryView({
   const clearSubCategoryFilters = useCallback(() => {
     setSubCategoryFilters(new Set());
   }, []);
-
-  useEffect(() => {
-    if (!duplicateNotice) return undefined;
-    const timer = setTimeout(() => setDuplicateNotice(null), 6000);
-    return () => clearTimeout(timer);
-  }, [duplicateNotice]);
 
   useEffect(() => {
     const resolved = resolveModuleKey(enabledModules, inventoryScope);
@@ -1278,18 +1397,7 @@ function InventoryView({
     const name = draft.trim();
     if (!name || name === BARCODE_LOOKUP_LOADING_TEXT) return;
     const existing = findInventoryItem(items, name, addItemType);
-    if (existing) {
-      if (isOnShoppingList(existing)) {
-        setDuplicateNotice(
-          `"${existing.name}" is already on your shopping list. Open the Shopping tab to mark it bought.`,
-        );
-      } else {
-        setDuplicateNotice(
-          `"${existing.name}" is already in your ${existing.category} inventory.`,
-        );
-      }
-      return;
-    }
+    if (existing) return;
     const consumption = buildConsumptionFields({
       name,
       itemType: addItemType,
@@ -1360,9 +1468,6 @@ function InventoryView({
         },
       ];
     });
-    if (duplicateAlreadyListed) {
-      setDuplicateNotice(`"${name}" is already on your shopping list.`);
-    }
     setShopDraft('');
   };
 
@@ -1610,15 +1715,6 @@ function InventoryView({
         onEdit={setEditingItem}
       />
 
-      {duplicateNotice && (
-        <p
-          role="status"
-          className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-medium leading-snug text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-        >
-          {duplicateNotice}
-        </p>
-      )}
-
       {!isShoppingPage && (
         <>
           {!isDismissed('predicted-low') && (
@@ -1705,17 +1801,21 @@ function InventoryView({
                 onPick={(entry) => applySuggestion(entry, 'shop')}
                 enabledModules={enabledModules}
                 placeholder='What do you need? (e.g. "Milk")'
-                inputClassName={`input-field min-w-0 flex-1 ${SHOPPING_ACCENT.focus}`}
+                inputClassName={`input-field min-w-0 flex-1 ${SHOPPING_ACCENT.focus}${
+                  shopListDuplicate ? ` ${DUPLICATE_INPUT_RING}` : ''
+                }`}
                 id="shop-item-input"
               />
               <button
                 type="submit"
-                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-lg active:scale-95 ${SHOPPING_ACCENT.btn}`}
+                disabled={Boolean(shopListDuplicate)}
+                className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 ${SHOPPING_ACCENT.btn}`}
                 aria-label="Add to shopping list"
               >
                 <Plus className="h-5 w-5" />
               </button>
             </div>
+            <DuplicateInventoryHint item={shopListDuplicate} context="shopping" />
             <button
               type="button"
               onClick={() => setShowShoppingAdvanced((v) => !v)}
@@ -1809,15 +1909,20 @@ function InventoryView({
                   enableBarcodeScan
                   placeholder="Item name or scan barcode"
                   id="quick-add-input"
+                  inputClassName={`input-field min-w-0 flex-1${
+                    addDuplicateMatch ? ` ${DUPLICATE_INPUT_RING}` : ''
+                  }`}
                 />
                 <button
                   type="submit"
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 active:scale-95"
+                  disabled={Boolean(addDuplicateMatch)}
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-900/40 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45"
                   aria-label="Add item"
                 >
                   <Plus className="h-5 w-5" />
                 </button>
               </div>
+              <DuplicateInventoryHint item={addDuplicateMatch} context="pantry" />
               {addItemType === ITEM_TYPE.FOOD && addExpiry && addExpiryDate && (
                 <p className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
                   Suggested use-by:{' '}
@@ -1934,14 +2039,7 @@ function InventoryView({
               )}
             </form>
 
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <p className="text-muted min-w-0 text-sm">
-                {getCategoryMeta(activeView, scopeItemType)?.emoji}{' '}
-                <span className="font-semibold text-slate-800 dark:text-slate-200">
-                  {getCategoryMeta(activeView, scopeItemType)?.label}
-                </span>{' '}
-                — {getCategoryMeta(activeView, scopeItemType)?.subtitle}
-              </p>
+            <InventorySectionHeader category={activeView} itemType={scopeItemType}>
               <SubCategoryFilterMenu
                 itemType={scopeItemType}
                 category={activeView}
@@ -1950,7 +2048,7 @@ function InventoryView({
                 onClear={clearSubCategoryFilters}
                 counts={categoryGrouped.subCategoryCounts}
               />
-            </div>
+            </InventorySectionHeader>
 
             {categoryGrouped.expiring.length > 0 && (
               <InventorySection
