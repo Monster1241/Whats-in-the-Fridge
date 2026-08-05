@@ -3,6 +3,8 @@ import { asyncRoute } from '../routeUtils.js';
 import { requireAuth } from '../middleware/auth.js';
 import { aiRecipeMatchLimiter } from '../rateLimit.js';
 import { generateAILiveMatches } from '../controllers/aiRecipe.js';
+import { sendError } from '../http.js';
+import { toFriendlyGeminiError } from '../errors.js';
 
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
 
@@ -61,10 +63,14 @@ recipesRouter.get(
 recipesRouter.post(
   '/ai-match',
   requireAuth,
-  aiRecipeMatchLimiter, // 5 requests / 15 min per user (see server/rateLimit.js)
-  asyncRoute(
-    generateAILiveMatches,
-    'POST /api/recipes/ai-match',
-    'AI recipe matching failed',
-  ),
+  aiRecipeMatchLimiter, // skipped for local dev — see server/rateLimit.js
+  async (req, res) => {
+    try {
+      await generateAILiveMatches(req, res);
+    } catch (error) {
+      console.error('=== GEMINI API ERROR DETAILS ===');
+      console.error(error);
+      sendError(res, toFriendlyGeminiError(error), 'AI recipe matching failed');
+    }
+  },
 );

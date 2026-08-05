@@ -1,7 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { getInventoryForHousehold } from '../db.js';
 import { EXPIRY_ALERT_DAYS, findExpiringSoonItems } from '../expiryAlerts.js';
-import { toFriendlyGeminiError } from '../errors.js';
 
 const MODEL_ID = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash';
 
@@ -176,22 +175,16 @@ export async function generateAILiveMatches(req, res) {
   const inventoryList = formatInventoryForPrompt(matchedItems);
   const ai = getGenAI();
 
-  let response;
-  try {
-    response = await ai.models.generateContent({
-      model: MODEL_ID,
-      contents: `Household inventory (only plentiful and expiring-soon items):\n\n${inventoryList}\n\nSuggest 3 practical recipes using these items. Prioritize expiring-soon ingredients.`,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: 'application/json',
-        responseSchema: RECIPE_RESPONSE_SCHEMA,
-        temperature: 0.6,
-      },
-    });
-  } catch (err) {
-    console.error('POST /api/recipes/ai-match Gemini error:', err);
-    throw toFriendlyGeminiError(err);
-  }
+  const response = await ai.models.generateContent({
+    model: MODEL_ID,
+    contents: `Household inventory (only plentiful and expiring-soon items):\n\n${inventoryList}\n\nSuggest 3 practical recipes using these items. Prioritize expiring-soon ingredients.`,
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseMimeType: 'application/json',
+      responseSchema: RECIPE_RESPONSE_SCHEMA,
+      temperature: 0.6,
+    },
+  });
 
   const recipes = parseRecipesResponse(response.text);
   res.json({ recipes });

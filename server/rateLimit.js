@@ -4,12 +4,24 @@ const RATE_LIMIT_MESSAGE = { error: 'Too many requests. Please try again later.'
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 
+function isLocalDevRequest(req) {
+  if (process.env.NODE_ENV === 'production') return false;
+  const ip = String(req.ip ?? '');
+  return (
+    ip === '127.0.0.1' ||
+    ip === '::1' ||
+    ip === '::ffff:127.0.0.1' ||
+    ip.includes('127.0.0.1')
+  );
+}
+
 function createLimiter({ max, windowMs = FIFTEEN_MINUTES_MS, message = RATE_LIMIT_MESSAGE }) {
   return rateLimit({
     windowMs,
     max,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: isLocalDevRequest,
     handler: (_req, res) => {
       res.status(429).json(message);
     },
@@ -33,6 +45,7 @@ export const aiRecipeMatchLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: isLocalDevRequest,
   keyGenerator: (req) => {
     if (req.user?.id) return `user:${req.user.id}`;
     return ipKeyGenerator(req.ip ?? '');
