@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Loader2, Send, Sparkles } from 'lucide-react';
 import { fetchFridgeScoutChat } from '../api.js';
 import {
@@ -56,13 +56,18 @@ function ScoutAvatar({ compact = false }) {
   );
 }
 
-export function FridgeScoutChat() {
+export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = false }, ref) {
   const [messages, setMessages] = useState(loadCachedMessages);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+  const messagesRef = useRef(messages);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     try {
@@ -76,39 +81,47 @@ export function FridgeScoutChat() {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  const sendMessage = useCallback(
-    async (textOverride) => {
-      const text = String(textOverride ?? input).trim();
-      if (!text || isLoading) return;
+  const sendMessage = useCallback(async (textOverride, { keepInputOnError = false } = {}) => {
+    const text = String(textOverride ?? input).trim();
+    if (!text || isLoading) return false;
 
-      const userMessage = { role: 'user', content: text };
-      const history = [...messages, userMessage];
-      setMessages(history);
-      setInput('');
-      setIsLoading(true);
-      setError('');
+    const userMessage = { role: 'user', content: text };
+    const history = [...messagesRef.current, userMessage];
+    setMessages(history);
+    if (!textOverride) setInput('');
+    setIsLoading(true);
+    setError('');
 
-      try {
-        const data = await fetchFridgeScoutChat(history);
-        const reply = String(data?.reply ?? '').trim();
-        if (reply) {
-          setMessages((current) => [...current, { role: 'assistant', content: reply }]);
-        }
-      } catch (err) {
-        setMessages((current) => current.slice(0, -1));
-        if (!textOverride) setInput(text);
-        const message = toUserFacingChatError(err?.message);
-        if (/not authenticated|unauthorized/i.test(message)) {
-          setError(`Please sign in to chat with ${FRIDGE_SCOUT_NAME}.`);
-        } else {
-          setError(message);
-        }
-      } finally {
-        setIsLoading(false);
-        inputRef.current?.focus();
+    try {
+      const data = await fetchFridgeScoutChat(history);
+      const reply = String(data?.reply ?? '').trim();
+      if (reply) {
+        setMessages((current) => [...current, { role: 'assistant', content: reply }]);
       }
-    },
-    [input, isLoading, messages],
+      return true;
+    } catch (err) {
+      setMessages((current) => current.slice(0, -1));
+      if (!textOverride || keepInputOnError) setInput(text);
+      const message = toUserFacingChatError(err?.message);
+      if (/not authenticated|unauthorized/i.test(message)) {
+        setError(`Please sign in to chat with ${FRIDGE_SCOUT_NAME}.`);
+      } else {
+        setError(message);
+      }
+      return false;
+    } finally {
+      setIsLoading(false);
+      inputRef.current?.focus();
+    }
+  }, [input, isLoading]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      sendMessage: (text) => sendMessage(text),
+      focus: () => inputRef.current?.focus(),
+    }),
+    [sendMessage],
   );
 
   function handleKeyDown(event) {
@@ -121,7 +134,7 @@ export function FridgeScoutChat() {
   const showWelcome = messages.length === 0;
 
   return (
-    <div className="fridge-scout-chat">
+    <div className={`fridge-scout-chat ${expanded ? 'fridge-scout-chat--expanded' : ''}`}>
       <div className="fridge-scout-chat__header">
         <div className="flex min-w-0 items-center gap-2.5">
           <ScoutAvatar />
@@ -240,4 +253,4 @@ export function FridgeScoutChat() {
       </div>
     </div>
   );
-}
+});

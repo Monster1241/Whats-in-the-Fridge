@@ -187,6 +187,10 @@ body {
     scrollbar-color: rgb(16 185 129 / 0.35) transparent;
   }
 
+  .fridge-scout-chat--expanded .fridge-scout-chat__thread {
+    max-height: min(58vh, 28rem);
+  }
+
   .fridge-scout-chat__row {
     @apply flex items-end gap-2;
   }

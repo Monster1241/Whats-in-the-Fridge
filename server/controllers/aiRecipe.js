@@ -12,7 +12,9 @@ import {
 import { getRecipeMainIngredient } from '../../src/recipes/recipeUtils.js';
 
 const MODEL_ID = process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
-const AI_RECIPE_COUNT = 3;
+const AI_RECIPE_COUNT = 5;
+const PANTRY_FIRST_RECIPE_COUNT = 3;
+const STRETCH_RECIPE_COUNT = 2;
 
 const REMIX_MODES = new Set(['higher_protein', 'lower_calorie', 'quick_speed']);
 
@@ -61,9 +63,13 @@ const RECIPE_RESPONSE_SCHEMA = {
 const REMIX_RESPONSE_SCHEMA = RECIPE_OBJECT_SCHEMA;
 
 const SYSTEM_INSTRUCTION = `You are a practical home-cooking assistant for Australian households.
-Given a list of in-stock pantry and fridge items, create exactly 3 original, fully-formed recipes a family could cook this week.
-Prioritize using items marked EXPIRING SOON to reduce food waste.
-Each recipe must include realistic prepTime and cookTime (e.g. "15 min"), a cuisine, a category, a full ingredient list, step-by-step instructions, estimated calories, macros (protein/carbs/fat as strings like "25g"), a tags array (e.g. "One-Pan", "High Protein", "Under 15 Mins"), and missingIngredients for staples not in the inventory.
+Given a list of in-stock pantry and fridge items, create exactly ${AI_RECIPE_COUNT} original, fully-formed recipes a family could cook this week.
+
+Recipe mix (required):
+- ${PANTRY_FIRST_RECIPE_COUNT} "pantry-first" recipes: build mainly from the household inventory. Prioritize items marked EXPIRING SOON. missingIngredients should be empty or only 1–2 common staples (salt, oil, etc.).
+- ${STRETCH_RECIPE_COUNT} "shop & cook" recipes: still inspired by what's in the fridge, but may need several ingredients not in stock. List every non-inventory ingredient in missingIngredients (2–6 items). Add the tag "Shop & Cook" to these recipes.
+
+Each recipe must include realistic prepTime and cookTime (e.g. "15 min"), a cuisine, a category, a full ingredient list, step-by-step instructions, estimated calories, macros (protein/carbs/fat as strings like "25g"), a tags array (e.g. "One-Pan", "High Protein", "Under 15 Mins"), and missingIngredients.
 Use clear ingredient names that match common Australian pantry labels.
 Do not duplicate any recipe titles provided in the user message.
 Return strict JSON only — no markdown fences or commentary.`;
@@ -356,7 +362,7 @@ export async function generateAILiveMatches(req, res) {
       existingTitles.length
         ? existingTitles.map((title) => `- ${title}`).join('\n')
         : '- (none yet)'
-    }${filterInstructions}\n\nCreate 3 new, original recipes using these items. Prioritize expiring-soon ingredients.`,
+    }${filterInstructions}\n\nCreate ${AI_RECIPE_COUNT} new, original recipes: ${PANTRY_FIRST_RECIPE_COUNT} mostly from on-hand inventory (prioritize expiring-soon items), and ${STRETCH_RECIPE_COUNT} creative "shop & cook" ideas that use what's in the fridge as a base but list extra ingredients to buy in missingIngredients.`,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bookmark,
   ChefHat,
@@ -11,11 +11,13 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { fetchAiRecipeMatches, fetchRemixRecipe } from '../api.js';
+import { fetchAiRecipeMatches } from '../api.js';
 import { FridgeScoutChat } from './FridgeScoutChat.jsx';
 import {
+  buildRecipeTweakPrompt,
   FRIDGE_SCOUT_NAME,
   FRIDGE_SCOUT_TAGLINE,
+  RECIPE_TWEAK_MODES,
 } from '../recipes/kitchenAiBranding.js';
 import { classifyItem } from '../inventory/classifyItem.js';
 import { buildConsumptionFields } from '../inventory/consumption.js';
@@ -33,6 +35,7 @@ import {
 import { fetchRecipesByIngredient, fetchRecipesBySearch } from '../recipes/themealdb.js';
 
 const RECIPE_VIEW = {
+  SCOUT: 'scout',
   MATCHED: 'matched',
   SEARCH: 'search',
   SAVED: 'saved',
@@ -187,8 +190,8 @@ function RecipeCard({
   onToggleSave,
   onMarkCooked,
   onAddNeedToShoppingList,
-  onRemix,
-  remixingMode,
+  onAskScoutToTweak,
+  scoutTweakingMode,
 }) {
   const [showAddConfirm, setShowAddConfirm] = useState(false);
 
@@ -332,32 +335,41 @@ function RecipeCard({
 
       <CollapsibleInstructions recipe={recipe} />
 
-      {onRemix && (
-        <div className="mb-3 flex flex-col gap-2 sm:flex-row">
-          <button
-            type="button"
-            disabled={Boolean(remixingMode)}
-            onClick={() => onRemix(recipe, 'higher_protein')}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-950/60"
-          >
-            {remixingMode === 'higher_protein' ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              '💪 Boost Protein'
-            )}
-          </button>
-          <button
-            type="button"
-            disabled={Boolean(remixingMode)}
-            onClick={() => onRemix(recipe, 'lower_calorie')}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-lime-200 bg-lime-50 py-2.5 text-xs font-semibold text-lime-900 transition hover:bg-lime-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:border-lime-800 dark:bg-lime-950/40 dark:text-lime-200 dark:hover:bg-lime-950/60"
-          >
-            {remixingMode === 'lower_calorie' ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              '🥗 Lower Calorie'
-            )}
-          </button>
+      {recipe.isAiGenerated && onAskScoutToTweak && (
+        <div className="mb-3">
+          <p className="text-muted mb-2 text-[10px] font-bold uppercase tracking-wide">
+            Tweak with {FRIDGE_SCOUT_NAME}
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {(['higher_protein', 'lower_calorie']).map((mode) => {
+              const tweak = RECIPE_TWEAK_MODES[mode];
+              const isActive = scoutTweakingMode === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  disabled={Boolean(scoutTweakingMode)}
+                  onClick={() => onAskScoutToTweak(recipe, mode)}
+                  title={`Ask Scout to ${tweak.label.toLowerCase()} for this recipe`}
+                  className="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-teal-200 bg-teal-50 py-2.5 text-xs font-semibold text-teal-900 transition hover:bg-teal-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:border-teal-800/60 dark:bg-teal-950/40 dark:text-teal-100 dark:hover:bg-teal-950/60"
+                >
+                  {isActive ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      Opening Scout…
+                    </span>
+                  ) : (
+                    <>
+                      <span>{tweak.emoji} {tweak.label}</span>
+                      <span className="text-[10px] font-medium text-teal-700/80 dark:text-teal-300/80">
+                        via chat
+                      </span>
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -401,9 +413,9 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [aiError, setAiError] = useState('');
   const [cravingInput, setCravingInput] = useState('');
   const [selectedQuickTag, setSelectedQuickTag] = useState('');
-  const [remixingId, setRemixingId] = useState(null);
-  const [remixingMode, setRemixingMode] = useState('');
-  const [remixError, setRemixError] = useState('');
+  const [scoutTweakingId, setScoutTweakingId] = useState(null);
+  const [scoutTweakingMode, setScoutTweakingMode] = useState('');
+  const scoutChatRef = useRef(null);
 
   const handleGenerateAiRecipes = useCallback(async () => {
     if (isAiLoading) return;
@@ -420,6 +432,8 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       saveCachedAiRecipes(recipes);
       if (recipes.length === 0) {
         setAiError(AI_EMPTY_MESSAGE);
+      } else {
+        setRecipeView(RECIPE_VIEW.MATCHED);
       }
     } catch (err) {
       const message = toUserFacingAiError(
@@ -437,34 +451,24 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
     }
   }, [cravingInput, selectedQuickTag, mergeRecipeLibrary, isAiLoading]);
 
-  const handleRemix = useCallback(
-    async (recipe, mode) => {
-      if (!recipe?.id) return;
-      setRemixError('');
-      setRemixingId(recipe.id);
-      setRemixingMode(mode);
-      rememberRecipe(recipe);
-      try {
-        const data = await fetchRemixRecipe(recipe.id, mode, recipe);
-        const remixed = data.recipe;
-        if (remixed) {
-          mergeRecipeLibrary([remixed]);
-          setAiRecipes((prev) => {
-            const next = [...prev.filter((entry) => entry.id !== remixed.id), remixed];
-            saveCachedAiRecipes(next);
-            return next;
-          });
-        }
-      } catch (err) {
-        const message = toUserFacingAiError(err?.message || 'Could not remix this recipe.');
-        setRemixError(message);
-      } finally {
-        setRemixingId(null);
-        setRemixingMode('');
-      }
-    },
-    [mergeRecipeLibrary, rememberRecipe],
-  );
+  const handleAskScoutToTweak = useCallback(async (recipe, mode) => {
+    if (!recipe?.id) return;
+    const prompt = buildRecipeTweakPrompt(recipe, mode);
+    if (!prompt) return;
+
+    setScoutTweakingId(recipe.id);
+    setScoutTweakingMode(mode);
+    setRecipeView(RECIPE_VIEW.SCOUT);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(async () => {
+        await scoutChatRef.current?.sendMessage(prompt);
+        setScoutTweakingId(null);
+        setScoutTweakingMode('');
+        scoutChatRef.current?.focus();
+      });
+    });
+  }, []);
 
   const aiRecipeCards = useMemo(
     () =>
@@ -658,24 +662,42 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       ? savedRecipeCards
       : recipeView === RECIPE_VIEW.SEARCH
         ? mergedSearchResults
-        : cookableRecipes;
+        : recipeView === RECIPE_VIEW.SCOUT
+          ? []
+          : cookableRecipes;
+
+  function tabActiveClass(id, active) {
+    if (!active) {
+      return 'border-black/[0.08] bg-lm-raised/50 text-zinc-600 dark:border-white/10 dark:bg-dm-raised/40 dark:text-zinc-400';
+    }
+    if (id === RECIPE_VIEW.SAVED) {
+      return 'border-violet-500 bg-violet-50 text-violet-800 dark:border-violet-500/70 dark:bg-violet-950/40 dark:text-violet-200';
+    }
+    if (id === RECIPE_VIEW.SCOUT) {
+      return 'border-teal-500 bg-teal-50 text-teal-900 shadow-sm shadow-teal-500/10 dark:border-teal-500/70 dark:bg-teal-950/35 dark:text-teal-100 dark:shadow-teal-500/5';
+    }
+    return 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm shadow-emerald-500/10 dark:border-emerald-500/70 dark:bg-emerald-950/35 dark:text-emerald-100 dark:shadow-emerald-500/5';
+  }
 
   return (
     <div className="pb-28">
       <header className="mb-4">
         <h1 className="text-heading text-2xl font-extrabold">What Can We Cook?</h1>
         <p className="text-muted mt-1.5 text-sm">
-          {recipeView === RECIPE_VIEW.SAVED
-            ? 'Your bookmarked recipes — always available here'
-            : recipeView === RECIPE_VIEW.SEARCH
-              ? 'Search built-in recipes and import free recipes from TheMealDB'
-              : 'Chat with Scout or generate meals from what’s already in your fridge'}
+          {recipeView === RECIPE_VIEW.SCOUT
+            ? FRIDGE_SCOUT_TAGLINE
+            : recipeView === RECIPE_VIEW.SAVED
+              ? 'Your bookmarked recipes — always available here'
+              : recipeView === RECIPE_VIEW.SEARCH
+                ? 'Search built-in recipes and import free recipes from TheMealDB'
+                : 'AI picks and catalogue recipes you can cook with what you have'}
         </p>
       </header>
 
-      <div className="mb-4 grid grid-cols-3 gap-2">
+      <div className="mb-4 grid grid-cols-4 gap-1.5 sm:gap-2">
         {[
-          { id: RECIPE_VIEW.MATCHED, label: 'Recommendations', shortLabel: 'For you', icon: ChefHat, count: cookableRecipes.length },
+          { id: RECIPE_VIEW.SCOUT, label: 'Fridge Scout', shortLabel: 'Scout', icon: Sparkles, count: 0 },
+          { id: RECIPE_VIEW.MATCHED, label: 'Recommendations', shortLabel: 'Recs', icon: ChefHat, count: cookableRecipes.length },
           { id: RECIPE_VIEW.SEARCH, label: 'Search', shortLabel: 'Search', icon: Search, count: 0 },
           { id: RECIPE_VIEW.SAVED, label: 'Saved', shortLabel: 'Saved', icon: Bookmark, count: savedIds.length },
         ].map(({ id, label, shortLabel, icon: Icon, count }) => {
@@ -685,15 +707,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               key={id}
               type="button"
               onClick={() => setRecipeView(id)}
-              className={`relative flex min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 px-1.5 py-2.5 transition active:scale-[0.98] ${
-                active
-                  ? id === RECIPE_VIEW.SAVED
-                    ? 'border-violet-500 bg-violet-50 text-violet-800 dark:border-violet-500/70 dark:bg-violet-950/40 dark:text-violet-200'
-                    : id === RECIPE_VIEW.MATCHED
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm shadow-emerald-500/10 dark:border-emerald-500/70 dark:bg-emerald-950/35 dark:text-emerald-100 dark:shadow-emerald-500/5'
-                      : 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
-                  : 'border-black/[0.08] bg-lm-raised/50 text-zinc-600 dark:border-white/10 dark:bg-dm-raised/40 dark:text-zinc-400'
-              }`}
+              className={`relative flex min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 px-1 py-2.5 transition active:scale-[0.98] sm:px-1.5 ${tabActiveClass(id, active)}`}
             >
               <span className="relative inline-flex shrink-0">
                 <Icon
@@ -713,7 +727,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               <span className="w-full truncate text-center text-[10px] font-semibold leading-tight sm:hidden">
                 {shortLabel}
               </span>
-              <span className="hidden w-full truncate text-center text-xs font-semibold leading-tight sm:block">
+              <span className="hidden w-full truncate text-center text-[11px] font-semibold leading-tight sm:block">
                 {label}
               </span>
             </button>
@@ -812,7 +826,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </section>
       )}
 
-      {recipeView === RECIPE_VIEW.MATCHED && (
+      {recipeView === RECIPE_VIEW.SCOUT && (
         <section className="fridge-scout-zone mb-5">
           <div className="fridge-scout-zone__hero">
             <div className="fridge-scout-zone__hero-top">
@@ -823,7 +837,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
             </div>
             <h2 className="fridge-scout-zone__title">{FRIDGE_SCOUT_NAME}</h2>
             <p className="fridge-scout-zone__tagline">{FRIDGE_SCOUT_TAGLINE}</p>
-            <FridgeScoutChat />
+            <FridgeScoutChat ref={scoutChatRef} expanded />
           </div>
 
           <div className="fridge-scout-zone__generator">
@@ -878,20 +892,14 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                 </>
               )}
             </button>
+            <p className="text-muted mt-3 text-center text-[11px] leading-relaxed">
+              New recipes appear in the <strong className="font-semibold text-zinc-700 dark:text-zinc-300">Recommendations</strong> tab.
+            </p>
           </div>
         </section>
       )}
 
-      {recipeView === RECIPE_VIEW.MATCHED && remixError && (
-        <p
-          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-          role="alert"
-        >
-          {remixError}
-        </p>
-      )}
-
-      {recipeView === RECIPE_VIEW.MATCHED && aiError && !isAiLoading && (
+      {recipeView === RECIPE_VIEW.SCOUT && aiError && !isAiLoading && (
         <p
           className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
           role="alert"
@@ -912,8 +920,8 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                 onToggleSave={handleToggleSave}
                 onMarkCooked={markCooked}
                 onAddNeedToShoppingList={addNeededToShoppingList}
-                onRemix={handleRemix}
-                remixingMode={remixingId === recipe.id ? remixingMode : ''}
+                onAskScoutToTweak={handleAskScoutToTweak}
+                scoutTweakingMode={scoutTweakingId === recipe.id ? scoutTweakingMode : ''}
               />
             ))}
           </ul>
@@ -933,12 +941,13 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         list.length === 0 && (
           <EmptyState
             icon={ChefHat}
-            title="No AI recommendations found"
-            description="Try adding more inventory items or tweaking your craving search."
+            title="No recommendations yet"
+            description="Open Fridge Scout to chat with Scout or generate meals from your inventory."
           />
         )}
 
-      {list.length === 0 ? (
+      {recipeView !== RECIPE_VIEW.SCOUT &&
+        (list.length === 0 ? (
         recipeView === RECIPE_VIEW.MATCHED && (aiRecipes.length > 0 || isAiLoading) ? null :
         recipeView === RECIPE_VIEW.MATCHED && aiRecipeCards.length === 0 ? null : (
         <EmptyState
@@ -980,12 +989,12 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               onToggleSave={handleToggleSave}
               onMarkCooked={markCooked}
               onAddNeedToShoppingList={addNeededToShoppingList}
-              onRemix={handleRemix}
-              remixingMode={remixingId === recipe.id ? remixingMode : ''}
+              onAskScoutToTweak={handleAskScoutToTweak}
+              scoutTweakingMode={scoutTweakingId === recipe.id ? scoutTweakingMode : ''}
             />
           ))}
         </ul>
-      )}
+      ))}
     </div>
   );
 }
