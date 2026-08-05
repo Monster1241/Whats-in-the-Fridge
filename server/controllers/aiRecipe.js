@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { getInventoryForHousehold } from '../db.js';
 import { EXPIRY_ALERT_DAYS, findExpiringSoonItems } from '../expiryAlerts.js';
 
-const MODEL_ID = process.env.GEMINI_MODEL?.trim() || 'gemini-2.0-flash';
+const MODEL_ID = 'gemini-2.0-flash';
 
 const RECIPE_RESPONSE_SCHEMA = {
   type: Type.ARRAY,

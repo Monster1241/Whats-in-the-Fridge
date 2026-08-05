@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { aiRecipeMatchLimiter } from '../rateLimit.js';
 import { generateAILiveMatches } from '../controllers/aiRecipe.js';
 import { sendError } from '../http.js';
-import { toFriendlyGeminiError } from '../errors.js';
+import { toFriendlyGeminiError, isGeminiQuotaError } from '../errors.js';
 
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
 
@@ -70,6 +70,10 @@ recipesRouter.post(
     } catch (error) {
       console.error('=== GEMINI API ERROR DETAILS ===');
       console.error(error);
+      if (isGeminiQuotaError(error)) {
+        res.status(429).json({ error: 'Daily AI limit reached. Please try again tomorrow.' });
+        return;
+      }
       sendError(res, toFriendlyGeminiError(error), 'AI recipe matching failed');
     }
   },

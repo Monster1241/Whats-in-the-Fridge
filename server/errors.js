@@ -35,6 +35,36 @@ export function toFriendlyError(err) {
 }
 
 /**
+ * @param {unknown} err
+ */
+export function isGeminiQuotaError(err) {
+  const raw = err && typeof err === 'object' ? err : { message: String(err ?? '') };
+  const status = Number(raw.status ?? raw.statusCode ?? 0) || undefined;
+  let code = String(raw.code ?? raw.error?.status ?? raw.error?.code ?? '');
+  let message = String(raw.message ?? '');
+
+  const jsonStart = message.indexOf('{');
+  if (jsonStart >= 0) {
+    try {
+      const parsed = JSON.parse(message.slice(jsonStart));
+      const nested = parsed?.error?.message ?? parsed?.message;
+      if (nested) message = String(nested);
+      if (parsed?.error?.status) code = String(parsed.error.status);
+      if (parsed?.error?.code) code = String(parsed.error.code);
+    } catch {
+      // keep original message
+    }
+  }
+
+  return (
+    status === 429 ||
+    /ResourceHasBeenExhausted|RESOURCE_EXHAUSTED|quota|rate limit|resource exhausted/i.test(
+      `${code} ${message}`,
+    )
+  );
+}
+
+/**
  * Maps Google GenAI / Gemini SDK errors to safe user-facing messages.
  * @param {unknown} err
  */
@@ -57,19 +87,9 @@ export function toFriendlyGeminiError(err) {
     }
   }
 
-  const isQuotaExhausted =
-    status === 429 ||
-    /ResourceHasBeenExhausted|RESOURCE_EXHAUSTED|quota|rate limit|resource exhausted/i.test(
-      `${code} ${message}`,
-    );
-
-  if (isQuotaExhausted) {
-    const friendly = new Error(
-      process.env.NODE_ENV !== 'production'
-        ? 'Gemini API rate limit exceeded. Check your Google AI Studio plan/quota.'
-        : 'AI recipe matching is busy right now. Please wait a few minutes and try again.',
-    );
-    friendly.status = 503;
+  if (isGeminiQuotaError(err)) {
+    const friendly = new Error('Daily AI limit reached. Please try again tomorrow.');
+    friendly.status = 429;
     return friendly;
   }
 
