@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { AppSplashScreen } from './components/AppSplashScreen.jsx';
 import { UnloadingLoader } from './components/UnloadingLoader.jsx';
 import { AuthScreen } from './components/AuthScreen.jsx';
@@ -23,8 +23,6 @@ import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { SubCategoryToggle } from './components/SubCategoryToggle.jsx';
 import { SubCategoryFilterMenu } from './components/SubCategoryFilterMenu.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
-import { WeeklyDealsFeed } from './components/WeeklyDealsFeed.jsx';
-import { RecipesView } from './components/RecipesView.jsx';
 import { LegalFooterLinks } from './components/LegalFooterLinks.jsx';
 import {
   defaultCategoryForItemType,
@@ -106,6 +104,21 @@ import {
   Users,
   X,
 } from 'lucide-react';
+
+const WeeklyDealsFeed = lazy(() =>
+  import('./components/WeeklyDealsFeed.jsx').then((m) => ({ default: m.WeeklyDealsFeed })),
+);
+const RecipesView = lazy(() =>
+  import('./components/RecipesView.jsx').then((m) => ({ default: m.RecipesView })),
+);
+
+function TabPanelLoader() {
+  return (
+    <div className="flex justify-center py-20" role="status" aria-live="polite">
+      <UnloadingLoader size="sm" />
+    </div>
+  );
+}
 
 const MAIN_TAB_ORDER = ['fridge', 'shopping', 'deals', 'recipes', 'settings'];
 
@@ -2175,7 +2188,9 @@ function DealsView({ items, updateItems }) {
   };
 
   return (
-    <WeeklyDealsFeed onAddDeal={addDealToShoppingList} addedNames={shoppingListNames} />
+    <Suspense fallback={<TabPanelLoader />}>
+      <WeeklyDealsFeed onAddDeal={addDealToShoppingList} addedNames={shoppingListNames} />
+    </Suspense>
   );
 }
 
@@ -3367,7 +3382,9 @@ export default function App() {
           <DealsView items={items} updateItems={updateItems} />
         )}
         {activeTab === 'recipes' && (
-          <RecipesView items={items} updateItems={updateItems} savedRecipes={savedRecipes} />
+          <Suspense fallback={<TabPanelLoader />}>
+            <RecipesView items={items} updateItems={updateItems} savedRecipes={savedRecipes} />
+          </Suspense>
         )}
         {activeTab === 'settings' && (
           <SettingsView
