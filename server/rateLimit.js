@@ -23,13 +23,14 @@ export const generalApiLimiter = createLimiter({ max: 100 });
 export const proxyApiLimiter = createLimiter({ max: 30 });
 
 const AI_RECIPE_RATE_LIMIT_MESSAGE = {
-  error: 'AI Chef is resting! You can generate recipe matches up to 10 times every 15 minutes.',
+  error: 'AI Chef is resting!',
+  message: "You've reached your limit of 5 recipe generations. Try again in 15 minutes.",
 };
 
-/** Gemini AI recipe match: 10 / 15 minutes per authenticated user (falls back to IP). */
+/** Gemini AI recipe match: 5 / 15 minutes per authenticated user (falls back to IP). */
 export const aiRecipeMatchLimiter = rateLimit({
   windowMs: FIFTEEN_MINUTES_MS,
-  max: 10,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {

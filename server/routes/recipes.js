@@ -61,7 +61,7 @@ recipesRouter.get(
 recipesRouter.post(
   '/ai-match',
   requireAuth,
-  aiRecipeMatchLimiter,
+  aiRecipeMatchLimiter, // 5 requests / 15 min per user (see server/rateLimit.js)
   asyncRoute(
     generateAILiveMatches,
     'POST /api/recipes/ai-match',

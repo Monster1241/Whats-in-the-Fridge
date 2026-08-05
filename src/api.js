@@ -278,7 +278,23 @@ export async function fetchAiRecipeMatches() {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
   });
-  return parseJson(res);
+  const text = await res.text();
+  let body = {};
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = {};
+    }
+  }
+  if (!res.ok) {
+    const err = new Error(
+      body.message || body.error || (text && text.length < 300 ? text : '') || `Request failed (${res.status})`,
+    );
+    err.status = res.status;
+    throw err;
+  }
+  return body;
 }
 
 /**

@@ -33,6 +33,40 @@ const RECIPE_VIEW = {
   SAVED: 'saved',
 };
 
+const AI_RECIPES_CACHE_KEY = 'fridge.aiRecipes';
+
+function loadCachedAiRecipes() {
+  try {
+    const raw = sessionStorage.getItem(AI_RECIPES_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCachedAiRecipes(recipes) {
+  try {
+    if (!recipes?.length) {
+      sessionStorage.removeItem(AI_RECIPES_CACHE_KEY);
+      return;
+    }
+    sessionStorage.setItem(AI_RECIPES_CACHE_KEY, JSON.stringify(recipes));
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+function toUserFacingAiError(message) {
+  const text = String(message ?? '').trim();
+  if (!text) return 'Could not generate AI recipe suggestions.';
+  if (text.startsWith('{') || text.includes('"error":') || text.includes('models/gemini')) {
+    return 'Could not generate recipe suggestions right now. Please try again in a few minutes.';
+  }
+  return text;
+}
+
 function EmptyState({ icon: Icon, title, description }) {
   return (
     <div className="surface-inset border-dashed px-6 py-10 text-center">
@@ -316,25 +350,38 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [pantryOnly, setPantryOnly] = useState(false);
-  const [aiRecipes, setAiRecipes] = useState([]);
+  const [aiRecipes, setAiRecipes] = useState(() => loadCachedAiRecipes());
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [aiRateLimited, setAiRateLimited] = useState(false);
 
   const handleGenerateAiRecipes = useCallback(async () => {
     setIsAiLoading(true);
     setAiError('');
+    setAiRateLimited(false);
     try {
       const data = await fetchAiRecipeMatches();
-      setAiRecipes(Array.isArray(data.recipes) ? data.recipes : []);
+      const recipes = Array.isArray(data.recipes) ? data.recipes : [];
+      setAiRecipes(recipes);
+      saveCachedAiRecipes(recipes);
     } catch (err) {
-      setAiRecipes([]);
-      const message = err?.message || 'Could not generate AI recipe suggestions.';
-      if (/ai chef is resting|too many requests/i.test(message)) {
-        setAiError(message);
-      } else if (/not authenticated|unauthorized/i.test(message)) {
-        setAiError('Please sign in to use AI recipe matching.');
+      if (err?.status === 429) {
+        setAiRateLimited(true);
+        setAiError(
+          toUserFacingAiError(
+            err.message ||
+              "You've reached your limit of 5 recipe generations. Try again in 15 minutes.",
+          ),
+        );
       } else {
-        setAiError(message);
+        const message = toUserFacingAiError(
+          err?.message || 'Could not generate AI recipe suggestions.',
+        );
+        if (/not authenticated|unauthorized/i.test(message)) {
+          setAiError('Please sign in to use AI recipe matching.');
+        } else {
+          setAiError(message);
+        }
       }
     } finally {
       setIsAiLoading(false);
@@ -701,7 +748,33 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </section>
       )}
 
-      {recipeView === RECIPE_VIEW.MATCHED && aiError && !isAiLoading && (
+      {recipeView === RECIPE_VIEW.MATCHED && aiRateLimited && !isAiLoading && (
+        <div
+          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 dark:border-amber-800 dark:bg-amber-950/40"
+          role="alert"
+        >
+          <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+            AI Chef is catching its breath! You can generate 5 new matches every 15 minutes.
+          </p>
+          {aiError && (
+            <p className="mt-1.5 text-sm text-amber-900/90 dark:text-amber-200/90">{aiError}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setRecipeView(RECIPE_VIEW.SAVED);
+              setAiRateLimited(false);
+              setAiError('');
+            }}
+            className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-violet-700 underline-offset-2 hover:underline dark:text-violet-300"
+          >
+            <Bookmark className="h-4 w-4" aria-hidden />
+            Browse Saved Recipes
+          </button>
+        </div>
+      )}
+
+      {recipeView === RECIPE_VIEW.MATCHED && aiError && !aiRateLimited && !isAiLoading && (
         <p
           className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
           role="alert"
@@ -722,7 +795,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
             ))}
           </ul>
           <p className="text-muted mt-4 text-center text-[11px] leading-relaxed">
-            AI suggestions are generated dynamically using Gemini 2.5 Flash.
+            AI suggestions are generated dynamically using Google Gemini.
           </p>
         </section>
       )}
