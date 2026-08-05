@@ -33,3 +33,55 @@ export function toFriendlyError(err) {
   friendly.status = 500;
   return friendly;
 }
+
+/**
+ * Maps Google GenAI / Gemini SDK errors to safe user-facing messages.
+ * @param {unknown} err
+ */
+export function toFriendlyGeminiError(err) {
+  const raw = err && typeof err === 'object' ? err : { message: String(err ?? '') };
+  const status = Number(raw.status ?? raw.statusCode ?? 0) || undefined;
+  let message = String(raw.message ?? '');
+
+  const jsonStart = message.indexOf('{');
+  if (jsonStart >= 0) {
+    try {
+      const parsed = JSON.parse(message.slice(jsonStart));
+      const nested = parsed?.error?.message ?? parsed?.message;
+      if (nested) message = String(nested);
+    } catch {
+      // keep original message
+    }
+  }
+
+  if (
+    status === 404 ||
+    /no longer available|not found|models\//i.test(message)
+  ) {
+    const friendly = new Error(
+      'AI recipe matching is temporarily unavailable. Please try again later.',
+    );
+    friendly.status = 502;
+    return friendly;
+  }
+
+  if (status === 429 || /quota|rate limit|resource exhausted/i.test(message)) {
+    const friendly = new Error(
+      'AI recipe matching is busy right now. Please wait a few minutes and try again.',
+    );
+    friendly.status = 503;
+    return friendly;
+  }
+
+  if (/API key|permission|unauthorized|403/i.test(message)) {
+    const friendly = new Error('AI recipe matching is not configured correctly.');
+    friendly.status = 503;
+    return friendly;
+  }
+
+  const friendly = new Error(
+    'Could not generate recipe suggestions right now. Please try again in a few minutes.',
+  );
+  friendly.status = status && status >= 400 && status < 600 ? status : 502;
+  return friendly;
+}
