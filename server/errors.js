@@ -65,16 +65,21 @@ export function parseGeminiApiError(err) {
   };
 }
 
+export const GOOGLE_AI_QUOTA_ERROR =
+  'Daily Google AI quota reached. Please try again tomorrow.';
+
 /**
- * @deprecated Use parseGeminiApiError — only true for explicit quota exhaustion codes.
  * @param {unknown} err
  */
 export function isGeminiQuotaError(err) {
   const { status, message, code } = parseGeminiApiError(err);
-  const haystack = `${code} ${message}`;
+  const haystack = `${code} ${message}`.toLowerCase();
   return (
-    (status === 429 && /RESOURCE_EXHAUSTED|ResourceHasBeenExhausted/i.test(haystack)) ||
-    /RESOURCE_EXHAUSTED|ResourceHasBeenExhausted/i.test(haystack)
+    status === 429 ||
+    haystack.includes('resource_exhausted') ||
+    haystack.includes('resourcehasbeenexhausted') ||
+    haystack.includes('quota exceeded') ||
+    haystack.includes('free_tier')
   );
 }
 
@@ -83,30 +88,17 @@ export function isGeminiQuotaError(err) {
  * @returns {{ status: number, message: string }}
  */
 export function formatGeminiErrorForClient(err, fallback = 'Failed to generate AI recipe.') {
-  const { status, message, code } = parseGeminiApiError(err);
+  const { status, message } = parseGeminiApiError(err);
+
+  if (isGeminiQuotaError(err)) {
+    return { status: 429, message: GOOGLE_AI_QUOTA_ERROR };
+  }
+
   if (!message) {
     return { status, message: fallback };
   }
 
   const firstLine = message.split('\n').map((line) => line.trim()).find(Boolean) ?? message;
-
-  if (
-    status === 429 &&
-    (/free_tier|limit:\s*0/i.test(message) || code === 'RESOURCE_EXHAUSTED')
-  ) {
-    return {
-      status,
-      message: `${firstLine} This is usually a per-model or free-tier limit — check Google AI Studio, try GEMINI_MODEL=gemini-2.0-flash-lite in .env, or create a new API key.`,
-    };
-  }
-
-  if (status === 404 || /not found|no longer available/i.test(message)) {
-    return {
-      status,
-      message: `${firstLine} Set GEMINI_MODEL in .env to a model your API key supports (e.g. gemini-2.0-flash).`,
-    };
-  }
-
   return { status, message: firstLine };
 }
 
@@ -134,7 +126,7 @@ export function toFriendlyGeminiError(err) {
   }
 
   if (isGeminiQuotaError(err)) {
-    const friendly = new Error('Daily Google AI quota reached. Please try again tomorrow.');
+    const friendly = new Error(GOOGLE_AI_QUOTA_ERROR);
     friendly.status = 429;
     return friendly;
   }
