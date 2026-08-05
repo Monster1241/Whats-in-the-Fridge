@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -n api,app -c green,blue \"npm run dev:server\" \"npm run dev:client\"",
     "dev:client": "vite",
-    "dev:server": "node server/index.js",
+    "dev:server": "NODE_ENV=development node server/index.js",
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server/index.js",

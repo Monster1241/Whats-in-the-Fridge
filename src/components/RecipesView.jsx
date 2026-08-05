@@ -412,13 +412,17 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       }
     } catch (err) {
       if (err?.status === 429) {
-        setAiRateLimited(true);
-        setAiError(
-          toUserFacingAiError(
-            err.message ||
-              "You've reached your limit of 5 AI recommendations. Try again in 15 minutes.",
-          ),
+        const message = toUserFacingAiError(
+          err.message ||
+            "You've reached your limit of 5 AI recommendations. Try again in 15 minutes.",
         );
+        if (/daily ai limit/i.test(message)) {
+          setAiRateLimited(false);
+          setAiError(message);
+        } else {
+          setAiRateLimited(true);
+          setAiError(message);
+        }
       } else {
         const message = toUserFacingAiError(
           err?.message || 'Could not generate AI recommendations.',

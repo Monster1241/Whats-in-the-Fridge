@@ -18,6 +18,9 @@ async function start() {
   }
 
   app.listen(PORT, () => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Rate limiting disabled for local development (NODE_ENV !== production)');
+    }
     console.log(`API server running on port ${PORT}`);
     startGroceryCronScheduler();
   });
