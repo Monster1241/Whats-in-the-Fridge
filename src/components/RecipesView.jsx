@@ -83,68 +83,54 @@ function CollapsibleInstructions({ recipe }) {
   );
 }
 
-function AiRecipeCard({ recipe }) {
+function AiRecipeCard({ recipe, onSearchDetailed }) {
   const expiring = recipe.expiringItemsUsed ?? [];
-  const missing = recipe.missingIngredients ?? [];
+  const matchCount = Number(recipe.matchingInventoryCount) || 0;
 
   return (
-    <li className="surface-card border border-violet-200/80 p-4 shadow-lg dark:border-violet-900/50">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-heading text-lg font-bold leading-snug">{recipe.recipeName}</h2>
-          {Number.isFinite(recipe.matchingInventoryCount) && recipe.matchingInventoryCount > 0 && (
-            <p className="text-muted mt-1 text-xs font-medium">
-              Uses {recipe.matchingInventoryCount} item
-              {recipe.matchingInventoryCount === 1 ? '' : 's'} from your inventory
-            </p>
+    <li className="surface-card flex h-full flex-col border border-violet-200/80 p-4 shadow-lg dark:border-violet-900/50">
+      <div className="mb-3 min-w-0 flex-1">
+        <h2 className="text-heading text-base font-bold leading-snug sm:text-lg">
+          {recipe.recipeName}
+        </h2>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {matchCount > 0 && (
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:ring-emerald-700">
+              {matchCount} matched
+            </span>
+          )}
+          {expiring.length > 0 && (
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700">
+              {expiring.length} expiring
+            </span>
           )}
         </div>
-        <span className="shrink-0 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:bg-violet-950/60 dark:text-violet-200">
-          AI
-        </span>
-      </div>
-
-      {expiring.length > 0 && (
-        <div className="mb-3">
-          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
-            Expiring items used
-          </p>
-          <div className="flex flex-wrap gap-1.5">
+        {expiring.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
             {expiring.map((name) => (
               <span
                 key={name}
-                className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700"
+                className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
               >
                 {name}
               </span>
             ))}
           </div>
-        </div>
-      )}
-
-      {missing.length > 0 && (
-        <div className="mb-3">
-          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
-            Missing ingredients
+        )}
+        {recipe.briefDescription && (
+          <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+            {recipe.briefDescription}
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {missing.map((name) => (
-              <span
-                key={name}
-                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800/80 dark:text-slate-300 dark:ring-slate-600"
-              >
-                {name}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {recipe.briefDescription && (
-        <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-          {recipe.briefDescription}
-        </p>
-      )}
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => onSearchDetailed(recipe.recipeName)}
+        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 py-2.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-100 active:scale-[0.98] dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200 dark:hover:bg-violet-950/60"
+      >
+        <Search className="h-3.5 w-3.5" aria-hidden />
+        Search Detailed Recipe
+      </button>
     </li>
   );
 }
@@ -329,29 +315,36 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [pantryOnly, setPantryOnly] = useState(false);
-  const [aiMatches, setAiMatches] = useState([]);
+  const [aiRecipes, setAiRecipes] = useState([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
 
-  const handleAiMatch = useCallback(async () => {
+  const handleGenerateAiRecipes = useCallback(async () => {
     setIsAiLoading(true);
     setAiError('');
     try {
       const data = await fetchAiRecipeMatches();
-      setAiMatches(Array.isArray(data.recipes) ? data.recipes : []);
+      setAiRecipes(Array.isArray(data.recipes) ? data.recipes : []);
     } catch (err) {
-      setAiMatches([]);
-      const message = err?.message || 'Could not generate AI recipe matches.';
-      if (/too many requests/i.test(message)) {
+      setAiRecipes([]);
+      const message = err?.message || 'Could not generate AI recipe suggestions.';
+      if (/access restricted|not authenticated|unauthorized|403/i.test(message)) {
+        setAiError('AI matching is not available for this account.');
+      } else if (/too many requests/i.test(message)) {
         setAiError('Too many requests — please wait a few minutes and try again.');
-      } else if (/access restricted|not authenticated|unauthorized/i.test(message)) {
-        setAiError('AI matching is not available for this account yet.');
       } else {
         setAiError(message);
       }
     } finally {
       setIsAiLoading(false);
     }
+  }, []);
+
+  const handleSearchDetailedRecipe = useCallback((recipeName) => {
+    const query = String(recipeName ?? '').trim();
+    if (!query) return;
+    setSearchQuery(query);
+    setRecipeView(RECIPE_VIEW.SEARCH);
   }, []);
 
   const pantryIngredients = useMemo(
@@ -681,18 +674,15 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       {recipeView === RECIPE_VIEW.MATCHED && (
         <section className="surface-card mb-5 overflow-hidden border border-violet-200/70 dark:border-violet-900/40">
           <div className="bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-4 py-5 dark:from-violet-950/40 dark:via-dm-raised dark:to-emerald-950/20">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">
-              Reduce food waste
-            </p>
-            <h2 className="text-heading mt-1 text-lg font-extrabold leading-snug">
-              Let AI cook up ideas from what you already have
+            <h2 className="text-heading text-lg font-extrabold leading-snug">
+              AI Kitchen Assistant 🪄
             </h2>
-            <p className="text-muted mt-2 text-xs leading-relaxed">
-              Prioritises expiring fridge items and suggests practical meals for your household.
+            <p className="text-muted mt-2 text-sm leading-relaxed">
+              Generate meal ideas based on what&apos;s currently in your fridge and pantry.
             </p>
             <button
               type="button"
-              onClick={handleAiMatch}
+              onClick={handleGenerateAiRecipes}
               disabled={isAiLoading}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-violet-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
@@ -702,24 +692,11 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                   Matching…
                 </>
               ) : (
-                <>Reduce Waste 🪄 Match My Inventory</>
+                'Match My Inventory'
               )}
             </button>
           </div>
         </section>
-      )}
-
-      {recipeView === RECIPE_VIEW.MATCHED && isAiLoading && (
-        <div
-          className="surface-inset mb-5 flex items-center justify-center gap-3 px-4 py-8 text-center"
-          role="status"
-          aria-live="polite"
-        >
-          <Loader2 className="h-6 w-6 shrink-0 animate-spin text-violet-600" aria-hidden />
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-            Checking your fridge &amp; matching ingredients…
-          </p>
-        </div>
       )}
 
       {recipeView === RECIPE_VIEW.MATCHED && aiError && !isAiLoading && (
@@ -731,28 +708,31 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </p>
       )}
 
-      {recipeView === RECIPE_VIEW.MATCHED && aiMatches.length > 0 && !isAiLoading && (
+      {recipeView === RECIPE_VIEW.MATCHED && aiRecipes.length > 0 && !isAiLoading && (
         <section className="mb-6">
-          <h2 className="text-heading mb-3 text-sm font-bold">AI suggestions</h2>
-          <ul className="space-y-4">
-            {aiMatches.map((recipe, index) => (
-              <AiRecipeCard key={`${recipe.recipeName}-${index}`} recipe={recipe} />
+          <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {aiRecipes.map((recipe, index) => (
+              <AiRecipeCard
+                key={`${recipe.recipeName}-${index}`}
+                recipe={recipe}
+                onSearchDetailed={handleSearchDetailedRecipe}
+              />
             ))}
           </ul>
           <p className="text-muted mt-4 text-center text-[11px] leading-relaxed">
-            Generated by AI based on your current household inventory.
+            AI suggestions are generated dynamically using Gemini 2.5 Flash.
           </p>
         </section>
       )}
 
       {recipeView === RECIPE_VIEW.MATCHED && cookableRecipes.length > 0 && (
         <h2 className="text-heading mb-3 text-sm font-bold">
-          {aiMatches.length > 0 ? 'From your catalogue' : 'Matched recipes'}
+          {aiRecipes.length > 0 ? 'From your catalogue' : 'Matched recipes'}
         </h2>
       )}
 
       {list.length === 0 ? (
-        recipeView === RECIPE_VIEW.MATCHED && (aiMatches.length > 0 || isAiLoading) ? null : (
+        recipeView === RECIPE_VIEW.MATCHED && (aiRecipes.length > 0 || isAiLoading) ? null : (
         <EmptyState
           icon={
             recipeView === RECIPE_VIEW.SAVED
