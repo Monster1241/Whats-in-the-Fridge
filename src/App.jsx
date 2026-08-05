@@ -2225,9 +2225,10 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       ? [
           {
             icon: ChefHat,
-            title: 'Recipes — what you can cook',
+            title: 'Recipes — AI recommendations & catalogue',
             steps: [
-              'Open Recipes to see meals you can make from what is in stock.',
+              'Tap AI Recommendation in Pantry Chef to generate meals from your inventory.',
+              'Add cravings or quick filters like Under 15 Mins before generating.',
               'Use Search to find built-in recipes or import from TheMealDB.',
               'Save favourites with the bookmark icon.',
               'Add missing ingredients straight to the shared shopping list.',

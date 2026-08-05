@@ -1,4 +1,4 @@
-/** @typedef {{ id: string, title: string, prepTime: string, cookTime?: string, ingredients: string[], instructions: string[], cuisine?: string, mainIngredient?: string, source?: string, sourceUrl?: string, imageUrl?: string, category?: string, calories?: number, macros?: { protein?: string, carbs?: string, fat?: string, calories?: number }, missingIngredients?: string[], isAiGenerated?: boolean, matchingInventoryCount?: number, expiringItemsUsed?: string[] }} Recipe */
+/** @typedef {{ id: string, title: string, prepTime: string, cookTime?: string, ingredients: string[], instructions: string[], cuisine?: string, mainIngredient?: string, source?: string, sourceUrl?: string, imageUrl?: string, category?: string, calories?: number, macros?: { protein?: string, carbs?: string, fat?: string, calories?: number }, tags?: string[], missingIngredients?: string[], isAiGenerated?: boolean, originalRecipeId?: string, matchingInventoryCount?: number, expiringItemsUsed?: string[] }} Recipe */
 
 export const BUILTIN_RECIPES = [
   {

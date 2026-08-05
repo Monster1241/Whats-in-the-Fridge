@@ -273,10 +273,44 @@ export async function lookupExternalRecipe(mealId) {
 }
 
 /** POST /api/recipes/ai-match — Gemini-powered recipes from current household inventory. */
-export async function fetchAiRecipeMatches() {
+export async function fetchAiRecipeMatches({ cravings, quickTag } = {}) {
+  const payload = {};
+  if (cravings?.trim()) payload.cravings = cravings.trim();
+  if (quickTag?.trim()) payload.quickTag = quickTag.trim();
+
   const res = await fetch(`${API_BASE}/recipes/ai-match`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let body = {};
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = {};
+    }
+  }
+  if (!res.ok) {
+    const err = new Error(
+      body.message || body.error || (text && text.length < 300 ? text : '') || `Request failed (${res.status})`,
+    );
+    err.status = res.status;
+    throw err;
+  }
+  return body;
+}
+
+/** POST /api/recipes/remix — FitChef macro remix of a household library recipe. */
+export async function fetchRemixRecipe(recipeId, mode, recipe) {
+  const payload = { recipeId, mode };
+  if (recipe) payload.recipe = recipe;
+
+  const res = await fetch(`${API_BASE}/recipes/remix`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
   });
   const text = await res.text();
   let body = {};

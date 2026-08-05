@@ -10,7 +10,7 @@ import {
   ShoppingCart,
   X,
 } from 'lucide-react';
-import { fetchAiRecipeMatches } from '../api.js';
+import { fetchAiRecipeMatches, fetchRemixRecipe } from '../api.js';
 import { classifyItem } from '../inventory/classifyItem.js';
 import { buildConsumptionFields } from '../inventory/consumption.js';
 import { FOOD_CATEGORY, ITEM_TYPE, STATUS } from '../inventory/constants.js';
@@ -21,7 +21,6 @@ import {
   analyzeRecipe,
   getRecipeById,
   MIN_MATCHED_RECIPES_TO_SHOW,
-  MIN_STOCKED_INGREDIENTS_FOR_RECIPE,
   recipeMatchesInventory,
   searchLocalRecipes,
 } from '../recipes/recipeUtils.js';
@@ -34,6 +33,15 @@ const RECIPE_VIEW = {
 };
 
 const AI_RECIPES_CACHE_KEY = 'fridge.aiRecipes';
+
+const AI_EMPTY_MESSAGE =
+  'No AI recommendations found. Try adding more inventory items or tweaking your craving search.';
+
+const QUICK_FILTER_CHIPS = [
+  { id: 'Under 15 Mins', label: '⏱️ Under 15 Mins' },
+  { id: 'One-Pan', label: '🍳 One-Pan' },
+  { id: 'High Protein', label: '💪 High Protein' },
+];
 
 function loadCachedAiRecipes() {
   try {
@@ -60,7 +68,7 @@ function saveCachedAiRecipes(recipes) {
 
 function toUserFacingAiError(message) {
   const text = String(message ?? '').trim();
-  if (!text) return 'Could not generate AI recipe suggestions.';
+  if (!text) return 'Could not generate AI recommendations.';
   if (text.startsWith('{') || text.includes('"error":') || text.includes('models/gemini')) {
     return 'Could not generate recipe suggestions right now. Please try again in a few minutes.';
   }
@@ -121,7 +129,15 @@ function CollapsibleInstructions({ recipe }) {
 function AiRecipeMetaBadges({ recipe }) {
   const matchCount = Number(recipe.matchingInventoryCount) || 0;
   const expiring = recipe.expiringItemsUsed ?? [];
-  if (!recipe.isAiGenerated && matchCount <= 0 && expiring.length <= 0) return null;
+  const tags = recipe.tags ?? [];
+  if (
+    !recipe.isAiGenerated &&
+    matchCount <= 0 &&
+    expiring.length <= 0 &&
+    tags.length <= 0
+  ) {
+    return null;
+  }
 
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -130,9 +146,17 @@ function AiRecipeMetaBadges({ recipe }) {
           AI generated
         </span>
       )}
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-900 ring-1 ring-sky-300 dark:bg-sky-950/70 dark:text-sky-200 dark:ring-sky-700"
+        >
+          {tag}
+        </span>
+      ))}
       {matchCount > 0 && (
         <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:ring-emerald-700">
-          {matchCount} matched
+          {matchCount} in pantry
         </span>
       )}
       {expiring.length > 0 && (
@@ -151,6 +175,8 @@ function RecipeCard({
   onToggleSave,
   onMarkCooked,
   onAddNeedToShoppingList,
+  onRemix,
+  remixingMode,
 }) {
   const [showAddConfirm, setShowAddConfirm] = useState(false);
 
@@ -173,6 +199,7 @@ function RecipeCard({
             Prep: {recipe.prepTime}
             {recipe.cookTime ? ` · Cook: ${recipe.cookTime}` : ''}
             {recipe.calories ? ` · ~${recipe.calories} cal` : ''}
+            {recipe.macros?.protein ? ` · Protein: ${recipe.macros.protein}` : ''}
           </p>
           <AiRecipeMetaBadges recipe={recipe} />
           {recipe.source === 'themealdb' && recipe.sourceUrl && (
@@ -293,6 +320,35 @@ function RecipeCard({
 
       <CollapsibleInstructions recipe={recipe} />
 
+      {onRemix && (
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            disabled={Boolean(remixingMode)}
+            onClick={() => onRemix(recipe, 'higher_protein')}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 py-2.5 text-xs font-semibold text-emerald-900 transition hover:bg-emerald-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200 dark:hover:bg-emerald-950/60"
+          >
+            {remixingMode === 'higher_protein' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              '💪 Boost Protein'
+            )}
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(remixingMode)}
+            onClick={() => onRemix(recipe, 'lower_calorie')}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-lime-200 bg-lime-50 py-2.5 text-xs font-semibold text-lime-900 transition hover:bg-lime-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:border-lime-800 dark:bg-lime-950/40 dark:text-lime-200 dark:hover:bg-lime-950/60"
+          >
+            {remixingMode === 'lower_calorie' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              '🥗 Lower Calorie'
+            )}
+          </button>
+        </div>
+      )}
+
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
@@ -332,32 +388,43 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiRateLimited, setAiRateLimited] = useState(false);
+  const [cravingInput, setCravingInput] = useState('');
+  const [selectedQuickTag, setSelectedQuickTag] = useState('');
+  const [remixingId, setRemixingId] = useState(null);
+  const [remixingMode, setRemixingMode] = useState('');
+  const [remixError, setRemixError] = useState('');
 
   const handleGenerateAiRecipes = useCallback(async () => {
     setIsAiLoading(true);
     setAiError('');
     setAiRateLimited(false);
     try {
-      const data = await fetchAiRecipeMatches();
+      const data = await fetchAiRecipeMatches({
+        cravings: cravingInput,
+        quickTag: selectedQuickTag,
+      });
       const recipes = Array.isArray(data.recipes) ? data.recipes : [];
       setAiRecipes(recipes);
       mergeRecipeLibrary(recipes.filter((recipe) => recipe.isAiGenerated));
       saveCachedAiRecipes(recipes);
+      if (recipes.length === 0) {
+        setAiError(AI_EMPTY_MESSAGE);
+      }
     } catch (err) {
       if (err?.status === 429) {
         setAiRateLimited(true);
         setAiError(
           toUserFacingAiError(
             err.message ||
-              "You've reached your limit of 5 recipe generations. Try again in 15 minutes.",
+              "You've reached your limit of 5 AI recommendations. Try again in 15 minutes.",
           ),
         );
       } else {
         const message = toUserFacingAiError(
-          err?.message || 'Could not generate AI recipe suggestions.',
+          err?.message || 'Could not generate AI recommendations.',
         );
         if (/not authenticated|unauthorized/i.test(message)) {
-          setAiError('Please sign in to use AI recipe matching.');
+          setAiError('Please sign in to use AI recommendations.');
         } else {
           setAiError(message);
         }
@@ -365,7 +432,36 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
     } finally {
       setIsAiLoading(false);
     }
-  }, [mergeRecipeLibrary]);
+  }, [cravingInput, selectedQuickTag, mergeRecipeLibrary]);
+
+  const handleRemix = useCallback(
+    async (recipe, mode) => {
+      if (!recipe?.id) return;
+      setRemixError('');
+      setRemixingId(recipe.id);
+      setRemixingMode(mode);
+      rememberRecipe(recipe);
+      try {
+        const data = await fetchRemixRecipe(recipe.id, mode, recipe);
+        const remixed = data.recipe;
+        if (remixed) {
+          mergeRecipeLibrary([remixed]);
+          setAiRecipes((prev) => {
+            const next = [...prev.filter((entry) => entry.id !== remixed.id), remixed];
+            saveCachedAiRecipes(next);
+            return next;
+          });
+        }
+      } catch (err) {
+        const message = toUserFacingAiError(err?.message || 'Could not remix this recipe.');
+        setRemixError(message);
+      } finally {
+        setRemixingId(null);
+        setRemixingMode('');
+      }
+    },
+    [mergeRecipeLibrary, rememberRecipe],
+  );
 
   const aiRecipeCards = useMemo(
     () =>
@@ -570,13 +666,13 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
             ? 'Your bookmarked recipes — always available here'
             : recipeView === RECIPE_VIEW.SEARCH
               ? 'Search built-in recipes and import free recipes from TheMealDB'
-              : `Shows recipes when you have the main ingredient plus at least ${MIN_STOCKED_INGREDIENTS_FOR_RECIPE} items in stock`}
+              : 'Get AI recommendations from your pantry or browse catalogue recipes you can cook now'}
         </p>
       </header>
 
       <div className="mb-4 grid grid-cols-3 gap-2">
         {[
-          { id: RECIPE_VIEW.MATCHED, label: 'Matched', icon: ChefHat, count: cookableRecipes.length },
+          { id: RECIPE_VIEW.MATCHED, label: 'Recommendations', icon: ChefHat, count: cookableRecipes.length },
           { id: RECIPE_VIEW.SEARCH, label: 'Search', icon: Search, count: 0 },
           { id: RECIPE_VIEW.SAVED, label: 'Saved', icon: Bookmark, count: savedIds.length },
         ].map(({ id, label, icon: Icon, count }) => {
@@ -708,21 +804,55 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         <section className="surface-card mb-5 overflow-hidden border border-violet-200/70 dark:border-violet-900/40">
           <div className="bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-4 py-5 dark:from-violet-950/40 dark:via-dm-raised dark:to-emerald-950/20">
             <h2 className="text-heading text-lg font-extrabold leading-snug">
-              AI Kitchen Assistant 🪄
+              Pantry Chef
             </h2>
-            <p className="text-muted mt-2 text-sm leading-relaxed">
-              Generate meal ideas based on what&apos;s currently in your fridge and pantry.
+            <p className="text-muted mt-1 text-sm leading-relaxed">
+              Cook what you have — tailored to your cravings and time.
             </p>
+            <label className="sr-only" htmlFor="craving-input">
+              What are you craving today?
+            </label>
+            <input
+              id="craving-input"
+              type="text"
+              value={cravingInput}
+              onChange={(event) => setCravingInput(event.target.value)}
+              placeholder="What are you craving today?"
+              className="mt-4 w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:border-violet-800 dark:bg-dm-raised dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-violet-900"
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {QUICK_FILTER_CHIPS.map((chip) => {
+                const active = selectedQuickTag === chip.id;
+                return (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() =>
+                      setSelectedQuickTag((current) => (current === chip.id ? '' : chip.id))
+                    }
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-[0.98] ${
+                      active
+                        ? 'border-violet-500 bg-violet-600 text-white shadow-sm'
+                        : 'border-violet-200 bg-white text-violet-800 hover:border-violet-400 dark:border-violet-800 dark:bg-dm-raised dark:text-violet-200 dark:hover:border-violet-600'
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                );
+              })}
+            </div>
             <button
               type="button"
               onClick={handleGenerateAiRecipes}
               disabled={isAiLoading}
+              title={isAiLoading ? 'Generating AI Recommendations…' : 'Generate AI recommendations from your pantry'}
+              aria-busy={isAiLoading}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-violet-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isAiLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Generating…
+                  Generating AI Recommendations…
                 </>
               ) : (
                 'AI Recommendation'
@@ -732,13 +862,22 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </section>
       )}
 
+      {recipeView === RECIPE_VIEW.MATCHED && remixError && (
+        <p
+          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+          role="alert"
+        >
+          {remixError}
+        </p>
+      )}
+
       {recipeView === RECIPE_VIEW.MATCHED && aiRateLimited && !isAiLoading && (
         <div
           className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 dark:border-amber-800 dark:bg-amber-950/40"
           role="alert"
         >
           <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">
-            AI Chef is catching its breath! You can generate 5 new matches every 15 minutes.
+            Pantry Chef is resting! You can generate 5 new AI recommendations every 15 minutes.
           </p>
           {aiError && (
             <p className="mt-1.5 text-sm text-amber-900/90 dark:text-amber-200/90">{aiError}</p>
@@ -779,23 +918,35 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                 onToggleSave={handleToggleSave}
                 onMarkCooked={markCooked}
                 onAddNeedToShoppingList={addNeededToShoppingList}
+                onRemix={handleRemix}
+                remixingMode={remixingId === recipe.id ? remixingMode : ''}
               />
             ))}
           </ul>
           <p className="text-muted mt-4 text-center text-[11px] leading-relaxed">
-            AI suggestions are generated with Gemini and saved to your household library.
+            AI recommendations are generated with Gemini and saved to your household library.
           </p>
         </section>
       )}
 
       {recipeView === RECIPE_VIEW.MATCHED && cookableRecipes.length > 0 && (
-        <h2 className="text-heading mb-3 text-sm font-bold">
-          {aiRecipes.length > 0 ? 'From your catalogue' : 'Matched recipes'}
-        </h2>
+        <h2 className="text-heading mb-3 text-sm font-bold">From your catalogue</h2>
       )}
 
+      {recipeView === RECIPE_VIEW.MATCHED &&
+        !isAiLoading &&
+        aiRecipeCards.length === 0 &&
+        list.length === 0 && (
+          <EmptyState
+            icon={ChefHat}
+            title="No AI recommendations found"
+            description="Try adding more inventory items or tweaking your craving search."
+          />
+        )}
+
       {list.length === 0 ? (
-        recipeView === RECIPE_VIEW.MATCHED && (aiRecipes.length > 0 || isAiLoading) ? null : (
+        recipeView === RECIPE_VIEW.MATCHED && (aiRecipes.length > 0 || isAiLoading) ? null :
+        recipeView === RECIPE_VIEW.MATCHED && aiRecipeCards.length === 0 ? null : (
         <EmptyState
           icon={
             recipeView === RECIPE_VIEW.SAVED
@@ -811,7 +962,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                 ? searchQuery.trim().length < 2
                   ? 'Start typing to search'
                   : 'No recipes found'
-                : 'No recipes yet'
+                : 'No catalogue recipes yet'
           }
           description={
             recipeView === RECIPE_VIEW.SAVED
@@ -820,7 +971,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                 ? searchQuery.trim().length < 2
                   ? 'Search by dish name, cuisine, or ingredient — or tap a pantry item above.'
                   : 'Try a different keyword, turn off “Only show recipes using what I have”, or search a pantry item chip.'
-                : `Stock the main ingredient for a recipe plus at least ${MIN_STOCKED_INGREDIENTS_FOR_RECIPE} of its items (Fresh or Expiring Soon) to see matches here.`
+                : AI_EMPTY_MESSAGE
           }
         />
         )
@@ -835,6 +986,8 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               onToggleSave={handleToggleSave}
               onMarkCooked={markCooked}
               onAddNeedToShoppingList={addNeededToShoppingList}
+              onRemix={handleRemix}
+              remixingMode={remixingId === recipe.id ? remixingMode : ''}
             />
           ))}
         </ul>

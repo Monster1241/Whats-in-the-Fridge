@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { asyncRoute } from '../routeUtils.js';
 import { requireAuth } from '../middleware/auth.js';
 import { aiRecipeMatchLimiter } from '../rateLimit.js';
-import { generateAILiveMatches } from '../controllers/aiRecipe.js';
+import { generateAILiveMatches, remixRecipe } from '../controllers/aiRecipe.js';
 import { sendError } from '../http.js';
 import { toFriendlyGeminiError, isGeminiQuotaError } from '../errors.js';
 
@@ -75,6 +75,25 @@ recipesRouter.post(
         return;
       }
       sendError(res, toFriendlyGeminiError(error), 'AI recipe matching failed');
+    }
+  },
+);
+
+recipesRouter.post(
+  '/remix',
+  requireAuth,
+  aiRecipeMatchLimiter,
+  async (req, res) => {
+    try {
+      await remixRecipe(req, res);
+    } catch (error) {
+      console.error('=== GEMINI REMIX ERROR DETAILS ===');
+      console.error(error);
+      if (isGeminiQuotaError(error)) {
+        res.status(429).json({ error: 'Daily AI limit reached. Please try again tomorrow.' });
+        return;
+      }
+      sendError(res, toFriendlyGeminiError(error), 'Recipe remix failed');
     }
   },
 );

@@ -11,8 +11,10 @@
  *   category?: string,
  *   calories?: number,
  *   macros?: { protein?: string, carbs?: string, fat?: string, calories?: number },
+ *   tags?: string[],
  *   missingIngredients?: string[],
  *   isAiGenerated?: boolean,
+ *   originalRecipeId?: string,
  *   matchingInventoryCount?: number,
  *   expiringItemsUsed?: string[],
  *   mainIngredient?: string,
@@ -66,6 +68,7 @@ export function sanitizeRecipeEntry(entry, { allowPartial = false } = {}) {
     maxItems: 20,
     maxLen: 80,
   });
+  const tags = sanitizeStringArray(entry?.tags, { maxItems: 12, maxLen: 48 });
 
   const calories = Number(entry?.calories);
   const matchingInventoryCount = Number(entry?.matchingInventoryCount);
@@ -95,8 +98,14 @@ export function sanitizeRecipeEntry(entry, { allowPartial = false } = {}) {
 
   if (missingIngredients.length) recipe.missingIngredients = missingIngredients;
   if (expiringItemsUsed.length) recipe.expiringItemsUsed = expiringItemsUsed;
+  if (tags.length) recipe.tags = tags;
 
   if (entry?.isAiGenerated === true) recipe.isAiGenerated = true;
+
+  const originalRecipeId = entry?.originalRecipeId
+    ? String(entry.originalRecipeId).trim().slice(0, 80)
+    : undefined;
+  if (originalRecipeId) recipe.originalRecipeId = originalRecipeId;
 
   if (Number.isFinite(matchingInventoryCount) && matchingInventoryCount >= 0) {
     recipe.matchingInventoryCount = Math.round(matchingInventoryCount);
@@ -141,3 +150,17 @@ export function createAiRecipeId(title) {
   const slug = slugifyRecipeTitle(title) || 'recipe';
   return `ai:${slug}:${Date.now().toString(36)}`;
 }
+
+export function createRemixRecipeId(title) {
+  const slug = slugifyRecipeTitle(title) || 'recipe';
+  return `remix:${slug}:${Date.now().toString(36)}`;
+}
+
+export const QUICK_TAG_CONSTRAINTS = {
+  'Under 15 Mins':
+    'Each recipe MUST have combined prepTime + cookTime totalling under 15 minutes. Use fast techniques and minimal steps.',
+  'One-Pan':
+    'Each recipe MUST be cooked in a single pan, pot, or skillet only (one-pan / one-pot).',
+  'High Protein':
+    'Each recipe MUST be high in protein (lean meats, eggs, legumes, tofu, Greek yogurt, etc.). Macros must reflect elevated protein.',
+};
