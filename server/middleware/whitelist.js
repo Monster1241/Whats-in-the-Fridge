@@ -1,15 +1,22 @@
 /**
- * Restricts access to a single authorized account (beta / internal testing).
+ * Restricts access to authorized accounts (beta / internal testing).
  * Must run after `requireAuth` so `req.user` is populated.
  */
+function parseWhitelistedEmails(raw) {
+  return String(raw ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export function whitelist(req, res, next) {
-  const allowed = process.env.WHITELISTED_EMAIL?.trim().toLowerCase();
+  const allowedEmails = parseWhitelistedEmails(process.env.WHITELISTED_EMAILS);
   const email = req.user?.email?.trim().toLowerCase();
 
-  if (allowed && email && email === allowed) {
+  if (email && allowedEmails.includes(email)) {
     next();
     return;
   }
 
-  res.status(403).json({ error: 'Access restricted to authorized account.' });
+  res.status(403).json({ error: 'AI matching is not available for this account.' });
 }
