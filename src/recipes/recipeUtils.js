@@ -1,6 +1,9 @@
 import { calculateItemStatus } from '../inventory/consumption.js';
-import { isInStockInventory, isOnShoppingList, ITEM_TYPE, STATUS } from '../inventory/constants.js';
-import { normalizeName } from '../inventory/itemUtils.js';
+import { ITEM_TYPE, STATUS } from '../inventory/constants.js';
+import {
+  findFoodItemForIngredient,
+  getCanonicalIngredientLabel,
+} from './ingredientMatching.js';
 import { BUILTIN_RECIPES } from './recipeCatalog.js';
 
 export const MIN_STOCKED_INGREDIENTS_FOR_RECIPE = 2;
@@ -9,25 +12,8 @@ export const MIN_MATCHED_RECIPES_TO_SHOW = 4;
 export const MAIN_INGREDIENT_PATTERN =
   /chicken|beef|salmon|barramundi|barra|chorizo|egg|pork|mince|tofu|lentil|potato|noodle|shrimp|prawn|fish|turkey|lamb|sausage|bacon/i;
 
-function findInventoryMatch(ingredientName, items) {
-  const needle = normalizeName(ingredientName);
-  return items.find(
-    (item) => item.itemType === ITEM_TYPE.FOOD && normalizeName(item.name) === needle,
-  );
-}
-
 function findStockedFoodMatch(ingredientName, items) {
-  const exact = findInventoryMatch(ingredientName, items);
-  if (exact && isInStockInventory(exact)) return exact;
-
-  const needle = normalizeName(ingredientName);
-  if (!needle) return null;
-
-  return items.find((item) => {
-    if (item.itemType !== ITEM_TYPE.FOOD || isOnShoppingList(item)) return false;
-    const itemName = normalizeName(item.name);
-    return itemName.includes(needle) || needle.includes(itemName);
-  });
+  return findFoodItemForIngredient(ingredientName, items);
 }
 
 export function getRecipeMainIngredient(recipe) {
@@ -53,11 +39,12 @@ export function analyzeRecipe(recipe, items) {
   const need = [];
 
   for (const ingredient of recipe.ingredients) {
-    const match = findInventoryMatch(ingredient, items);
-    if (!match || isOnShoppingList(match)) {
-      need.push(ingredient);
+    const match = findStockedFoodMatch(ingredient, items);
+    const label = getCanonicalIngredientLabel(ingredient);
+    if (!match) {
+      need.push(label);
     } else {
-      have.push({ name: ingredient, status: getDisplayStatus(match) });
+      have.push({ name: match.name, status: getDisplayStatus(match) });
     }
   }
 

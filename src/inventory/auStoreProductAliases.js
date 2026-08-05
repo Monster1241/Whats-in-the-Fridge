@@ -130,6 +130,18 @@ const AU_STORE_ALIASES_BY_PRODUCT = {
   'Toilet Paper': ['coles toilet paper', 'woolworths toilet paper', 'quilton', 'kleenex toilet tissue'],
   'Dishwashing Liquid': ['coles dish liquid', 'fairy', 'morning fresh', 'aldi dishwashing liquid'],
   'Laundry Liquid': ['coles laundry liquid', 'omo', 'aldi laundry liquid', 'earth choice laundry'],
+  // ── Dried herbs & spices (AU brands as search aliases only) ──
+  Oregano: ['masterfoods oregano', 'coles oregano', 'woolworths oregano', 'aldi oregano'],
+  'Dried Parsley': ['masterfoods parsley', 'parsley flakes', 'coles dried parsley'],
+  'Onion Powder': ['masterfoods onion powder', 'coles onion powder', 'woolworths onion powder'],
+  'Garlic Powder': ['masterfoods garlic powder', 'coles garlic powder'],
+  Paprika: ['masterfoods paprika', 'coles paprika', 'woolworths paprika'],
+  Cumin: ['masterfoods cumin', 'coles cumin ground'],
+  Turmeric: ['masterfoods turmeric', 'coles turmeric ground'],
+  'Mixed Herbs': ['masterfoods mixed herbs', 'coles mixed herbs'],
+  'Italian Herbs': ['masterfoods italian herbs', 'coles italian herbs'],
+  'Curry Powder': ['masterfoods curry powder', 'coles curry powder', 'keens curry'],
+  'Chili Flakes': ['masterfoods chilli flakes', 'coles chilli flakes'],
 };
 
 /**

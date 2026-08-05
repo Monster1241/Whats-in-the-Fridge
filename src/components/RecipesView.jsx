@@ -14,6 +14,7 @@ import { fetchAiRecipeMatches } from '../api.js';
 import { classifyItem } from '../inventory/classifyItem.js';
 import { buildConsumptionFields } from '../inventory/consumption.js';
 import { FOOD_CATEGORY, ITEM_TYPE, STATUS } from '../inventory/constants.js';
+import { findFoodItemForIngredient } from '../recipes/ingredientMatching.js';
 import { normalizeName } from '../inventory/itemUtils.js';
 import { BUILTIN_RECIPES } from '../recipes/recipeCatalog.js';
 import {
@@ -480,11 +481,12 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
     updateItems((prev) => {
       const next = [...prev];
       for (const ingredient of recipe.ingredients) {
-        const idx = next.findIndex(
-          (item) => normalizeName(item.name) === normalizeName(ingredient),
-        );
-        if (idx >= 0) {
-          next[idx] = { ...next[idx], status: STATUS.OUT };
+        const match = findFoodItemForIngredient(ingredient, next);
+        if (match) {
+          const idx = next.findIndex((item) => item.id === match.id);
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], status: STATUS.OUT };
+          }
         }
       }
       return next;
