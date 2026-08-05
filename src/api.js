@@ -293,6 +293,13 @@ export async function fetchAiRecipeMatches({ cravings, quickTag } = {}) {
     }
   }
   if (!res.ok) {
+    if (res.status === 504) {
+      const err = new Error(
+        'AI generation timed out. Please try again — if this keeps happening, check your server timeout settings.',
+      );
+      err.status = 504;
+      throw err;
+    }
     const err = new Error(
       body.message || body.error || (text && text.length < 300 ? text : '') || `Request failed (${res.status})`,
     );

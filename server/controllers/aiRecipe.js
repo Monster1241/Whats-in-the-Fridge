@@ -11,7 +11,7 @@ import {
 } from '../recipeSchema.js';
 import { getRecipeMainIngredient } from '../../src/recipes/recipeUtils.js';
 
-const MODEL_ID = process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash';
+const MODEL_ID = process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
 const AI_RECIPE_COUNT = 3;
 
 const REMIX_MODES = new Set(['higher_protein', 'lower_calorie', 'quick_speed']);

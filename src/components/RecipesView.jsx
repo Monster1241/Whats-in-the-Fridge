@@ -422,6 +422,8 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       );
       if (/not authenticated|unauthorized/i.test(message)) {
         setAiError('Please sign in to use AI recommendations.');
+      } else if (err?.status === 504 || /deployment|timed out/i.test(message)) {
+        setAiError('AI generation timed out. Please try again in a moment.');
       } else {
         setAiError(message);
       }
