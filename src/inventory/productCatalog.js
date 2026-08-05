@@ -4,6 +4,7 @@ import {
   HOUSEHOLD_CATEGORY,
   ITEM_TYPE,
 } from './constants.js';
+import { withAustralianStoreAliases } from './auStoreProductAliases.js';
 
 /**
  * Household & grocery product knowledge for typeahead suggestions.
@@ -13,7 +14,7 @@ import {
  */
 
 /** @type {ProductCatalogEntry[]} */
-export const PRODUCT_CATALOG = [
+const BASE_PRODUCT_CATALOG = [
   // ── Household — Cleaning ─────────────────────────────────────
   { name: 'Dishwashing Liquid', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
   { name: 'Dishwashing Tablets', itemType: ITEM_TYPE.HOUSEHOLD, category: HOUSEHOLD_CATEGORY.CLEANING },
@@ -436,48 +437,203 @@ export const PRODUCT_CATALOG = [
   },
   { name: 'Chorizo', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
   // ── Food — Fresh — Seafood ───────────────────────────────────
-  { name: 'Salmon Fillet', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
+  {
+    name: 'Salmon Fillet',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['atlantic salmon', 'sockeye salmon', 'salmon portion'],
+  },
   {
     name: 'Barramundi Fillet',
     itemType: ITEM_TYPE.FOOD,
     category: FOOD_CATEGORY.FRESH,
-    aliases: ['barramundi', 'barra', 'baramundi', 'barramundi fish'],
+    aliases: ['barramundi', 'barra', 'baramundi', 'barramundi fish', 'australian barramundi'],
   },
   {
     name: 'Snapper Fillet',
     itemType: ITEM_TYPE.FOOD,
     category: FOOD_CATEGORY.FRESH,
-    aliases: ['snapper', 'red snapper'],
+    aliases: ['snapper', 'red snapper', 'crimson snapper'],
   },
   {
     name: 'Flathead Fillet',
     itemType: ITEM_TYPE.FOOD,
     category: FOOD_CATEGORY.FRESH,
-    aliases: ['flathead', 'flat head'],
+    aliases: ['flathead', 'flat head', 'southern flathead'],
   },
   {
     name: 'Prawns',
     itemType: ITEM_TYPE.FOOD,
     category: FOOD_CATEGORY.FRESH,
-    aliases: ['king prawns', 'tiger prawns', 'green prawns', 'shrimp'],
+    aliases: ['king prawns', 'tiger prawns', 'green prawns', 'shrimp', 'school prawns'],
+  },
+  {
+    name: 'King Prawns',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['jumbo prawns', 'large prawns'],
+  },
+  {
+    name: 'Tiger Prawns',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['black tiger prawns'],
+  },
+  {
+    name: 'Banana Prawns',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['banana prawn'],
+  },
+  {
+    name: 'Cooked Prawns',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['peeled prawns cooked', 'ready to eat prawns'],
   },
   {
     name: 'Calamari',
     itemType: ITEM_TYPE.FOOD,
     category: FOOD_CATEGORY.FRESH,
-    aliases: ['squid', 'salt and pepper squid'],
+    aliases: ['squid', 'salt and pepper squid', 'squid tubes'],
   },
   {
     name: 'Tuna Steak',
     itemType: ITEM_TYPE.FOOD,
     category: FOOD_CATEGORY.FRESH,
-    aliases: ['yellowfin tuna', 'fresh tuna'],
+    aliases: ['yellowfin tuna', 'fresh tuna', 'ahi tuna'],
   },
   {
     name: 'Fish Fillets',
     itemType: ITEM_TYPE.FOOD,
     category: FOOD_CATEGORY.FRESH,
-    aliases: ['white fish', 'fish fillet'],
+    aliases: ['white fish', 'fish fillet', 'boneless fish fillets'],
+  },
+  {
+    name: 'Ocean Trout Fillet',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['ocean trout', 'tasmanian trout', 'steelhead trout'],
+  },
+  {
+    name: 'Rainbow Trout Fillet',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['rainbow trout', 'trout fillet'],
+  },
+  {
+    name: 'Whiting Fillets',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['whiting', 'sand whiting', 'school whiting'],
+  },
+  {
+    name: 'Hoki Fillet',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['hoki', 'new zealand hoki'],
+  },
+  {
+    name: 'Blue Grenadier Fillet',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['grenadier', 'deep sea dory', 'blue grenadier'],
+  },
+  {
+    name: 'Cod Fillet',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['cod', 'pacific cod'],
+  },
+  {
+    name: 'Kingfish Fillet',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['yellowtail kingfish', 'kingfish', 'hiramasa'],
+  },
+  {
+    name: 'Trevally Fillet',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['trevally', 'silver trevally'],
+  },
+  {
+    name: 'Mahi Mahi Fillet',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['mahi mahi', 'dolphinfish'],
+  },
+  {
+    name: 'Swordfish Steak',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['swordfish', 'broadbill'],
+  },
+  {
+    name: 'Smoked Salmon',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['hot smoked salmon', 'cold smoked salmon', 'smoked salmon slices'],
+  },
+  {
+    name: 'Mussels',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['green lip mussels', 'black mussels', 'mussel pot'],
+  },
+  {
+    name: 'Oysters',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['sydney rock oysters', 'pacific oysters', 'dozen oysters'],
+  },
+  {
+    name: 'Scallops',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['sea scallops', 'roeless scallops'],
+  },
+  {
+    name: 'Octopus',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['baby octopus', 'octopus tentacles'],
+  },
+  {
+    name: 'Blue Swimmer Crab',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['swimmer crab', 'sand crab', 'blue crab'],
+  },
+  {
+    name: 'Mud Crab',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['mangrove crab', 'queensland mud crab'],
+  },
+  {
+    name: 'Moreton Bay Bugs',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['bay bugs', 'moreton bay bug', 'balmain bugs'],
+  },
+  {
+    name: 'Rock Lobster',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['crayfish', 'southern rock lobster', 'wa crayfish'],
+  },
+  {
+    name: 'Sardines',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['fresh sardines', 'pilchards'],
+  },
+  {
+    name: 'Whole Barramundi',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FRESH,
+    aliases: ['whole barra', 'barramundi whole'],
   },
   // ── Food — Fresh — Fruit ─────────────────────────────────────
   { name: 'Apples', itemType: ITEM_TYPE.FOOD, category: FOOD_CATEGORY.FRESH },
@@ -847,7 +1003,73 @@ export const PRODUCT_CATALOG = [
     name: 'Frozen Fish Fillets',
     itemType: ITEM_TYPE.FOOD,
     category: FOOD_CATEGORY.FREEZER,
-    aliases: ['frozen barramundi', 'frozen fish'],
+    aliases: ['frozen barramundi', 'frozen fish', 'frozen white fish'],
+  },
+  {
+    name: 'Frozen Salmon Portions',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen salmon fillets', 'frozen salmon portions'],
+  },
+  {
+    name: 'Frozen Barramundi Portions',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen barra portions', 'frozen barramundi fillets'],
+  },
+  {
+    name: 'Frozen Prawns',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen raw prawns', 'frozen cooked prawns', 'frozen peeled prawns'],
+  },
+  {
+    name: 'Frozen Calamari Rings',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen squid rings', 'frozen calamari', 'frozen salt and pepper squid'],
+  },
+  {
+    name: 'Frozen Hoki Fillets',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen hoki', 'frozen grenadier fillets'],
+  },
+  {
+    name: 'Frozen Fish Fingers',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['fish fingers', 'frozen fish sticks'],
+  },
+  {
+    name: 'Frozen Crumbed Fish',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen battered fish', 'crumbed fish portions'],
+  },
+  {
+    name: 'Frozen Seafood Mix',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen marinara mix', 'seafood medley frozen', 'frozen mussels prawns mix'],
+  },
+  {
+    name: 'Frozen Scallops',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen roeless scallops'],
+  },
+  {
+    name: 'Frozen Mussels',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen green lip mussels', 'frozen mussel meat'],
+  },
+  {
+    name: 'Frozen Squid Tubes',
+    itemType: ITEM_TYPE.FOOD,
+    category: FOOD_CATEGORY.FREEZER,
+    aliases: ['frozen squid tubes', 'frozen whole squid'],
   },
   // ── Baby ─────────────────────────────────────────────────────
   { name: 'Nappies Size 1', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.DIAPERS },
@@ -869,3 +1091,6 @@ export const PRODUCT_CATALOG = [
   { name: 'Dummy / Pacifier', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
   { name: 'Baby Sunscreen', itemType: ITEM_TYPE.BABY, category: BABY_CATEGORY.ESSENTIALS },
 ];
+
+/** Curated catalogue with AU retail search aliases (see auStoreProductAliases.js). */
+export const PRODUCT_CATALOG = withAustralianStoreAliases(BASE_PRODUCT_CATALOG);
