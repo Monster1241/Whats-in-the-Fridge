@@ -69,3 +69,11 @@ ${instructions || '(not listed)'}
 
 Give me the updated recipe with adjusted ingredients, clear steps, and estimated macros. Prefer ingredients I already have in my fridge where possible.`;
 }
+
+/** Short label shown in chat bubbles for tweak requests. */
+export function buildRecipeTweakSummary(recipe, mode) {
+  const tweak = RECIPE_TWEAK_MODES[mode];
+  const title = String(recipe?.title ?? 'this recipe').trim();
+  if (!tweak) return title;
+  return `${tweak.emoji} ${tweak.label}: ${title}`;
+}

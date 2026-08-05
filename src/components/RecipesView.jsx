@@ -15,7 +15,9 @@ import { fetchAiRecipeMatches } from '../api.js';
 import { FridgeScoutChat } from './FridgeScoutChat.jsx';
 import {
   buildRecipeTweakPrompt,
+  buildRecipeTweakSummary,
   FRIDGE_SCOUT_NAME,
+  FRIDGE_SCOUT_PERSONA,
   FRIDGE_SCOUT_TAGLINE,
   RECIPE_TWEAK_MODES,
 } from '../recipes/kitchenAiBranding.js';
@@ -191,6 +193,7 @@ function RecipeCard({
   onMarkCooked,
   onAddNeedToShoppingList,
   onAskScoutToTweak,
+  scoutTweakingId,
   scoutTweakingMode,
 }) {
   const [showAddConfirm, setShowAddConfirm] = useState(false);
@@ -335,35 +338,37 @@ function RecipeCard({
 
       <CollapsibleInstructions recipe={recipe} />
 
-      {recipe.isAiGenerated && onAskScoutToTweak && (
+      {onAskScoutToTweak && (
         <div className="mb-3">
           <p className="text-muted mb-2 text-[10px] font-bold uppercase tracking-wide">
-            Tweak with {FRIDGE_SCOUT_NAME}
+            Tweak with {FRIDGE_SCOUT_PERSONA}
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             {(['higher_protein', 'lower_calorie']).map((mode) => {
               const tweak = RECIPE_TWEAK_MODES[mode];
-              const isActive = scoutTweakingMode === mode;
+              const isActive = scoutTweakingId === recipe.id && scoutTweakingMode === mode;
+              const isBusy = scoutTweakingId === recipe.id;
               return (
                 <button
                   key={mode}
                   type="button"
-                  disabled={Boolean(scoutTweakingMode)}
+                  disabled={isBusy}
                   onClick={() => onAskScoutToTweak(recipe, mode)}
                   title={`Ask Scout to ${tweak.label.toLowerCase()} for this recipe`}
-                  className="flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border border-teal-200 bg-teal-50 py-2.5 text-xs font-semibold text-teal-900 transition hover:bg-teal-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:border-teal-800/60 dark:bg-teal-950/40 dark:text-teal-100 dark:hover:bg-teal-950/60"
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 ${
+                    mode === 'higher_protein'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-950/60'
+                      : 'border-lime-200 bg-lime-50 text-lime-900 hover:bg-lime-100 dark:border-lime-800/60 dark:bg-lime-950/40 dark:text-lime-100 dark:hover:bg-lime-950/60'
+                  }`}
                 >
                   {isActive ? (
-                    <span className="flex items-center gap-2">
+                    <>
                       <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                      Opening Scout…
-                    </span>
+                      Asking Scout…
+                    </>
                   ) : (
                     <>
                       <span>{tweak.emoji} {tweak.label}</span>
-                      <span className="text-[10px] font-medium text-teal-700/80 dark:text-teal-300/80">
-                        via chat
-                      </span>
                     </>
                   )}
                 </button>
@@ -455,6 +460,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
     if (!recipe?.id) return;
     const prompt = buildRecipeTweakPrompt(recipe, mode);
     if (!prompt) return;
+    const summary = buildRecipeTweakSummary(recipe, mode);
 
     setScoutTweakingId(recipe.id);
     setScoutTweakingMode(mode);
@@ -462,7 +468,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
 
     requestAnimationFrame(() => {
       requestAnimationFrame(async () => {
-        await scoutChatRef.current?.sendMessage(prompt);
+        await scoutChatRef.current?.sendMessage(prompt, { summary });
         setScoutTweakingId(null);
         setScoutTweakingMode('');
         scoutChatRef.current?.focus();
@@ -826,9 +832,91 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </section>
       )}
 
-      {recipeView === RECIPE_VIEW.SCOUT && (
+      {recipeView === RECIPE_VIEW.MATCHED && (
         <section className="fridge-scout-zone mb-5">
-          <div className="fridge-scout-zone__hero">
+          <div className="fridge-scout-zone__generator border-0 bg-transparent p-0 dark:bg-transparent">
+            <div className="fridge-scout-zone__hero rounded-2xl px-4 pb-4 pt-5">
+              <div className="fridge-scout-zone__hero-top">
+                <span className="fridge-scout-zone__badge">
+                  <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                  AI kitchen
+                </span>
+              </div>
+              <h2 className="fridge-scout-zone__title">Recipe generator</h2>
+              <p className="fridge-scout-zone__tagline">
+                Generate meals from your pantry — including a few shop-and-cook ideas.
+              </p>
+            </div>
+            <div className="fridge-scout-zone__generator !border-t-0 px-4 pb-4 pt-0">
+              <label className="sr-only" htmlFor="craving-input">
+                What are you craving today?
+              </label>
+              <input
+                id="craving-input"
+                type="text"
+                value={cravingInput}
+                onChange={(event) => setCravingInput(event.target.value)}
+                placeholder="What are you craving today?"
+                className="input-field w-full"
+              />
+              <div className="mt-3 flex flex-wrap gap-2">
+                {QUICK_FILTER_CHIPS.map((chip) => {
+                  const active = selectedQuickTag === chip.id;
+                  return (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedQuickTag((current) => (current === chip.id ? '' : chip.id))
+                      }
+                      className={`fridge-scout-chip ${active ? 'fridge-scout-chip--active' : ''}`}
+                    >
+                      {chip.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={handleGenerateAiRecipes}
+                disabled={isAiLoading}
+                title={
+                  isAiLoading
+                    ? 'Generating AI Recommendations...'
+                    : 'Generate AI recommendations from your pantry'
+                }
+                aria-busy={isAiLoading}
+                className="fridge-scout-generate-btn mt-4"
+              >
+                {isAiLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    Generating recommendations…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" aria-hidden />
+                    Generate recommendations
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {recipeView === RECIPE_VIEW.MATCHED && aiError && !isAiLoading && (
+        <p
+          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+          role="alert"
+        >
+          {aiError}
+        </p>
+      )}
+
+      <div className={recipeView === RECIPE_VIEW.SCOUT ? 'mb-5' : 'hidden'} aria-hidden={recipeView !== RECIPE_VIEW.SCOUT}>
+        <section className="fridge-scout-zone">
+          <div className="fridge-scout-zone__hero px-4 pb-5 pt-5">
             <div className="fridge-scout-zone__hero-top">
               <span className="fridge-scout-zone__badge">
                 <Sparkles className="h-3.5 w-3.5" aria-hidden />
@@ -839,74 +927,8 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
             <p className="fridge-scout-zone__tagline">{FRIDGE_SCOUT_TAGLINE}</p>
             <FridgeScoutChat ref={scoutChatRef} expanded />
           </div>
-
-          <div className="fridge-scout-zone__generator">
-            <div className="fridge-scout-zone__divider">
-              <span>Recipe generator</span>
-            </div>
-            <label className="sr-only" htmlFor="craving-input">
-              What are you craving today?
-            </label>
-            <input
-              id="craving-input"
-              type="text"
-              value={cravingInput}
-              onChange={(event) => setCravingInput(event.target.value)}
-              placeholder="What are you craving today?"
-              className="input-field w-full"
-            />
-            <div className="mt-3 flex flex-wrap gap-2">
-              {QUICK_FILTER_CHIPS.map((chip) => {
-                const active = selectedQuickTag === chip.id;
-                return (
-                  <button
-                    key={chip.id}
-                    type="button"
-                    onClick={() =>
-                      setSelectedQuickTag((current) => (current === chip.id ? '' : chip.id))
-                    }
-                    className={`fridge-scout-chip ${active ? 'fridge-scout-chip--active' : ''}`}
-                  >
-                    {chip.label}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              onClick={handleGenerateAiRecipes}
-              disabled={isAiLoading}
-              title={isAiLoading ? 'Generating AI Recommendations...' : 'Generate AI recommendations from your pantry'}
-              aria-busy={isAiLoading}
-              className="fridge-scout-generate-btn mt-4"
-            >
-              {isAiLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Generating recommendations…
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" aria-hidden />
-                  Generate recommendations
-                </>
-              )}
-            </button>
-            <p className="text-muted mt-3 text-center text-[11px] leading-relaxed">
-              New recipes appear in the <strong className="font-semibold text-zinc-700 dark:text-zinc-300">Recommendations</strong> tab.
-            </p>
-          </div>
         </section>
-      )}
-
-      {recipeView === RECIPE_VIEW.SCOUT && aiError && !isAiLoading && (
-        <p
-          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-          role="alert"
-        >
-          {aiError}
-        </p>
-      )}
+      </div>
 
       {recipeView === RECIPE_VIEW.MATCHED && aiRecipeCards.length > 0 && !isAiLoading && (
         <section className="mb-6">
@@ -921,7 +943,8 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                 onMarkCooked={markCooked}
                 onAddNeedToShoppingList={addNeededToShoppingList}
                 onAskScoutToTweak={handleAskScoutToTweak}
-                scoutTweakingMode={scoutTweakingId === recipe.id ? scoutTweakingMode : ''}
+                scoutTweakingId={scoutTweakingId}
+                scoutTweakingMode={scoutTweakingMode}
               />
             ))}
           </ul>
@@ -942,7 +965,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
           <EmptyState
             icon={ChefHat}
             title="No recommendations yet"
-            description="Open Fridge Scout to chat with Scout or generate meals from your inventory."
+            description="Use the recipe generator above or open Fridge Scout to chat and tweak meals."
           />
         )}
 
@@ -990,7 +1013,8 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               onMarkCooked={markCooked}
               onAddNeedToShoppingList={addNeededToShoppingList}
               onAskScoutToTweak={handleAskScoutToTweak}
-              scoutTweakingMode={scoutTweakingId === recipe.id ? scoutTweakingMode : ''}
+              scoutTweakingId={scoutTweakingId}
+              scoutTweakingMode={scoutTweakingMode}
             />
           ))}
         </ul>

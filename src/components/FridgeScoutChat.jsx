@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Loader2, Send, Sparkles } from 'lucide-react';
+import { Loader2, RotateCcw, Send, Sparkles } from 'lucide-react';
 import { fetchFridgeScoutChat } from '../api.js';
 import {
   FRIDGE_SCOUT_CHAT_CACHE_KEY,
@@ -45,6 +45,10 @@ function loadCachedMessages() {
   }
 }
 
+function toApiMessages(messages) {
+  return messages.map(({ role, content }) => ({ role, content }));
+}
+
 function ScoutAvatar({ compact = false }) {
   return (
     <span
@@ -71,7 +75,10 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = 
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(FRIDGE_SCOUT_CHAT_CACHE_KEY, JSON.stringify(messages));
+      sessionStorage.setItem(
+        FRIDGE_SCOUT_CHAT_CACHE_KEY,
+        JSON.stringify(messages.map(({ role, content, summary }) => ({ role, content, summary }))),
+      );
     } catch {
       // ignore
     }
@@ -81,44 +88,59 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = 
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  const sendMessage = useCallback(async (textOverride, { keepInputOnError = false } = {}) => {
-    const text = String(textOverride ?? input).trim();
-    if (!text || isLoading) return false;
+  const sendMessage = useCallback(
+    async (textOverride, { summary, keepInputOnError = false } = {}) => {
+      const text = String(textOverride ?? input).trim();
+      if (!text || isLoading) return false;
 
-    const userMessage = { role: 'user', content: text };
-    const history = [...messagesRef.current, userMessage];
-    setMessages(history);
-    if (!textOverride) setInput('');
-    setIsLoading(true);
+      const userMessage = { role: 'user', content: text, summary: summary?.trim() || '' };
+      const history = [...messagesRef.current, userMessage];
+      setMessages(history);
+      if (!textOverride) setInput('');
+      setIsLoading(true);
+      setError('');
+
+      try {
+        const data = await fetchFridgeScoutChat(toApiMessages(history));
+        const reply = String(data?.reply ?? '').trim();
+        if (reply) {
+          setMessages((current) => [...current, { role: 'assistant', content: reply }]);
+        }
+        return true;
+      } catch (err) {
+        setMessages((current) => current.slice(0, -1));
+        if (!textOverride || keepInputOnError) setInput(text);
+        const message = toUserFacingChatError(err?.message);
+        if (/not authenticated|unauthorized/i.test(message)) {
+          setError(`Please sign in to chat with ${FRIDGE_SCOUT_NAME}.`);
+        } else {
+          setError(message);
+        }
+        return false;
+      } finally {
+        setIsLoading(false);
+        inputRef.current?.focus();
+      }
+    },
+    [input, isLoading],
+  );
+
+  const clearChat = useCallback(() => {
+    setMessages([]);
+    setInput('');
     setError('');
-
     try {
-      const data = await fetchFridgeScoutChat(history);
-      const reply = String(data?.reply ?? '').trim();
-      if (reply) {
-        setMessages((current) => [...current, { role: 'assistant', content: reply }]);
-      }
-      return true;
-    } catch (err) {
-      setMessages((current) => current.slice(0, -1));
-      if (!textOverride || keepInputOnError) setInput(text);
-      const message = toUserFacingChatError(err?.message);
-      if (/not authenticated|unauthorized/i.test(message)) {
-        setError(`Please sign in to chat with ${FRIDGE_SCOUT_NAME}.`);
-      } else {
-        setError(message);
-      }
-      return false;
-    } finally {
-      setIsLoading(false);
-      inputRef.current?.focus();
+      sessionStorage.removeItem(FRIDGE_SCOUT_CHAT_CACHE_KEY);
+    } catch {
+      // ignore
     }
-  }, [input, isLoading]);
+    inputRef.current?.focus();
+  }, []);
 
   useImperativeHandle(
     ref,
     () => ({
-      sendMessage: (text) => sendMessage(text),
+      sendMessage: (text, options) => sendMessage(text, options),
       focus: () => inputRef.current?.focus(),
     }),
     [sendMessage],
@@ -140,13 +162,29 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = 
           <ScoutAvatar />
           <div className="min-w-0">
             <p className="fridge-scout-chat__title">Chat with {FRIDGE_SCOUT_PERSONA}</p>
-            <p className="fridge-scout-chat__subtitle">Ask about meals, swaps &amp; expiring food</p>
+            <p className="fridge-scout-chat__subtitle">
+              Meal ideas, swaps, tweaks &amp; expiring food tips
+            </p>
           </div>
         </div>
-        <span className="fridge-scout-chat__live" title="AI assistant online">
-          <span className="fridge-scout-chat__live-dot" aria-hidden />
-          Live
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={clearChat}
+              disabled={isLoading}
+              className="fridge-scout-chat__clear"
+              title="Clear chat"
+            >
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+              <span className="sr-only">Clear chat</span>
+            </button>
+          )}
+          <span className="fridge-scout-chat__live" title="AI assistant online">
+            <span className="fridge-scout-chat__live-dot" aria-hidden />
+            Live
+          </span>
+        </div>
       </div>
 
       <div
@@ -166,6 +204,8 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = 
 
         {messages.map((message, index) => {
           const isUser = message.role === 'user';
+          const displayText =
+            isUser && message.summary ? message.summary : message.content;
           return (
             <div
               key={`${message.role}-${index}`}
@@ -181,7 +221,7 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = 
                     : 'fridge-scout-chat__bubble--assistant'
                 }`}
               >
-                {message.content}
+                {displayText}
               </p>
             </div>
           );
@@ -200,21 +240,19 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = 
         <div ref={scrollRef} />
       </div>
 
-      {showWelcome && (
-        <div className="fridge-scout-chat__prompts" aria-label="Suggested questions">
-          {FRIDGE_SCOUT_QUICK_PROMPTS.map((prompt) => (
-            <button
-              key={prompt}
-              type="button"
-              onClick={() => sendMessage(prompt)}
-              disabled={isLoading}
-              className="fridge-scout-chat__prompt-chip"
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="fridge-scout-chat__prompts" aria-label="Suggested questions">
+        {FRIDGE_SCOUT_QUICK_PROMPTS.map((prompt) => (
+          <button
+            key={prompt}
+            type="button"
+            onClick={() => sendMessage(prompt)}
+            disabled={isLoading}
+            className="fridge-scout-chat__prompt-chip"
+          >
+            {prompt}
+          </button>
+        ))}
+      </div>
 
       {error && (
         <p className="fridge-scout-chat__error" role="alert">
@@ -226,16 +264,16 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = 
         <label className="sr-only" htmlFor="fridge-scout-chat-input">
           Message {FRIDGE_SCOUT_NAME}
         </label>
-        <input
+        <textarea
           ref={inputRef}
           id="fridge-scout-chat-input"
-          type="text"
+          rows={2}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask Scout anything about your fridge…"
+          placeholder="Ask Scout anything — meals, swaps, tweaks…"
           disabled={isLoading}
-          className="fridge-scout-chat__input"
+          className="fridge-scout-chat__input fridge-scout-chat__textarea"
         />
         <button
           type="button"
