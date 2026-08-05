@@ -5,7 +5,6 @@ import { ensureDb } from './ensureDb.js';
 import { startGroceryCronScheduler } from './groceryCronScheduler.js';
 
 const PORT = Number(process.env.PORT) || 3001;
-// Rate limiting and trust proxy are configured in createApp() (server/app.js).
 const app = createApp();
 
 async function start() {
@@ -18,9 +17,6 @@ async function start() {
   }
 
   app.listen(PORT, () => {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('Rate limiting disabled for local development (NODE_ENV !== production)');
-    }
     console.log(`API server running on port ${PORT}`);
     startGroceryCronScheduler();
   });

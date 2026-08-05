@@ -115,11 +115,7 @@ Without `RESEND_API_KEY`, the 6-digit code is printed in the server console only
 
 ## Security & Compliance
 
-Express rate limiting is configured in `server/rateLimit.js` and applied in `server/app.js`. Limits are per IP over a 15-minute window. Exceeded requests return HTTP **429** with `{ "error": "Too many requests. Please try again later." }`.
-
-- **General API routes** (`/api/auth`, `/api/household`, `/api/state`) — **100 requests** per 15-minute window per IP.
-- **External proxy routes** (`/api/deals`, `/api/recipes`, `/api/products`) — **30 requests** per 15-minute window per IP.
-- **Exempt routes** — Health check (`/api/health`).
+AI recipe endpoints rely on Google Gemini quota limits and client-side loading guards (no Express rate limiting). Gemini quota errors return HTTP **429** with `{ "error": "Daily Google AI quota reached. Please try again tomorrow." }`.
 
 Public legal pages are available at standalone routes (linked from Settings and the sign-in screen):
 
