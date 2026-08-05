@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncRoute } from '../routeUtils.js';
 import { requireAuth } from '../middleware/auth.js';
-import { whitelist } from '../middleware/whitelist.js';
+import { aiRecipeMatchLimiter } from '../rateLimit.js';
 import { generateAILiveMatches } from '../controllers/aiRecipe.js';
 
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
@@ -61,7 +61,7 @@ recipesRouter.get(
 recipesRouter.post(
   '/ai-match',
   requireAuth,
-  whitelist,
+  aiRecipeMatchLimiter,
   asyncRoute(
     generateAILiveMatches,
     'POST /api/recipes/ai-match',

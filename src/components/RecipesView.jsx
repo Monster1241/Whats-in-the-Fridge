@@ -329,10 +329,10 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
     } catch (err) {
       setAiRecipes([]);
       const message = err?.message || 'Could not generate AI recipe suggestions.';
-      if (/access restricted|not authenticated|unauthorized|403/i.test(message)) {
-        setAiError('AI matching is not available for this account.');
-      } else if (/too many requests/i.test(message)) {
-        setAiError('Too many requests — please wait a few minutes and try again.');
+      if (/ai chef is resting|too many requests/i.test(message)) {
+        setAiError(message);
+      } else if (/not authenticated|unauthorized/i.test(message)) {
+        setAiError('Please sign in to use AI recipe matching.');
       } else {
         setAiError(message);
       }
