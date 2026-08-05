@@ -675,17 +675,17 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
 
       <div className="mb-4 grid grid-cols-3 gap-2">
         {[
-          { id: RECIPE_VIEW.MATCHED, label: 'Recommendations', icon: ChefHat, count: cookableRecipes.length },
-          { id: RECIPE_VIEW.SEARCH, label: 'Search', icon: Search, count: 0 },
-          { id: RECIPE_VIEW.SAVED, label: 'Saved', icon: Bookmark, count: savedIds.length },
-        ].map(({ id, label, icon: Icon, count }) => {
+          { id: RECIPE_VIEW.MATCHED, label: 'Recommendations', shortLabel: 'For you', icon: ChefHat, count: cookableRecipes.length },
+          { id: RECIPE_VIEW.SEARCH, label: 'Search', shortLabel: 'Search', icon: Search, count: 0 },
+          { id: RECIPE_VIEW.SAVED, label: 'Saved', shortLabel: 'Saved', icon: Bookmark, count: savedIds.length },
+        ].map(({ id, label, shortLabel, icon: Icon, count }) => {
           const active = recipeView === id;
           return (
             <button
               key={id}
               type="button"
               onClick={() => setRecipeView(id)}
-              className={`flex items-center justify-center gap-1.5 rounded-xl border-2 py-2.5 text-xs font-semibold transition active:scale-[0.98] sm:text-sm ${
+              className={`relative flex min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 px-1.5 py-2.5 transition active:scale-[0.98] ${
                 active
                   ? id === RECIPE_VIEW.SAVED
                     ? 'border-violet-500 bg-violet-50 text-violet-800 dark:border-violet-500/70 dark:bg-violet-950/40 dark:text-violet-200'
@@ -695,20 +695,27 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                   : 'border-black/[0.08] bg-lm-raised/50 text-zinc-600 dark:border-white/10 dark:bg-dm-raised/40 dark:text-zinc-400'
               }`}
             >
-              <Icon
-                className={`h-4 w-4 ${id === RECIPE_VIEW.SAVED && active ? 'fill-current' : ''}`}
-                aria-hidden
-              />
-              {label}
-              {count > 0 && (
-                <span
-                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white ${
-                    id === RECIPE_VIEW.SAVED ? 'bg-violet-600' : 'bg-emerald-600'
-                  }`}
-                >
-                  {count}
-                </span>
-              )}
+              <span className="relative inline-flex shrink-0">
+                <Icon
+                  className={`h-4 w-4 ${id === RECIPE_VIEW.SAVED && active ? 'fill-current' : ''}`}
+                  aria-hidden
+                />
+                {count > 0 && (
+                  <span
+                    className={`absolute -right-2 -top-2 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none text-white ${
+                      id === RECIPE_VIEW.SAVED ? 'bg-violet-600' : 'bg-emerald-600'
+                    }`}
+                  >
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
+              </span>
+              <span className="w-full truncate text-center text-[10px] font-semibold leading-tight sm:hidden">
+                {shortLabel}
+              </span>
+              <span className="hidden w-full truncate text-center text-xs font-semibold leading-tight sm:block">
+                {label}
+              </span>
             </button>
           );
         })}
