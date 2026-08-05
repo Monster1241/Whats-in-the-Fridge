@@ -70,7 +70,7 @@ function toUserFacingAiError(message) {
   const text = String(message ?? '').trim();
   if (!text) return 'Could not generate AI recommendations.';
   if (text.startsWith('{') || text.includes('"error":') || text.includes('models/gemini')) {
-    return 'Could not generate recipe suggestions right now. Please try again in a few minutes.';
+    return 'Could not generate AI recommendations right now. Please try again in a few minutes.';
   }
   return text;
 }
@@ -845,14 +845,14 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               type="button"
               onClick={handleGenerateAiRecipes}
               disabled={isAiLoading}
-              title={isAiLoading ? 'Generating AI Recommendations…' : 'Generate AI recommendations from your pantry'}
+              title={isAiLoading ? 'Generating AI Recommendations...' : 'Generate AI recommendations from your pantry'}
               aria-busy={isAiLoading}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-violet-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isAiLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Generating AI Recommendations…
+                  Generating AI Recommendations...
                 </>
               ) : (
                 'AI Recommendation'
