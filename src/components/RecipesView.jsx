@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { fetchAiRecipeMatches, fetchRemixRecipe } from '../api.js';
+import { PantryChefChat } from './PantryChefChat.jsx';
 import { classifyItem } from '../inventory/classifyItem.js';
 import { buildConsumptionFields } from '../inventory/consumption.js';
 import { FOOD_CATEGORY, ITEM_TYPE, STATUS } from '../inventory/constants.js';
@@ -804,6 +805,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
             <p className="text-muted mt-1 text-sm leading-relaxed">
               Cook what you have — tailored to your cravings and time.
             </p>
+            <PantryChefChat />
             <label className="sr-only" htmlFor="craving-input">
               What are you craving today?
             </label>

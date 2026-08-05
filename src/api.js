@@ -331,6 +331,32 @@ export async function fetchRemixRecipe(recipeId, mode, recipe) {
   return body;
 }
 
+/** POST /api/recipes/chat — Pantry Chef conversational assistant. */
+export async function fetchPantryChefChat(messages) {
+  const res = await fetch(`${API_BASE}/recipes/chat`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ messages }),
+  });
+  const text = await res.text();
+  let body = {};
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = {};
+    }
+  }
+  if (!res.ok) {
+    const err = new Error(
+      body.message || body.error || (text && text.length < 300 ? text : '') || `Request failed (${res.status})`,
+    );
+    err.status = res.status;
+    throw err;
+  }
+  return body;
+}
+
 /**
  * @param {{ store?: string, category?: string, groupBy?: 'store'|'category' }} [filters]
  */

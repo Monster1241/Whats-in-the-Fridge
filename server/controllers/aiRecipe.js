@@ -453,3 +453,77 @@ export async function remixRecipe(req, res) {
 
   res.json({ recipe: remixedRecipe });
 }
+
+const CHAT_SYSTEM_INSTRUCTION = `You are Pantry Chef, a friendly AI cooking assistant for Australian households.
+Help users decide what to cook with their current fridge and pantry items.
+Be practical, concise, and warm. Suggest recipes, substitutions, meal ideas, and ways to use expiring ingredients.
+Use Australian English and common AU supermarket ingredient names.
+Keep replies short: 2–4 sentences or brief bullet points unless the user asks for detail.
+You may suggest a small shopping list only when staples are missing.
+Do not claim to see inventory items that are not listed below.`;
+
+function sanitizeChatMessages(messages) {
+  if (!Array.isArray(messages)) return [];
+  return messages
+    .filter((m) => m?.role === 'user' || m?.role === 'assistant')
+    .map((m) => ({
+      role: m.role,
+      content: String(m.content ?? '').trim().slice(0, 2000),
+    }))
+    .filter((m) => m.content)
+    .slice(-24);
+}
+
+export async function chatPantryChef(req, res) {
+  const householdId = resolveHouseholdId(req);
+  if (!householdId) {
+    res.status(403).json({ error: 'Join or create a household to continue.' });
+    return;
+  }
+
+  const messages = sanitizeChatMessages(req.body?.messages);
+  if (!messages.length || messages.at(-1)?.role !== 'user') {
+    res.status(400).json({ error: 'Send at least one user message.' });
+    return;
+  }
+
+  const allItems = await getInventoryForHousehold(householdId);
+  const expiringItems = findExpiringSoonItems(allItems, EXPIRY_ALERT_DAYS);
+  const expiringIds = new Set(
+    expiringItems.map((item) => String(item.id ?? item.name ?? '').trim()).filter(Boolean),
+  );
+
+  const matchedItems = allItems
+    .map((item) => {
+      const matchStatus = classifyForRecipeMatching(item, expiringIds);
+      if (!matchStatus) return null;
+      return { ...item, _matchStatus: matchStatus };
+    })
+    .filter(Boolean);
+
+  const inventoryList = formatInventoryForPrompt(matchedItems);
+  const ai = getGenAI();
+
+  const contents = messages.map((msg) => ({
+    role: msg.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: msg.content }],
+  }));
+
+  const response = await ai.models.generateContent({
+    model: MODEL_ID,
+    contents,
+    config: {
+      systemInstruction: `${CHAT_SYSTEM_INSTRUCTION}\n\nCurrent household inventory:\n${inventoryList}`,
+      temperature: 0.7,
+    },
+  });
+
+  const reply = String(response.text ?? '').trim();
+  if (!reply) {
+    const err = new Error('AI returned an empty response.');
+    err.status = 502;
+    throw err;
+  }
+
+  res.json({ reply });
+}

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { asyncRoute } from '../routeUtils.js';
 import { requireAuth } from '../middleware/auth.js';
-import { generateAILiveMatches, remixRecipe } from '../controllers/aiRecipe.js';
+import { chatPantryChef, generateAILiveMatches, remixRecipe } from '../controllers/aiRecipe.js';
 import { formatGeminiErrorForClient } from '../errors.js';
 
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
@@ -84,6 +84,18 @@ recipesRouter.post(
       await remixRecipe(req, res);
     } catch (error) {
       sendGeminiRouteError(res, error, 'Failed to remix AI recipe.');
+    }
+  },
+);
+
+recipesRouter.post(
+  '/chat',
+  requireAuth,
+  async (req, res) => {
+    try {
+      await chatPantryChef(req, res);
+    } catch (error) {
+      sendGeminiRouteError(res, error, 'Failed to reach Pantry Chef.');
     }
   },
 );
