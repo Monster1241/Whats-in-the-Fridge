@@ -307,6 +307,17 @@ export function useAppData(enabled) {
     });
   }, []);
 
+  const mergeRecipeLibrary = useCallback((recipes) => {
+    if (!Array.isArray(recipes) || recipes.length === 0) return;
+    setRecipeLibrary((prev) => {
+      const byId = new Map(prev.map((entry) => [entry.id, entry]));
+      for (const recipe of recipes) {
+        if (recipe?.id) byId.set(recipe.id, recipe);
+      }
+      return [...byId.values()];
+    });
+  }, []);
+
   return {
     loading,
     error,
@@ -323,7 +334,7 @@ export function useAppData(enabled) {
     enabledModules,
     updateEnabledModules,
     householdCode,
-    savedRecipes: { savedIds, isSaved, toggleSave, recipeLibrary, rememberRecipe },
+    savedRecipes: { savedIds, isSaved, toggleSave, recipeLibrary, rememberRecipe, mergeRecipeLibrary },
     onboarding: { isDismissed, dismiss: dismissOnboarding, resetOnboarding },
   };
 }

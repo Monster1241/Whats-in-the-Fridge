@@ -1,41 +1,72 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { getInventoryForHousehold } from '../db.js';
+import { getHouseholdMeta, getInventoryForHousehold, upsertHouseholdRecipes } from '../db.js';
 import { EXPIRY_ALERT_DAYS, findExpiringSoonItems } from '../expiryAlerts.js';
+import { enrichRecipeWithMatchMeta, findMatchingLibraryRecipes } from '../recipeMatching.js';
+import {
+  createAiRecipeId,
+  sanitizeRecipeEntry,
+  sanitizeRecipeLibrary,
+} from '../recipeSchema.js';
+import { getRecipeMainIngredient } from '../../src/recipes/recipeUtils.js';
 
 const MODEL_ID = 'gemini-2.0-flash';
+const AI_RECIPE_COUNT = 3;
+
+const MACROS_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    protein: { type: Type.STRING },
+    carbs: { type: Type.STRING },
+    fat: { type: Type.STRING },
+    calories: { type: Type.INTEGER },
+  },
+};
 
 const RECIPE_RESPONSE_SCHEMA = {
   type: Type.ARRAY,
   items: {
     type: Type.OBJECT,
     properties: {
-      recipeName: { type: Type.STRING },
-      matchingInventoryCount: { type: Type.INTEGER },
-      expiringItemsUsed: { type: Type.ARRAY, items: { type: Type.STRING } },
+      title: { type: Type.STRING },
+      prepTime: { type: Type.STRING },
+      cookTime: { type: Type.STRING },
+      cuisine: { type: Type.STRING },
+      category: { type: Type.STRING },
+      ingredients: { type: Type.ARRAY, items: { type: Type.STRING } },
+      instructions: { type: Type.ARRAY, items: { type: Type.STRING } },
+      calories: { type: Type.INTEGER },
+      macros: MACROS_SCHEMA,
       missingIngredients: { type: Type.ARRAY, items: { type: Type.STRING } },
-      briefDescription: { type: Type.STRING },
     },
     required: [
-      'recipeName',
-      'matchingInventoryCount',
-      'expiringItemsUsed',
+      'title',
+      'prepTime',
+      'cookTime',
+      'ingredients',
+      'instructions',
       'missingIngredients',
-      'briefDescription',
     ],
     propertyOrdering: [
-      'recipeName',
-      'matchingInventoryCount',
-      'expiringItemsUsed',
+      'title',
+      'prepTime',
+      'cookTime',
+      'cuisine',
+      'category',
+      'ingredients',
+      'instructions',
+      'calories',
+      'macros',
       'missingIngredients',
-      'briefDescription',
     ],
   },
 };
 
 const SYSTEM_INSTRUCTION = `You are a practical home-cooking assistant for Australian households.
-Given a list of in-stock pantry and fridge items, suggest exactly 3 realistic recipes a family could cook this week.
+Given a list of in-stock pantry and fridge items, create exactly 3 original, fully-formed recipes a family could cook this week.
 Prioritize using items marked EXPIRING SOON to reduce food waste.
-Each recipe must be achievable with mostly on-hand ingredients; list only genuinely missing staples in missingIngredients.
+Each recipe must include realistic prepTime and cookTime (e.g. "15 min"), a cuisine, a category, a full ingredient list, step-by-step instructions, estimated calories, macros (protein/carbs/fat as strings like "25g"), and missingIngredients for staples not in the inventory.
+Use clear ingredient names that match common Australian pantry labels.
+Do not duplicate any recipe titles provided in the user message.
 Return strict JSON only — no markdown fences or commentary.`;
 
 let genaiClient;
@@ -82,7 +113,7 @@ function formatInventoryForPrompt(items) {
   return lines.join('\n');
 }
 
-function parseRecipesResponse(text) {
+function extractJsonArray(text) {
   const trimmed = String(text ?? '').trim();
   if (!trimmed) {
     const err = new Error('AI returned an empty response.');
@@ -100,54 +131,93 @@ function parseRecipesResponse(text) {
     }
   }
 
-  let parsed;
   try {
-    parsed = JSON.parse(raw);
-  } catch {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      const err = new Error('AI response was not a recipe array.');
+      err.status = 502;
+      throw err;
+    }
+    return parsed;
+  } catch (error) {
+    if (error?.status) throw error;
     const err = new Error('AI returned invalid JSON.');
     err.status = 502;
     throw err;
   }
+}
 
-  if (!Array.isArray(parsed)) {
-    const err = new Error('AI response was not a recipe array.');
+function normalizeGeneratedRecipe(entry, index, items, expiringIds) {
+  const title = String(entry?.title ?? '').trim();
+  if (!title) {
+    const err = new Error(`AI recipe at index ${index} is missing a title.`);
     err.status = 502;
     throw err;
   }
 
-  const recipes = parsed.slice(0, 3).map((entry, index) => {
-    const recipeName = String(entry?.recipeName ?? '').trim();
-    const briefDescription = String(entry?.briefDescription ?? '').trim();
-    const matchingInventoryCount = Number(entry?.matchingInventoryCount);
-    const expiringItemsUsed = Array.isArray(entry?.expiringItemsUsed)
-      ? entry.expiringItemsUsed.map((v) => String(v).trim()).filter(Boolean)
-      : [];
-    const missingIngredients = Array.isArray(entry?.missingIngredients)
+  const ingredients = Array.isArray(entry?.ingredients)
+    ? entry.ingredients.map((v) => String(v).trim()).filter(Boolean)
+    : [];
+  const instructions = Array.isArray(entry?.instructions)
+    ? entry.instructions.map((v) => String(v).trim()).filter(Boolean)
+    : [];
+
+  if (!ingredients.length || !instructions.length) {
+    const err = new Error(`AI recipe "${title}" is missing ingredients or instructions.`);
+    err.status = 502;
+    throw err;
+  }
+
+  const draft = {
+    id: createAiRecipeId(title),
+    title,
+    prepTime: String(entry?.prepTime ?? '15 min').trim(),
+    cookTime: String(entry?.cookTime ?? '20 min').trim(),
+    cuisine: entry?.cuisine ? String(entry.cuisine).trim() : 'Australian',
+    category: entry?.category ? String(entry.category).trim() : 'Dinner',
+    ingredients,
+    instructions,
+    calories: Number(entry?.calories),
+    macros: entry?.macros,
+    missingIngredients: Array.isArray(entry?.missingIngredients)
       ? entry.missingIngredients.map((v) => String(v).trim()).filter(Boolean)
-      : [];
+      : [],
+    isAiGenerated: true,
+    source: 'gemini',
+    mainIngredient: getRecipeMainIngredient({ ingredients, title }),
+  };
 
-    if (!recipeName || !briefDescription || !Number.isFinite(matchingInventoryCount)) {
-      const err = new Error(`AI recipe at index ${index} is missing required fields.`);
-      err.status = 502;
-      throw err;
-    }
+  const sanitized = sanitizeRecipeEntry(draft, { allowPartial: true });
+  if (!sanitized) {
+    const err = new Error(`AI recipe "${title}" could not be normalized.`);
+    err.status = 502;
+    throw err;
+  }
 
-    return {
-      recipeName,
-      matchingInventoryCount: Math.max(0, Math.round(matchingInventoryCount)),
-      expiringItemsUsed,
-      missingIngredients,
-      briefDescription,
-    };
-  });
+  return enrichRecipeWithMatchMeta(sanitized, items, expiringIds);
+}
 
-  if (recipes.length === 0) {
-    const err = new Error('AI did not return any recipes.');
+function parseAiRecipesResponse(text, items, expiringIds) {
+  const parsed = extractJsonArray(text);
+  const recipes = parsed
+    .slice(0, AI_RECIPE_COUNT)
+    .map((entry, index) => normalizeGeneratedRecipe(entry, index, items, expiringIds));
+
+  if (recipes.length < 2) {
+    const err = new Error('AI did not return enough recipes.');
     err.status = 502;
     throw err;
   }
 
   return recipes;
+}
+
+function dedupeRecipesById(recipes) {
+  const byId = new Map();
+  for (const recipe of recipes) {
+    if (recipe?.id) byId.set(recipe.id, recipe);
+  }
+  return [...byId.values()];
 }
 
 export async function generateAILiveMatches(req, res) {
@@ -157,7 +227,12 @@ export async function generateAILiveMatches(req, res) {
     return;
   }
 
-  const allItems = await getInventoryForHousehold(householdId);
+  const [allItems, householdMeta] = await Promise.all([
+    getInventoryForHousehold(householdId),
+    getHouseholdMeta(householdId),
+  ]);
+
+  const recipeLibrary = sanitizeRecipeLibrary(householdMeta?.recipeLibrary ?? []);
   const expiringItems = findExpiringSoonItems(allItems, EXPIRY_ALERT_DAYS);
   const expiringIds = new Set(
     expiringItems.map((item) => String(item.id ?? item.name ?? '').trim()).filter(Boolean),
@@ -172,20 +247,48 @@ export async function generateAILiveMatches(req, res) {
     .filter(Boolean)
     .filter((item) => item._matchStatus === 'Plentiful' || item._matchStatus === 'ExpiringSoon');
 
+  const matchedFromLibrary = findMatchingLibraryRecipes(
+    recipeLibrary,
+    allItems,
+    expiringIds,
+    { limit: 6 },
+  );
+
+  const existingTitles = [
+    ...recipeLibrary.map((recipe) => recipe.title),
+    ...matchedFromLibrary.map((recipe) => recipe.title),
+  ]
+    .filter(Boolean)
+    .slice(0, 40);
+
   const inventoryList = formatInventoryForPrompt(matchedItems);
   const ai = getGenAI();
 
   const response = await ai.models.generateContent({
     model: MODEL_ID,
-    contents: `Household inventory (only plentiful and expiring-soon items):\n\n${inventoryList}\n\nSuggest 3 practical recipes using these items. Prioritize expiring-soon ingredients.`,
+    contents: `Household inventory (only plentiful and expiring-soon items):\n\n${inventoryList}\n\nExisting recipe titles to avoid duplicating:\n${
+      existingTitles.length
+        ? existingTitles.map((title) => `- ${title}`).join('\n')
+        : '- (none yet)'
+    }\n\nCreate 3 new, original recipes using these items. Prioritize expiring-soon ingredients.`,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
       responseSchema: RECIPE_RESPONSE_SCHEMA,
-      temperature: 0.6,
+      temperature: 0.65,
     },
   });
 
-  const recipes = parseRecipesResponse(response.text);
-  res.json({ recipes });
+  const generatedRecipes = parseAiRecipesResponse(response.text, allItems, expiringIds);
+  const recipesToSave = generatedRecipes.map((recipe) => {
+    const { matchingInventoryCount, expiringItemsUsed, ...persisted } = recipe;
+    void matchingInventoryCount;
+    void expiringItemsUsed;
+    return persisted;
+  });
+
+  await upsertHouseholdRecipes(householdId, recipesToSave);
+
+  const combined = dedupeRecipesById([...matchedFromLibrary, ...generatedRecipes]);
+  res.json({ recipes: combined });
 }

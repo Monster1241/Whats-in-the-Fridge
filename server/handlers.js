@@ -7,6 +7,7 @@ import {
   verifyPassword,
 } from './auth.js';
 import { toFriendlyError } from './errors.js';
+import { sanitizeRecipeLibrary } from './recipeSchema.js';
 import { verifyFirebaseIdToken } from './firebaseAdmin.js';
 import {
   createHousehold,
@@ -403,42 +404,6 @@ function sanitizeRestockHistory(history) {
     })
     .filter(Boolean)
     .slice(0, 50);
-}
-
-function sanitizeRecipeLibrary(library) {
-  if (!Array.isArray(library)) return [];
-  return library
-    .map((entry) => {
-      const id = String(entry?.id ?? '').trim().slice(0, 80);
-      const title = String(entry?.title ?? '').trim().slice(0, 160);
-      if (!id || !title) return null;
-      const ingredients = Array.isArray(entry?.ingredients)
-        ? entry.ingredients
-            .map((ing) => String(ing ?? '').trim().slice(0, 120))
-            .filter(Boolean)
-            .slice(0, 30)
-        : [];
-      const instructions = Array.isArray(entry?.instructions)
-        ? entry.instructions
-            .map((step) => String(step ?? '').trim().slice(0, 500))
-            .filter(Boolean)
-            .slice(0, 30)
-        : [];
-      return {
-        id,
-        title,
-        prepTime: String(entry?.prepTime ?? 'See instructions').trim().slice(0, 40),
-        cuisine: entry?.cuisine ? String(entry.cuisine).trim().slice(0, 48) : undefined,
-        category: entry?.category ? String(entry.category).trim().slice(0, 48) : undefined,
-        ingredients,
-        instructions,
-        source: entry?.source ? String(entry.source).trim().slice(0, 32) : undefined,
-        sourceUrl: entry?.sourceUrl ? String(entry.sourceUrl).trim().slice(0, 500) : undefined,
-        imageUrl: entry?.imageUrl ? String(entry.imageUrl).trim().slice(0, 500) : undefined,
-      };
-    })
-    .filter(Boolean)
-    .slice(0, 80);
 }
 
 function sanitizeConsumptionDuration(value) {

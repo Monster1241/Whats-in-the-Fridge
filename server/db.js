@@ -605,6 +605,38 @@ export async function updateHouseholdAppState(householdId, partial) {
   return getHouseholdAppState(scopedId);
 }
 
+/**
+ * Merge recipes into a household library (by id), capped at 80 entries.
+ * @param {string} householdId
+ * @param {import('./recipeSchema.js').HouseholdRecipe[]} recipes
+ */
+export async function upsertHouseholdRecipes(householdId, recipes) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const households = getDb().collection('households');
+  const householdOid = new ObjectId(scopedId);
+  const existing = await households.findOne({ _id: householdOid });
+  if (!existing) {
+    const err = new Error('Household not found.');
+    err.status = 404;
+    throw err;
+  }
+
+  const library = Array.isArray(existing.recipeLibrary) ? existing.recipeLibrary : [];
+  const byId = new Map(library.map((entry) => [String(entry.id), entry]));
+  for (const recipe of recipes) {
+    if (!recipe?.id) continue;
+    byId.set(String(recipe.id), recipe);
+  }
+  const merged = [...byId.values()].slice(0, 80);
+
+  await households.updateOne(
+    { _id: householdOid },
+    { $set: { recipeLibrary: merged, updated_at: new Date() } },
+  );
+
+  return merged;
+}
+
 export async function replaceInventoryForHousehold(householdId, items) {
   const scopedId = assertScopedHouseholdId(householdId);
   const inventory = getDb().collection('inventory');

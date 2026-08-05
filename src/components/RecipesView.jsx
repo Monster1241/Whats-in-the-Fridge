@@ -118,55 +118,29 @@ function CollapsibleInstructions({ recipe }) {
   );
 }
 
-function AiRecipeCard({ recipe, onSearchDetailed }) {
-  const expiring = recipe.expiringItemsUsed ?? [];
+function AiRecipeMetaBadges({ recipe }) {
   const matchCount = Number(recipe.matchingInventoryCount) || 0;
+  const expiring = recipe.expiringItemsUsed ?? [];
+  if (!recipe.isAiGenerated && matchCount <= 0 && expiring.length <= 0) return null;
 
   return (
-    <li className="surface-card flex h-full flex-col border border-violet-200/80 p-4 shadow-lg dark:border-violet-900/50">
-      <div className="mb-3 min-w-0 flex-1">
-        <h2 className="text-heading text-base font-bold leading-snug sm:text-lg">
-          {recipe.recipeName}
-        </h2>
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {matchCount > 0 && (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:ring-emerald-700">
-              {matchCount} matched
-            </span>
-          )}
-          {expiring.length > 0 && (
-            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700">
-              {expiring.length} expiring
-            </span>
-          )}
-        </div>
-        {expiring.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {expiring.map((name) => (
-              <span
-                key={name}
-                className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
-              >
-                {name}
-              </span>
-            ))}
-          </div>
-        )}
-        {recipe.briefDescription && (
-          <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-            {recipe.briefDescription}
-          </p>
-        )}
-      </div>
-      <button
-        type="button"
-        onClick={() => onSearchDetailed(recipe.recipeName)}
-        className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 py-2.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-100 active:scale-[0.98] dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200 dark:hover:bg-violet-950/60"
-      >
-        <Search className="h-3.5 w-3.5" aria-hidden />
-        Search Detailed Recipe
-      </button>
-    </li>
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {recipe.isAiGenerated && (
+        <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-900 ring-1 ring-violet-300 dark:bg-violet-950/70 dark:text-violet-200 dark:ring-violet-700">
+          AI generated
+        </span>
+      )}
+      {matchCount > 0 && (
+        <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:ring-emerald-700">
+          {matchCount} matched
+        </span>
+      )}
+      {expiring.length > 0 && (
+        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700">
+          {expiring.length} expiring
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -197,7 +171,10 @@ function RecipeCard({
             {recipe.cuisine ? `${recipe.cuisine} · ` : ''}
             {recipe.category ? `${recipe.category} · ` : ''}
             Prep: {recipe.prepTime}
+            {recipe.cookTime ? ` · Cook: ${recipe.cookTime}` : ''}
+            {recipe.calories ? ` · ~${recipe.calories} cal` : ''}
           </p>
+          <AiRecipeMetaBadges recipe={recipe} />
           {recipe.source === 'themealdb' && recipe.sourceUrl && (
             <a
               href={recipe.sourceUrl}
@@ -343,7 +320,8 @@ function RecipeCard({
 }
 
 export function RecipesView({ items, updateItems, savedRecipes }) {
-  const { savedIds, isSaved, toggleSave, recipeLibrary, rememberRecipe } = savedRecipes;
+  const { savedIds, isSaved, toggleSave, recipeLibrary, rememberRecipe, mergeRecipeLibrary } =
+    savedRecipes;
   const [recipeView, setRecipeView] = useState(RECIPE_VIEW.MATCHED);
   const [searchQuery, setSearchQuery] = useState('');
   const [remoteResults, setRemoteResults] = useState([]);
@@ -363,6 +341,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       const data = await fetchAiRecipeMatches();
       const recipes = Array.isArray(data.recipes) ? data.recipes : [];
       setAiRecipes(recipes);
+      mergeRecipeLibrary(recipes.filter((recipe) => recipe.isAiGenerated));
       saveCachedAiRecipes(recipes);
     } catch (err) {
       if (err?.status === 429) {
@@ -386,14 +365,19 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
     } finally {
       setIsAiLoading(false);
     }
-  }, []);
+  }, [mergeRecipeLibrary]);
 
-  const handleSearchDetailedRecipe = useCallback((recipeName) => {
-    const query = String(recipeName ?? '').trim();
-    if (!query) return;
-    setSearchQuery(query);
-    setRecipeView(RECIPE_VIEW.SEARCH);
-  }, []);
+  const aiRecipeCards = useMemo(
+    () =>
+      aiRecipes.map((recipe) => {
+        const analysis = analyzeRecipe(recipe, items);
+        if (recipe.missingIngredients?.length) {
+          analysis.need = recipe.missingIngredients;
+        }
+        return { recipe, analysis };
+      }),
+    [aiRecipes, items],
+  );
 
   const pantryIngredients = useMemo(
     () =>
@@ -516,7 +500,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
 
   const handleToggleSave = useCallback(
     (recipe) => {
-      if (recipe.source === 'themealdb') {
+      if (recipe.source === 'themealdb' || recipe.isAiGenerated) {
         rememberRecipe(recipe);
       }
       toggleSave(recipe.id);
@@ -738,10 +722,10 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               {isAiLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Matching…
+                  Generating…
                 </>
               ) : (
-                'Match My Inventory'
+                'AI Recommendation'
               )}
             </button>
           </div>
@@ -783,19 +767,23 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </p>
       )}
 
-      {recipeView === RECIPE_VIEW.MATCHED && aiRecipes.length > 0 && !isAiLoading && (
+      {recipeView === RECIPE_VIEW.MATCHED && aiRecipeCards.length > 0 && !isAiLoading && (
         <section className="mb-6">
-          <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {aiRecipes.map((recipe, index) => (
-              <AiRecipeCard
-                key={`${recipe.recipeName}-${index}`}
+          <ul className="space-y-4">
+            {aiRecipeCards.map(({ recipe, analysis }) => (
+              <RecipeCard
+                key={recipe.id}
                 recipe={recipe}
-                onSearchDetailed={handleSearchDetailedRecipe}
+                analysis={analysis}
+                isSaved={isSaved(recipe.id)}
+                onToggleSave={handleToggleSave}
+                onMarkCooked={markCooked}
+                onAddNeedToShoppingList={addNeededToShoppingList}
               />
             ))}
           </ul>
           <p className="text-muted mt-4 text-center text-[11px] leading-relaxed">
-            AI suggestions are generated dynamically using Google Gemini.
+            AI suggestions are generated with Gemini and saved to your household library.
           </p>
         </section>
       )}
