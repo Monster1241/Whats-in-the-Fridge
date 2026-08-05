@@ -8,10 +8,15 @@ import {
   Loader2,
   Search,
   ShoppingCart,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { fetchAiRecipeMatches, fetchRemixRecipe } from '../api.js';
-import { PantryChefChat } from './PantryChefChat.jsx';
+import { FridgeScoutChat } from './FridgeScoutChat.jsx';
+import {
+  FRIDGE_SCOUT_NAME,
+  FRIDGE_SCOUT_TAGLINE,
+} from '../recipes/kitchenAiBranding.js';
 import { classifyItem } from '../inventory/classifyItem.js';
 import { buildConsumptionFields } from '../inventory/consumption.js';
 import { FOOD_CATEGORY, ITEM_TYPE, STATUS } from '../inventory/constants.js';
@@ -149,7 +154,7 @@ function AiRecipeMetaBadges({ recipe }) {
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {recipe.isAiGenerated && (
-        <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[11px] font-semibold text-violet-900 ring-1 ring-violet-300 dark:bg-violet-950/70 dark:text-violet-200 dark:ring-violet-700">
+        <span className="rounded-full bg-teal-100 px-2.5 py-1 text-[11px] font-semibold text-teal-900 ring-1 ring-teal-300 dark:bg-teal-950/60 dark:text-teal-200 dark:ring-teal-700/80">
           AI generated
         </span>
       )}
@@ -664,7 +669,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
             ? 'Your bookmarked recipes — always available here'
             : recipeView === RECIPE_VIEW.SEARCH
               ? 'Search built-in recipes and import free recipes from TheMealDB'
-              : 'Get AI recommendations from your pantry or browse catalogue recipes you can cook now'}
+              : 'Chat with Scout or generate meals from what’s already in your fridge'}
         </p>
       </header>
 
@@ -683,9 +688,11 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               className={`flex items-center justify-center gap-1.5 rounded-xl border-2 py-2.5 text-xs font-semibold transition active:scale-[0.98] sm:text-sm ${
                 active
                   ? id === RECIPE_VIEW.SAVED
-                    ? 'border-violet-500 bg-violet-50 text-violet-800 dark:bg-violet-950/50 dark:text-violet-300'
-                    : 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
-                  : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
+                    ? 'border-violet-500 bg-violet-50 text-violet-800 dark:border-violet-500/70 dark:bg-violet-950/40 dark:text-violet-200'
+                    : id === RECIPE_VIEW.MATCHED
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm shadow-emerald-500/10 dark:border-emerald-500/70 dark:bg-emerald-950/35 dark:text-emerald-100 dark:shadow-emerald-500/5'
+                      : 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                  : 'border-black/[0.08] bg-lm-raised/50 text-zinc-600 dark:border-white/10 dark:bg-dm-raised/40 dark:text-zinc-400'
               }`}
             >
               <Icon
@@ -799,15 +806,23 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       )}
 
       {recipeView === RECIPE_VIEW.MATCHED && (
-        <section className="surface-card mb-5 overflow-hidden border border-violet-200/70 dark:border-violet-900/40">
-          <div className="bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-4 py-5 dark:from-violet-950/40 dark:via-dm-raised dark:to-emerald-950/20">
-            <h2 className="text-heading text-lg font-extrabold leading-snug">
-              Pantry Chef
-            </h2>
-            <p className="text-muted mt-1 text-sm leading-relaxed">
-              Cook what you have — tailored to your cravings and time.
-            </p>
-            <PantryChefChat />
+        <section className="fridge-scout-zone mb-5">
+          <div className="fridge-scout-zone__hero">
+            <div className="fridge-scout-zone__hero-top">
+              <span className="fridge-scout-zone__badge">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                AI kitchen
+              </span>
+            </div>
+            <h2 className="fridge-scout-zone__title">{FRIDGE_SCOUT_NAME}</h2>
+            <p className="fridge-scout-zone__tagline">{FRIDGE_SCOUT_TAGLINE}</p>
+            <FridgeScoutChat />
+          </div>
+
+          <div className="fridge-scout-zone__generator">
+            <div className="fridge-scout-zone__divider">
+              <span>Recipe generator</span>
+            </div>
             <label className="sr-only" htmlFor="craving-input">
               What are you craving today?
             </label>
@@ -817,7 +832,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               value={cravingInput}
               onChange={(event) => setCravingInput(event.target.value)}
               placeholder="What are you craving today?"
-              className="mt-4 w-full rounded-xl border border-violet-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-200 dark:border-violet-800 dark:bg-dm-raised dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-violet-900"
+              className="input-field w-full"
             />
             <div className="mt-3 flex flex-wrap gap-2">
               {QUICK_FILTER_CHIPS.map((chip) => {
@@ -829,11 +844,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                     onClick={() =>
                       setSelectedQuickTag((current) => (current === chip.id ? '' : chip.id))
                     }
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition active:scale-[0.98] ${
-                      active
-                        ? 'border-violet-500 bg-violet-600 text-white shadow-sm'
-                        : 'border-violet-200 bg-white text-violet-800 hover:border-violet-400 dark:border-violet-800 dark:bg-dm-raised dark:text-violet-200 dark:hover:border-violet-600'
-                    }`}
+                    className={`fridge-scout-chip ${active ? 'fridge-scout-chip--active' : ''}`}
                   >
                     {chip.label}
                   </button>
@@ -846,15 +857,18 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               disabled={isAiLoading}
               title={isAiLoading ? 'Generating AI Recommendations...' : 'Generate AI recommendations from your pantry'}
               aria-busy={isAiLoading}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-violet-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+              className="fridge-scout-generate-btn mt-4"
             >
               {isAiLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                  Generating AI Recommendations...
+                  Generating recommendations…
                 </>
               ) : (
-                'AI Recommendation'
+                <>
+                  <Sparkles className="h-4 w-4" aria-hidden />
+                  Generate recommendations
+                </>
               )}
             </button>
           </div>
@@ -897,7 +911,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
             ))}
           </ul>
           <p className="text-muted mt-4 text-center text-[11px] leading-relaxed">
-            AI recommendations are generated with Gemini and saved to your household library.
+            Recommendations are powered by Gemini and saved to your household library.
           </p>
         </section>
       )}

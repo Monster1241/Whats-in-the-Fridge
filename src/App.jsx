@@ -2227,7 +2227,8 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
             icon: ChefHat,
             title: 'Recipes — AI recommendations & catalogue',
             steps: [
-              'Tap AI Recommendation in Pantry Chef to generate meals from your inventory.',
+              'Tap Generate recommendations in Fridge Scout to create meals from your inventory.',
+              'Chat with Scout for quick meal ideas, swaps, and expiring-item tips.',
               'Add cravings or quick filters like Under 15 Mins before generating.',
               'Use Search to find built-in recipes or import from TheMealDB.',
               'Save favourites with the bookmark icon.',

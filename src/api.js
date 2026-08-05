@@ -338,8 +338,8 @@ export async function fetchRemixRecipe(recipeId, mode, recipe) {
   return body;
 }
 
-/** POST /api/recipes/chat — Pantry Chef conversational assistant. */
-export async function fetchPantryChefChat(messages) {
+/** POST /api/recipes/chat — Fridge Scout conversational assistant. */
+export async function fetchFridgeScoutChat(messages) {
   const res = await fetch(`${API_BASE}/recipes/chat`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -363,6 +363,9 @@ export async function fetchPantryChefChat(messages) {
   }
   return body;
 }
+
+/** @deprecated Use fetchFridgeScoutChat */
+export const fetchPantryChefChat = fetchFridgeScoutChat;
 
 /**
  * @param {{ store?: string, category?: string, groupBy?: 'store'|'category' }} [filters]

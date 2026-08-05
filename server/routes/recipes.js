@@ -95,7 +95,7 @@ recipesRouter.post(
     try {
       await chatPantryChef(req, res);
     } catch (error) {
-      sendGeminiRouteError(res, error, 'Failed to reach Pantry Chef.');
+      sendGeminiRouteError(res, error, 'Failed to reach Fridge Scout.');
     }
   },
 );
