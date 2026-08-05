@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { sendPasswordResetEmail } from '../api.js';
 import { AuthShell } from './AuthShell.jsx';
+import { LegalFooterLinks } from './LegalFooterLinks.jsx';
 
 export function AuthScreen({
   needsHousehold,
@@ -388,12 +389,13 @@ export function AuthScreen({
             role="note"
           >
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              Beta privacy note
+              Privacy &amp; terms
             </p>
             <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500/90 dark:text-slate-500">
               Sign-in is handled by Firebase Authentication. Household inventory data stays private to
               your household.
             </p>
+            <LegalFooterLinks className="mt-3" />
           </div>
         </>
       ) : (

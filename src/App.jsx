@@ -25,6 +25,7 @@ import { SubCategoryFilterMenu } from './components/SubCategoryFilterMenu.jsx';
 import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
 import { WeeklyDealsFeed } from './components/WeeklyDealsFeed.jsx';
 import { RecipesView } from './components/RecipesView.jsx';
+import { LegalFooterLinks } from './components/LegalFooterLinks.jsx';
 import {
   defaultCategoryForItemType,
   getCategoriesForItemType,
@@ -3126,6 +3127,13 @@ function SettingsView({
           typical shelf life when not printed on the pack.
         </p>
       </section>
+
+      <footer className="border-t border-slate-200 pt-6 dark:border-slate-700">
+        <LegalFooterLinks />
+        <p className="text-muted mt-2 text-center text-[10px]">
+          What&apos;s in the Fridge? · Household inventory for Australia
+        </p>
+      </footer>
     </div>
   );
 }
