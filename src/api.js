@@ -272,6 +272,15 @@ export async function lookupExternalRecipe(mealId) {
   return data.meal ?? null;
 }
 
+/** POST /api/recipes/ai-match — Gemini-powered recipes from current household inventory. */
+export async function fetchAiRecipeMatches() {
+  const res = await fetch(`${API_BASE}/recipes/ai-match`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+  });
+  return parseJson(res);
+}
+
 /**
  * @param {{ store?: string, category?: string, groupBy?: 'store'|'category' }} [filters]
  */

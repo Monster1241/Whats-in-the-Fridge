@@ -10,6 +10,7 @@ import {
   ShoppingCart,
   X,
 } from 'lucide-react';
+import { fetchAiRecipeMatches } from '../api.js';
 import { classifyItem } from '../inventory/classifyItem.js';
 import { buildConsumptionFields } from '../inventory/consumption.js';
 import { FOOD_CATEGORY, ITEM_TYPE, STATUS } from '../inventory/constants.js';
@@ -79,6 +80,72 @@ function CollapsibleInstructions({ recipe }) {
         <p className="text-muted mt-2 text-xs">Tap to expand step-by-step directions.</p>
       )}
     </div>
+  );
+}
+
+function AiRecipeCard({ recipe }) {
+  const expiring = recipe.expiringItemsUsed ?? [];
+  const missing = recipe.missingIngredients ?? [];
+
+  return (
+    <li className="surface-card border border-violet-200/80 p-4 shadow-lg dark:border-violet-900/50">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-heading text-lg font-bold leading-snug">{recipe.recipeName}</h2>
+          {Number.isFinite(recipe.matchingInventoryCount) && recipe.matchingInventoryCount > 0 && (
+            <p className="text-muted mt-1 text-xs font-medium">
+              Uses {recipe.matchingInventoryCount} item
+              {recipe.matchingInventoryCount === 1 ? '' : 's'} from your inventory
+            </p>
+          )}
+        </div>
+        <span className="shrink-0 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:bg-violet-950/60 dark:text-violet-200">
+          AI
+        </span>
+      </div>
+
+      {expiring.length > 0 && (
+        <div className="mb-3">
+          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
+            Expiring items used
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {expiring.map((name) => (
+              <span
+                key={name}
+                className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700"
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {missing.length > 0 && (
+        <div className="mb-3">
+          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
+            Missing ingredients
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {missing.map((name) => (
+              <span
+                key={name}
+                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800/80 dark:text-slate-300 dark:ring-slate-600"
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {recipe.briefDescription && (
+        <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+          {recipe.briefDescription}
+        </p>
+      )}
+    </li>
   );
 }
 
@@ -262,6 +329,30 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [pantryOnly, setPantryOnly] = useState(false);
+  const [aiMatches, setAiMatches] = useState([]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  const handleAiMatch = useCallback(async () => {
+    setIsAiLoading(true);
+    setAiError('');
+    try {
+      const data = await fetchAiRecipeMatches();
+      setAiMatches(Array.isArray(data.recipes) ? data.recipes : []);
+    } catch (err) {
+      setAiMatches([]);
+      const message = err?.message || 'Could not generate AI recipe matches.';
+      if (/too many requests/i.test(message)) {
+        setAiError('Too many requests — please wait a few minutes and try again.');
+      } else if (/access restricted|not authenticated|unauthorized/i.test(message)) {
+        setAiError('AI matching is not available for this account yet.');
+      } else {
+        setAiError(message);
+      }
+    } finally {
+      setIsAiLoading(false);
+    }
+  }, []);
 
   const pantryIngredients = useMemo(
     () =>
@@ -587,7 +678,81 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </section>
       )}
 
+      {recipeView === RECIPE_VIEW.MATCHED && (
+        <section className="surface-card mb-5 overflow-hidden border border-violet-200/70 dark:border-violet-900/40">
+          <div className="bg-gradient-to-br from-violet-50 via-white to-emerald-50 px-4 py-5 dark:from-violet-950/40 dark:via-dm-raised dark:to-emerald-950/20">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+              Reduce food waste
+            </p>
+            <h2 className="text-heading mt-1 text-lg font-extrabold leading-snug">
+              Let AI cook up ideas from what you already have
+            </h2>
+            <p className="text-muted mt-2 text-xs leading-relaxed">
+              Prioritises expiring fridge items and suggests practical meals for your household.
+            </p>
+            <button
+              type="button"
+              onClick={handleAiMatch}
+              disabled={isAiLoading}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-md transition hover:bg-violet-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isAiLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  Matching…
+                </>
+              ) : (
+                <>Reduce Waste 🪄 Match My Inventory</>
+              )}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {recipeView === RECIPE_VIEW.MATCHED && isAiLoading && (
+        <div
+          className="surface-inset mb-5 flex items-center justify-center gap-3 px-4 py-8 text-center"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="h-6 w-6 shrink-0 animate-spin text-violet-600" aria-hidden />
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+            Checking your fridge &amp; matching ingredients…
+          </p>
+        </div>
+      )}
+
+      {recipeView === RECIPE_VIEW.MATCHED && aiError && !isAiLoading && (
+        <p
+          className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+          role="alert"
+        >
+          {aiError}
+        </p>
+      )}
+
+      {recipeView === RECIPE_VIEW.MATCHED && aiMatches.length > 0 && !isAiLoading && (
+        <section className="mb-6">
+          <h2 className="text-heading mb-3 text-sm font-bold">AI suggestions</h2>
+          <ul className="space-y-4">
+            {aiMatches.map((recipe, index) => (
+              <AiRecipeCard key={`${recipe.recipeName}-${index}`} recipe={recipe} />
+            ))}
+          </ul>
+          <p className="text-muted mt-4 text-center text-[11px] leading-relaxed">
+            Generated by AI based on your current household inventory.
+          </p>
+        </section>
+      )}
+
+      {recipeView === RECIPE_VIEW.MATCHED && cookableRecipes.length > 0 && (
+        <h2 className="text-heading mb-3 text-sm font-bold">
+          {aiMatches.length > 0 ? 'From your catalogue' : 'Matched recipes'}
+        </h2>
+      )}
+
       {list.length === 0 ? (
+        recipeView === RECIPE_VIEW.MATCHED && (aiMatches.length > 0 || isAiLoading) ? null : (
         <EmptyState
           icon={
             recipeView === RECIPE_VIEW.SAVED
@@ -615,6 +780,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                 : `Stock the main ingredient for a recipe plus at least ${MIN_STOCKED_INGREDIENTS_FOR_RECIPE} of its items (Fresh or Expiring Soon) to see matches here.`
           }
         />
+        )
       ) : (
         <ul className="space-y-4">
           {list.map(({ recipe, analysis }) => (

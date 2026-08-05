@@ -1,5 +1,8 @@
 import { Router } from 'express';
 import { asyncRoute } from '../routeUtils.js';
+import { requireAuth } from '../middleware/auth.js';
+import { whitelist } from '../middleware/whitelist.js';
+import { generateAILiveMatches } from '../controllers/aiRecipe.js';
 
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
 
@@ -53,4 +56,15 @@ recipesRouter.get(
     const data = await fetchTheMealDb(`/lookup.php?i=${encodeURIComponent(mealId)}`);
     res.json({ meal: data.meals?.[0] ?? null });
   }, 'GET /api/recipes/lookup/:mealId', 'Recipe lookup failed'),
+);
+
+recipesRouter.post(
+  '/ai-match',
+  requireAuth,
+  whitelist,
+  asyncRoute(
+    generateAILiveMatches,
+    'POST /api/recipes/ai-match',
+    'AI recipe matching failed',
+  ),
 );
