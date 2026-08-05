@@ -69,10 +69,16 @@ function saveCachedAiRecipes(recipes) {
 function toUserFacingAiError(message) {
   const text = String(message ?? '').trim();
   if (!text) return 'Could not generate AI recommendations.';
-  if (text.startsWith('{') || text.includes('"error":') || text.includes('models/gemini')) {
-    return 'Could not generate AI recommendations right now. Please try again in a few minutes.';
+  if (text.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(text);
+      const nested = parsed?.error?.message ?? parsed?.message;
+      if (nested) return String(nested).split('\n')[0].trim();
+    } catch {
+      // fall through
+    }
   }
-  return text;
+  return text.split('\n')[0].trim();
 }
 
 function EmptyState({ icon: Icon, title, description }) {

@@ -2,36 +2,13 @@ import { Router } from 'express';
 import { asyncRoute } from '../routeUtils.js';
 import { requireAuth } from '../middleware/auth.js';
 import { generateAILiveMatches, remixRecipe } from '../controllers/aiRecipe.js';
-import { isGeminiQuotaError } from '../errors.js';
+import { formatGeminiErrorForClient } from '../errors.js';
 
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
 
-export const GOOGLE_AI_QUOTA_ERROR =
-  'Daily Google AI quota reached. Please try again tomorrow.';
-
-function getErrorMessage(error) {
-  if (!error) return '';
-  if (typeof error === 'string') return error;
-  const raw = error;
-  return String(raw.message ?? raw.error?.message ?? '');
-}
-
-function getErrorStatus(error) {
-  const status = Number(error?.status ?? error?.statusCode ?? 0);
-  if (Number.isFinite(status) && status >= 400 && status < 600) return status;
-  const message = getErrorMessage(error);
-  if (message.includes('429')) return 429;
-  return 500;
-}
-
 function sendGeminiRouteError(res, error, fallback = 'Failed to generate AI recipe.') {
   console.error('Gemini API Error Detail:', error);
-  if (isGeminiQuotaError(error)) {
-    res.status(429).json({ error: GOOGLE_AI_QUOTA_ERROR });
-    return;
-  }
-  const status = getErrorStatus(error);
-  const message = getErrorMessage(error) || fallback;
+  const { status, message } = formatGeminiErrorForClient(error, fallback);
   res.status(status).json({ error: message });
 }
 
