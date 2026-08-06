@@ -230,26 +230,39 @@ body {
   .fridge-scout-page {
     @apply -mx-4 flex min-h-0 flex-col sm:-mx-5;
     height: calc(100dvh - 1.5rem - 4.25rem - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 1.5rem - 4.25rem - env(safe-area-inset-bottom, 0px));
+    /* main top padding + bottom nav; header/tabs shrink inside via flex */
   }
 
   .fridge-scout-messenger--fullscreen {
-    @apply h-full min-h-0 flex-1 rounded-none border-0 shadow-none;
+    @apply flex h-full min-h-0 flex-1 flex-col rounded-none border-0 shadow-none;
+    overflow: visible;
   }
 
   .fridge-scout-messenger--expanded {
     min-height: min(72vh, 40rem);
   }
 
+  .fridge-scout-messenger--fullscreen.fridge-scout-messenger--expanded {
+    min-height: 0;
+  }
+
   .fridge-scout-messenger--fullscreen .fridge-scout-messenger__thread {
     min-height: 0;
     max-height: none;
     flex: 1 1 auto;
+    overflow-y: auto;
   }
 
   .fridge-scout-messenger--fullscreen .fridge-scout-messenger__footer,
   .fridge-scout-messenger--fullscreen .fridge-scout-messenger__prompts,
   .fridge-scout-messenger--fullscreen .fridge-scout-messenger__topbar {
     @apply shrink-0;
+  }
+
+  .fridge-scout-messenger--fullscreen .fridge-scout-messenger__footer {
+    @apply z-10 border-t border-black/[0.08] bg-lm-raised/95 backdrop-blur-md dark:border-white/[0.08] dark:bg-zinc-950/95;
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
   }
 
   .fridge-scout-messenger__topbar {
@@ -388,7 +401,7 @@ body {
   }
 
   .fridge-scout-messenger__composer-pill {
-    @apply flex items-end gap-2 rounded-full border border-black/[0.1] bg-white/90 px-3 py-1.5 shadow-inner dark:border-white/10 dark:bg-zinc-900/90;
+    @apply flex items-end gap-2 rounded-full border border-emerald-500/20 bg-white px-3 py-1.5 shadow-md dark:border-emerald-500/25 dark:bg-zinc-900;
   }
 
   .fridge-scout-messenger__input {
@@ -404,12 +417,19 @@ body {
 .barcode-scanner-view {
   position: relative;
   width: 100%;
-  min-height: min(58vh, 420px);
-  height: 100%;
-  max-height: 68vh;
+  min-height: min(52dvh, 420px);
+  height: min(52dvh, 420px);
+  max-height: 68dvh;
   border-radius: 1rem;
   overflow: hidden;
   background: #000;
+}
+
+.barcode-scanner-view video {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
 }
 
 .barcode-scanner-overlay {
@@ -428,10 +448,6 @@ body {
   box-shadow:
     0 0 0 9999px rgb(0 0 0 / 0.45),
     0 0 24px rgb(var(--brand-primary-rgb) / 0.35);
-}
-
-.barcode-scanner-view video {
-  object-fit: cover;
 }
 
 .barcode-scanner-view #qr-shaded-region {

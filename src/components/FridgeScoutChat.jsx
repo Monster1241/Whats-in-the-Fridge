@@ -362,7 +362,7 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat(
       </div>
 
       {showWelcome && (
-        <div className="fridge-scout-messenger__prompts" aria-label="Suggested questions">
+        <div className="fridge-scout-messenger__prompts shrink-0" aria-label="Suggested questions">
           {FRIDGE_SCOUT_QUICK_PROMPTS.map((prompt) => (
             <button
               key={prompt}
@@ -383,7 +383,7 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat(
         </p>
       )}
 
-      <footer className="fridge-scout-messenger__footer">
+      <footer className="fridge-scout-messenger__footer shrink-0">
         <div className="fridge-scout-messenger__composer-pill">
           <label className="sr-only" htmlFor="fridge-scout-chat-input">
             Message {FRIDGE_SCOUT_NAME}
