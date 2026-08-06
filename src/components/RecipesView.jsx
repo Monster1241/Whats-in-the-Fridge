@@ -27,6 +27,7 @@ import { normalizeName } from '../inventory/itemUtils.js';
 import { BUILTIN_RECIPES } from '../recipes/recipeCatalog.js';
 import {
   analyzeRecipe,
+  findRecipesByCraving,
   getAllKnownRecipes,
   getRecipeById,
   MIN_MATCHED_RECIPES_TO_SHOW,
@@ -423,25 +424,66 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
   const [cravingInput, setCravingInput] = useState('');
+  const [cravingMatches, setCravingMatches] = useState([]);
+  const [lastCravingQuery, setLastCravingQuery] = useState('');
+  const [cravingSearchLoading, setCravingSearchLoading] = useState(false);
   const [selectedQuickTag, setSelectedQuickTag] = useState('');
   const [scoutTweakingId, setScoutTweakingId] = useState(null);
   const [scoutTweakingMode, setScoutTweakingMode] = useState('');
   const scoutChatRef = useRef(null);
 
+  const fetchCravingCatalogMatches = useCallback(
+    async (craving) => {
+      const query = String(craving ?? '').trim();
+      if (query.length < 2) return [];
+
+      const local = findRecipesByCraving(query, recipeLibrary, { limit: 12 });
+      let remote = [];
+      try {
+        remote = (await fetchRecipesBySearch(query)).slice(0, 8);
+      } catch {
+        remote = [];
+      }
+
+      const byId = new Map();
+      for (const recipe of local) byId.set(recipe.id, recipe);
+      for (const recipe of remote) {
+        if (!byId.has(recipe.id)) byId.set(recipe.id, recipe);
+      }
+      return [...byId.values()];
+    },
+    [recipeLibrary],
+  );
+
   const handleGenerateAiRecipes = useCallback(async () => {
     if (isAiLoading) return;
     setIsAiLoading(true);
+    setCravingSearchLoading(true);
     setAiError('');
+    const craving = cravingInput.trim();
     try {
-      const data = await fetchAiRecipeMatches({
-        cravings: cravingInput,
-        quickTag: selectedQuickTag,
-      });
+      const [data, catalogueMatches] = await Promise.all([
+        fetchAiRecipeMatches({
+          cravings: craving,
+          quickTag: selectedQuickTag,
+        }),
+        craving.length >= 2 ? fetchCravingCatalogMatches(craving) : Promise.resolve([]),
+      ]);
+
       const recipes = Array.isArray(data.recipes) ? data.recipes : [];
-      setAiRecipes(recipes);
-      mergeRecipeLibrary(recipes.filter((recipe) => recipe.isAiGenerated));
-      saveCachedAiRecipes(recipes);
-      if (recipes.length === 0) {
+      const matchIds = new Set(catalogueMatches.map((recipe) => recipe.id));
+      const aiOnly = recipes.filter((recipe) => !matchIds.has(recipe.id));
+
+      setCravingMatches(catalogueMatches);
+      setLastCravingQuery(craving);
+      setAiRecipes(aiOnly);
+      mergeRecipeLibrary([
+        ...catalogueMatches.filter((recipe) => recipe.source === 'themealdb'),
+        ...aiOnly.filter((recipe) => recipe.isAiGenerated),
+      ]);
+      saveCachedAiRecipes([...catalogueMatches, ...aiOnly]);
+
+      if (catalogueMatches.length === 0 && aiOnly.length === 0) {
         setAiError(AI_EMPTY_MESSAGE);
       } else {
         setRecipeView(RECIPE_VIEW.MATCHED);
@@ -459,8 +501,15 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       }
     } finally {
       setIsAiLoading(false);
+      setCravingSearchLoading(false);
     }
-  }, [cravingInput, selectedQuickTag, mergeRecipeLibrary, isAiLoading]);
+  }, [
+    cravingInput,
+    selectedQuickTag,
+    mergeRecipeLibrary,
+    isAiLoading,
+    fetchCravingCatalogMatches,
+  ]);
 
   const handleAskScoutToTweak = useCallback(async (recipe, mode) => {
     if (!recipe?.id) return;
@@ -481,6 +530,15 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       });
     });
   }, []);
+
+  const cravingMatchCards = useMemo(
+    () =>
+      cravingMatches.map((recipe) => ({
+        recipe,
+        analysis: analyzeRecipe(recipe, items),
+      })),
+    [cravingMatches, items],
+  );
 
   const aiRecipeCards = useMemo(
     () =>
@@ -853,7 +911,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               </div>
               <h2 className="fridge-scout-zone__title">Recipe generator</h2>
               <p className="fridge-scout-zone__tagline">
-                Generate meals from your pantry — including a few shop-and-cook ideas.
+                Generate meals from your pantry — plus catalogue picks when you name a cuisine or craving.
               </p>
             </div>
             <div className="fridge-scout-zone__generator !border-t-0 px-4 pb-4 pt-0">
@@ -900,7 +958,9 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
                 {isAiLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    Generating recommendations…
+                    {cravingInput.trim().length >= 2
+                      ? 'Finding matches & generating…'
+                      : 'Generating recommendations…'}
                   </>
                 ) : (
                   <>
@@ -934,8 +994,38 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         <FridgeScoutChat ref={scoutChatRef} expanded fullscreen />
       </div>
 
+      {recipeView === RECIPE_VIEW.MATCHED && cravingMatchCards.length > 0 && !isAiLoading && (
+        <section className="mb-6">
+          <h2 className="text-heading mb-3 text-sm font-bold">
+            {lastCravingQuery
+              ? `Matches for “${lastCravingQuery}”`
+              : 'Craving matches'}
+          </h2>
+          <ul className="space-y-4">
+            {cravingMatchCards.map(({ recipe, analysis }) => (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                analysis={analysis}
+                isSaved={isSaved(recipe.id)}
+                onToggleSave={handleToggleSave}
+                onMarkCooked={markCooked}
+                onAddNeedToShoppingList={addNeededToShoppingList}
+                onAskScoutToTweak={handleAskScoutToTweak}
+                scoutTweakingId={scoutTweakingId}
+                scoutTweakingMode={scoutTweakingMode}
+              />
+            ))}
+          </ul>
+          <p className="text-muted mt-3 text-center text-[11px] leading-relaxed">
+            From your built-in catalogue, saved library, and TheMealDB.
+          </p>
+        </section>
+      )}
+
       {recipeView === RECIPE_VIEW.MATCHED && aiRecipeCards.length > 0 && !isAiLoading && (
         <section className="mb-6">
+          <h2 className="text-heading mb-3 text-sm font-bold">AI recommendations</h2>
           <ul className="space-y-4">
             {aiRecipeCards.map(({ recipe, analysis }) => (
               <RecipeCard
@@ -964,7 +1054,9 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
 
       {recipeView === RECIPE_VIEW.MATCHED &&
         !isAiLoading &&
+        !cravingSearchLoading &&
         aiRecipeCards.length === 0 &&
+        cravingMatchCards.length === 0 &&
         list.length === 0 && (
           <EmptyState
             icon={ChefHat}
@@ -975,8 +1067,14 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
 
       {recipeView !== RECIPE_VIEW.SCOUT &&
         (list.length === 0 ? (
-        recipeView === RECIPE_VIEW.MATCHED && (aiRecipes.length > 0 || isAiLoading) ? null :
-        recipeView === RECIPE_VIEW.MATCHED && aiRecipeCards.length === 0 ? null : (
+        recipeView === RECIPE_VIEW.MATCHED &&
+        (aiRecipes.length > 0 || cravingMatches.length > 0 || isAiLoading || cravingSearchLoading)
+          ? null
+        : recipeView === RECIPE_VIEW.MATCHED &&
+            aiRecipeCards.length === 0 &&
+            cravingMatchCards.length === 0
+          ? null
+        : (
         <EmptyState
           icon={
             recipeView === RECIPE_VIEW.SAVED
