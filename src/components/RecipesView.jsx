@@ -670,18 +670,19 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
           ? []
           : cookableRecipes;
 
-  function tabActiveClass(id, active) {
-    if (!active) {
-      return 'border-black/[0.08] bg-lm-raised/50 text-zinc-600 dark:border-white/10 dark:bg-dm-raised/40 dark:text-zinc-400';
-    }
-    if (id === RECIPE_VIEW.SAVED) {
-      return 'border-violet-500 bg-violet-50 text-violet-800 dark:border-violet-500/70 dark:bg-violet-950/40 dark:text-violet-200';
-    }
-    if (id === RECIPE_VIEW.SCOUT) {
-      return 'border-teal-500 bg-teal-50 text-teal-900 shadow-sm shadow-teal-500/10 dark:border-teal-500/70 dark:bg-teal-950/35 dark:text-teal-100 dark:shadow-teal-500/5';
-    }
-    return 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm shadow-emerald-500/10 dark:border-emerald-500/70 dark:bg-emerald-950/35 dark:text-emerald-100 dark:shadow-emerald-500/5';
+  function tabClassName(id, active) {
+    const base = `recipe-tab recipe-tab--${id}`;
+    return active ? `${base} recipe-tab--active` : `${base} recipe-tab--idle`;
   }
+
+  const pageSubtitle =
+    recipeView === RECIPE_VIEW.SCOUT
+      ? 'Chat with Scout — meal ideas, tweaks & kitchen help'
+      : recipeView === RECIPE_VIEW.SAVED
+        ? 'Your bookmarked recipes — always available here'
+        : recipeView === RECIPE_VIEW.SEARCH
+          ? 'Search built-in recipes and import free recipes from TheMealDB'
+          : 'AI picks and catalogue recipes you can cook with what you have';
 
   return (
     <div
@@ -691,18 +692,10 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
           : 'pb-28'
       }
     >
-      {recipeView !== RECIPE_VIEW.SCOUT && (
-        <header className="mb-4">
-          <h1 className="text-heading text-2xl font-extrabold">What Can We Cook?</h1>
-          <p className="text-muted mt-1.5 text-sm">
-            {recipeView === RECIPE_VIEW.SAVED
-              ? 'Your bookmarked recipes — always available here'
-              : recipeView === RECIPE_VIEW.SEARCH
-                ? 'Search built-in recipes and import free recipes from TheMealDB'
-                : 'AI picks and catalogue recipes you can cook with what you have'}
-          </p>
-        </header>
-      )}
+      <header className={`page-header shrink-0 ${recipeView === RECIPE_VIEW.SCOUT ? 'px-4 sm:px-5' : ''}`}>
+        <h1 className="page-header__title">What Can We Cook?</h1>
+        <p className="page-header__subtitle">{pageSubtitle}</p>
+      </header>
 
       <div
         className={`grid grid-cols-4 gap-1.5 sm:gap-2 ${
@@ -721,7 +714,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               key={id}
               type="button"
               onClick={() => setRecipeView(id)}
-              className={`relative flex min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 px-1 py-2.5 transition active:scale-[0.98] sm:px-1.5 ${tabActiveClass(id, active)}`}
+              className={tabClassName(id, active)}
             >
               <span className="relative inline-flex shrink-0">
                 <Icon

@@ -6,45 +6,19 @@ export default {
     extend: {
       colors: {
         brand: {
-          primary: '#6B8E5A',
-          secondary: '#A3B18A',
-          light: '#EDF2E8',
-          bg: '#F8F8F4',
-          text: '#222222',
-        },
-        /* Sage palette — replaces default emerald accents app-wide */
-        emerald: {
-          50: '#EDF2E8',
-          100: '#e4ebe0',
-          200: '#d0dbc6',
-          300: '#A3B18A',
-          400: '#8b9d75',
-          500: '#789264',
-          600: '#6B8E5A',
-          700: '#557347',
-          800: '#405636',
-          900: '#2b3924',
-          950: '#161e12',
-        },
-        /* Harmonized teal for gradients and Scout tab highlights */
-        teal: {
-          50: '#EDF2E8',
-          100: '#e2e9da',
-          200: '#d0dbc4',
-          300: '#A3B18A',
-          400: '#95a67f',
-          500: '#84956f',
-          600: '#6B8E5A',
-          700: '#567247',
-          800: '#415637',
-          900: '#2c3925',
-          950: '#161d12',
+          primary: '#059669',
+          secondary: '#14b8a6',
+          accent: '#7c3aed',
+          sky: '#0ea5e9',
+          light: '#ecfdf5',
+          canvas: '#f2fbf7',
+          text: '#0f172a',
         },
         lm: {
-          canvas: '#F8F8F4',
-          card: '#EDF2E8',
+          canvas: '#f2fbf7',
+          card: '#ffffff',
           raised: '#ffffff',
-          inset: '#EDF2E8',
+          inset: '#ecfdf5',
         },
         dm: {
           canvas: '#000000',
@@ -55,10 +29,10 @@ export default {
       },
       boxShadow: {
         'lm-card':
-          '0 1px 2px rgb(34 34 34 / 0.04), 0 8px 28px -8px rgb(107 142 90 / 0.1)',
+          '0 1px 2px rgb(15 23 42 / 0.04), 0 10px 32px -10px rgb(5 150 105 / 0.12)',
         'lm-raised':
-          '0 1px 2px rgb(34 34 34 / 0.05), 0 2px 10px -3px rgb(107 142 90 / 0.08)',
-        'lm-nav': '0 -4px 24px -4px rgb(107 142 90 / 0.1)',
+          '0 1px 2px rgb(15 23 42 / 0.05), 0 4px 14px -4px rgb(5 150 105 / 0.1)',
+        'lm-nav': '0 -4px 24px -4px rgb(5 150 105 / 0.1)',
         'dm-card':
           '0 1px 0 0 rgb(255 255 255 / 0.05) inset, 0 12px 40px -12px rgb(0 0 0 / 0.55)',
         'dm-raised':

@@ -136,7 +136,7 @@ function flowEnterClass(direction, base = 'animate-flow') {
 }
 
 const COLOR_LEGEND = [
-  { swatch: 'bg-emerald-600', label: 'Sage', desc: 'In stock · plentiful · primary actions' },
+  { swatch: 'bg-emerald-600', label: 'Emerald', desc: 'In stock · plentiful · primary actions' },
   { swatch: 'bg-amber-500', label: 'Amber', desc: 'Expiring soon (auto from expiry date)' },
   { swatch: 'bg-rose-600', label: 'Rose', desc: 'Out of stock — tap badge to mark need to buy' },
   { swatch: 'bg-sky-600', label: 'Sky', desc: 'Shopping list tab, tips & add-to-buy flow' },
@@ -3354,7 +3354,7 @@ export default function App() {
   return (
     <PushNotificationProvider enabled={auth.canUseApp}>
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
-      <main className="flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
+      <main className="app-main flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
         <div key={activeTab} className={flowEnterClass(tabFlowDir, 'animate-page')}>
         {saveError && (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
