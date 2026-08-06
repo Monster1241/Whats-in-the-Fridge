@@ -8,6 +8,7 @@ import {
 } from './auth.js';
 import { toFriendlyError } from './errors.js';
 import { sanitizeRecipeLibrary } from './recipeSchema.js';
+import { sanitizeInventoryItems } from './inventorySanitize.js';
 import { verifyFirebaseIdToken } from './firebaseAdmin.js';
 import {
   createHousehold,
@@ -404,77 +405,6 @@ function sanitizeRestockHistory(history) {
     })
     .filter(Boolean)
     .slice(0, 50);
-}
-
-function sanitizeConsumptionDuration(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.min(Math.max(Math.round(n), 1), 3650);
-}
-
-function sanitizeStockedAt(value) {
-  if (typeof value !== 'string' || !value.trim()) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
-function sanitizeInventoryItems(items) {
-  const now = new Date().toISOString();
-  const normalized = items.map((item) => {
-    const stockedAt = sanitizeStockedAt(item?.stockedAt ?? item?.createdAt) ?? now;
-    const rawStatus = item?.status;
-    const status =
-      rawStatus != null && String(rawStatus).trim().toLowerCase() === 'out'
-        ? 'out'
-        : 'fresh';
-    return {
-      id: item?.id,
-      name: item?.name,
-      itemType:
-        item?.itemType === 'Household'
-          ? 'Household'
-          : item?.itemType === 'Baby'
-            ? 'Baby'
-            : 'Food',
-      category: item?.category,
-      subCategory: item?.subCategory ?? null,
-      status,
-      expiryDate: item?.expiryDate ?? null,
-      preferredStore:
-        item?.preferredStore === null || item?.preferredStore === undefined
-          ? null
-          : String(item.preferredStore).trim() || null,
-      consumptionDuration: sanitizeConsumptionDuration(item?.consumptionDuration),
-      stockedAt,
-      createdAt: stockedAt,
-    };
-  });
-
-  const byKey = new Map();
-  for (const item of normalized) {
-    const name = String(item.name || '')
-      .trim()
-      .toLowerCase()
-      .replace(/['']/g, '')
-      .replace(/\s+/g, ' ');
-    if (!name) continue;
-    const key = `${name}|${item.itemType}`;
-    const prev = byKey.get(key);
-    if (!prev) {
-      byKey.set(key, item);
-      continue;
-    }
-    byKey.set(key, {
-      ...prev,
-      ...item,
-      id: prev.id || item.id,
-      status: prev.status === 'out' || item.status === 'out' ? 'out' : 'fresh',
-      expiryDate: prev.expiryDate || item.expiryDate || null,
-      preferredStore: prev.preferredStore ?? item.preferredStore ?? null,
-    });
-  }
-  return [...byKey.values()];
 }
 
 export async function handleGetState(req, res) {

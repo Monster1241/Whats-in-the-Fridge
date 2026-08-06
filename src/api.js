@@ -405,3 +405,66 @@ export async function checkApiHealth() {
     return false;
   }
 }
+
+export async function fetchInventory() {
+  const res = await fetch(`${API_BASE}/inventory`, { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function createInventoryItem(payload) {
+  const res = await fetch(`${API_BASE}/inventory`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function updateInventoryItemApi(id, payload) {
+  const res = await fetch(`${API_BASE}/inventory/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function deleteInventoryItemApi(id) {
+  const res = await fetch(`${API_BASE}/inventory/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
+export async function fetchShoppingList() {
+  const res = await fetch(`${API_BASE}/shopping-list`, { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function addShoppingListItem(payload) {
+  const res = await fetch(`${API_BASE}/shopping-list/add`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function addRecipeIngredientsToShoppingList(payload) {
+  const res = await fetch(`${API_BASE}/shopping-list/add-from-recipe`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function markShoppingItemPurchased(id, options = {}) {
+  const res = await fetch(`${API_BASE}/shopping-list/mark-purchased`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ id, ...options }),
+  });
+  return parseJson(res);
+}

@@ -8,6 +8,8 @@ import { householdRouter } from './routes/household.js';
 import { stateRouter } from './routes/state.js';
 import { dealsRouter } from './routes/deals.js';
 import { recipesRouter } from './routes/recipes.js';
+import { inventoryRouter } from './routes/inventory.js';
+import { shoppingListRouter } from './routes/shoppingList.js';
 
 export function createApp() {
   const app = express();
@@ -28,6 +30,8 @@ export function createApp() {
 
   app.use('/api/deals', dealsRouter);
   app.use('/api/recipes', recipesRouter);
+  app.use('/api/inventory', inventoryRouter);
+  app.use('/api/shopping-list', shoppingListRouter);
 
   app.use('/api/auth', authRouter);
   app.use('/api/household', householdRouter);

@@ -659,12 +659,100 @@ export async function replaceInventoryForHousehold(householdId, items) {
     expiryDate: item.expiryDate ?? null,
     preferredStore: item.preferredStore ?? null,
     consumptionDuration: item.consumptionDuration ?? null,
-    stockedAt: item.stockedAt ?? item.createdAt ?? now,
-    createdAt: item.stockedAt ?? item.createdAt ?? now,
+    stockedAt: item.stockedAt ?? item.createdAt ?? item.dateAdded ?? now,
+    createdAt: item.stockedAt ?? item.createdAt ?? item.dateAdded ?? now,
+    dateAdded: item.dateAdded ?? item.stockedAt ?? item.createdAt ?? now,
+    quantity: item.quantity ?? 1,
+    unit: item.unit ?? '',
+    foodGroup: item.foodGroup ?? null,
+    storageLocation: item.storageLocation ?? null,
+    isLow: Boolean(item.isLow),
+    checked: Boolean(item.checked),
+    sourceRecipe: item.sourceRecipe ?? null,
     household_id: scopedId,
     updated_at: new Date(),
   }));
   await inventory.insertMany(docs);
+}
+
+function mapInventoryDocument(doc) {
+  if (!doc) return null;
+  const { _id, household_id, updated_at, ...item } = doc;
+  return {
+    ...item,
+    id: item.id || _id.toString(),
+  };
+}
+
+function buildInventoryQuery(scopedId, itemId) {
+  const filters = [{ household_id: scopedId, id: itemId }];
+  if (ObjectId.isValid(itemId)) {
+    filters.push({ household_id: scopedId, _id: new ObjectId(itemId) });
+  }
+  return { $or: filters };
+}
+
+export async function insertInventoryItem(householdId, item) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const inventory = getDb().collection('inventory');
+  const now = new Date().toISOString();
+  const doc = {
+    id: item.id,
+    name: item.name,
+    itemType: item.itemType,
+    category: item.category,
+    subCategory: item.subCategory ?? null,
+    status: item.status,
+    expiryDate: item.expiryDate ?? null,
+    preferredStore: item.preferredStore ?? null,
+    consumptionDuration: item.consumptionDuration ?? null,
+    stockedAt: item.stockedAt ?? item.createdAt ?? item.dateAdded ?? now,
+    createdAt: item.stockedAt ?? item.createdAt ?? item.dateAdded ?? now,
+    dateAdded: item.dateAdded ?? item.stockedAt ?? item.createdAt ?? now,
+    quantity: item.quantity ?? 1,
+    unit: item.unit ?? '',
+    foodGroup: item.foodGroup ?? null,
+    storageLocation: item.storageLocation ?? null,
+    isLow: Boolean(item.isLow),
+    checked: Boolean(item.checked),
+    sourceRecipe: item.sourceRecipe ?? null,
+    household_id: scopedId,
+    updated_at: new Date(),
+  };
+  const result = await inventory.insertOne(doc);
+  return mapInventoryDocument({ ...doc, _id: result.insertedId });
+}
+
+export async function updateInventoryItem(householdId, itemId, patch) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const inventory = getDb().collection('inventory');
+  const result = await inventory.findOneAndUpdate(
+    buildInventoryQuery(scopedId, itemId),
+    { $set: { ...patch, updated_at: new Date() } },
+    { returnDocument: 'after' },
+  );
+  if (!result) {
+    const err = new Error('Inventory item not found.');
+    err.status = 404;
+    throw err;
+  }
+  return mapInventoryDocument(result);
+}
+
+export async function deleteInventoryItem(householdId, itemId) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const inventory = getDb().collection('inventory');
+  const result = await inventory.deleteOne(buildInventoryQuery(scopedId, itemId));
+  if (!result.deletedCount) {
+    const err = new Error('Inventory item not found.');
+    err.status = 404;
+    throw err;
+  }
+}
+
+export async function saveInventoryItems(householdId, items) {
+  await replaceInventoryForHousehold(householdId, items);
+  return getInventoryForHousehold(householdId);
 }
 
 export async function deleteHouseholdData(householdId) {

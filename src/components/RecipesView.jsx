@@ -11,7 +11,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { fetchAiRecipeMatches } from '../api.js';
+import { fetchAiRecipeMatches, addRecipeIngredientsToShoppingList } from '../api.js';
 import { FridgeScoutChat } from './FridgeScoutChat.jsx';
 import {
   buildRecipeTweakPrompt,
@@ -19,11 +19,8 @@ import {
   FRIDGE_SCOUT_PERSONA,
   RECIPE_TWEAK_MODES,
 } from '../recipes/kitchenAiBranding.js';
-import { classifyItem } from '../inventory/classifyItem.js';
-import { buildConsumptionFields } from '../inventory/consumption.js';
-import { FOOD_CATEGORY, ITEM_TYPE, STATUS } from '../inventory/constants.js';
+import { ITEM_TYPE, STATUS } from '../inventory/constants.js';
 import { findFoodItemForIngredient } from '../recipes/ingredientMatching.js';
-import { normalizeName } from '../inventory/itemUtils.js';
 import { BUILTIN_RECIPES } from '../recipes/recipeCatalog.js';
 import {
   analyzeRecipe,
@@ -342,7 +339,7 @@ function RecipeCard({
                 <button
                   type="button"
                   onClick={() => {
-                    onAddNeedToShoppingList(analysis.need);
+                    onAddNeedToShoppingList(analysis.need, recipe);
                     setShowAddConfirm(false);
                   }}
                   className="flex-1 rounded-lg bg-sky-600 py-2.5 text-xs font-semibold text-white active:scale-[0.98]"
@@ -432,7 +429,7 @@ function RecipeCard({
   );
 }
 
-export function RecipesView({ items, updateItems, savedRecipes }) {
+export function RecipesView({ items, updateItems, replaceItemsFromServer, savedRecipes }) {
   const { savedIds, isSaved, toggleSave, recipeLibrary, rememberRecipe, mergeRecipeLibrary } =
     savedRecipes;
   const [recipeView, setRecipeView] = useState(RECIPE_VIEW.MATCHED);
@@ -456,6 +453,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [selectedQuickTag, setSelectedQuickTag] = useState('');
   const [scoutTweakingId, setScoutTweakingId] = useState(null);
   const [scoutTweakingMode, setScoutTweakingMode] = useState('');
+  const [recipeShopFeedback, setRecipeShopFeedback] = useState('');
   const scoutChatRef = useRef(null);
 
   const fetchCravingCatalogMatches = useCallback(
@@ -735,34 +733,27 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
     });
   };
 
-  const addNeededToShoppingList = (neededIngredients) => {
-    updateItems((prev) => {
-      let next = [...prev];
-      for (const name of neededIngredients) {
-        const needle = normalizeName(name);
-        const idx = next.findIndex((item) => normalizeName(item.name) === needle);
-        if (idx >= 0) {
-          next[idx] = { ...next[idx], status: STATUS.OUT };
-          continue;
-        }
-        const classified = classifyItem(name);
-        const consumption = buildConsumptionFields({
-          name,
-          itemType: ITEM_TYPE.FOOD,
-          category: classified?.category ?? FOOD_CATEGORY.AMBIENT,
-        });
-        next.push({
-          id: crypto.randomUUID(),
-          name,
-          itemType: ITEM_TYPE.FOOD,
-          status: STATUS.OUT,
-          category: classified?.category ?? FOOD_CATEGORY.AMBIENT,
-          expiryDate: null,
-          ...consumption,
-        });
+  const addNeededToShoppingList = async (neededIngredients, recipe) => {
+    if (!neededIngredients?.length) return;
+    setRecipeShopFeedback('');
+    try {
+      const result = await addRecipeIngredientsToShoppingList({
+        recipe: recipe
+          ? { id: recipe.id, title: recipe.title, ingredients: recipe.ingredients }
+          : undefined,
+        ingredients: neededIngredients.map((name) => ({ name, quantity: 1 })),
+      });
+      if (replaceItemsFromServer) {
+        replaceItemsFromServer(result.items);
+      } else {
+        updateItems(result.items);
       }
-      return next;
-    });
+      if (result.warnings?.length) {
+        setRecipeShopFeedback(result.warnings.map((warning) => warning.message).join(' '));
+      }
+    } catch (err) {
+      setRecipeShopFeedback(err.message || 'Could not add ingredients to shopping list.');
+    }
   };
 
   const list =
@@ -800,6 +791,15 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         <h1 className="page-header__title">What Can We Cook?</h1>
         <p className="page-header__subtitle">{pageSubtitle}</p>
       </header>
+
+      {recipeShopFeedback && (
+        <p
+          role="status"
+          className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+        >
+          {recipeShopFeedback}
+        </p>
+      )}
 
       <div
         className={`grid grid-cols-4 gap-1.5 sm:gap-2 ${

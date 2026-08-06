@@ -16,6 +16,7 @@ import {
 import { getSubcategoriesForCategory, resolveSubCategory, SUBCATEGORY_OTHER } from './subcategories.js';
 import { normalizePreferredStore } from './storeOptions.js';
 import { getDefaultConsumptionDuration } from './consumption.js';
+import { enrichInventoryFields } from './smartInventory.js';
 
 function backfillStockedAt(item, consumptionDuration) {
   const existing = item.stockedAt ?? item.createdAt;
@@ -172,6 +173,14 @@ function mergeDuplicateItems(a, b) {
         : null),
     stockedAt: newer.stockedAt ?? newer.createdAt,
     createdAt: newer.stockedAt ?? newer.createdAt,
+    quantity: (a.quantity ?? 1) + (b.quantity ?? 1),
+    unit: a.unit || b.unit || '',
+    isLow: Boolean(a.isLow || b.isLow),
+    checked: Boolean(a.checked || b.checked),
+    sourceRecipe: a.sourceRecipe ?? b.sourceRecipe ?? null,
+    foodGroup: a.foodGroup ?? b.foodGroup ?? null,
+    storageLocation: a.storageLocation ?? b.storageLocation ?? null,
+    dateAdded: a.dateAdded ?? b.dateAdded ?? newer.stockedAt ?? newer.createdAt,
   };
 }
 
@@ -194,13 +203,19 @@ export function migrateItem(item) {
       ? item.consumptionDuration
       : getDefaultConsumptionDuration(item.name ?? '', itemType, resolvedCategory);
   const stockedAt = backfillStockedAt(item, consumptionDuration);
-
   const id = getItemId(item);
   const allowedSubs = getSubcategoriesForCategory(itemType, resolvedCategory);
   const subCategory =
     item.subCategory && allowedSubs.includes(item.subCategory)
       ? item.subCategory
       : resolveSubCategory(item.name ?? '', itemType, resolvedCategory);
+  const smartFields = enrichInventoryFields({
+    ...item,
+    category: resolvedCategory,
+    subCategory,
+    stockedAt,
+    createdAt: stockedAt,
+  });
 
   return {
     ...item,
@@ -214,6 +229,14 @@ export function migrateItem(item) {
     consumptionDuration,
     stockedAt,
     createdAt: stockedAt,
+    quantity: smartFields.quantity,
+    unit: smartFields.unit,
+    foodGroup: smartFields.foodGroup,
+    storageLocation: smartFields.storageLocation,
+    dateAdded: smartFields.dateAdded,
+    isLow: smartFields.isLow,
+    checked: smartFields.checked,
+    sourceRecipe: smartFields.sourceRecipe,
   };
 }
 

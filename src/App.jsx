@@ -14,6 +14,8 @@ import {
   fetchHouseholdMembers,
   pingShoppingList,
   removeHouseholdMember,
+  addShoppingListItem as addShoppingListItemApi,
+  markShoppingItemPurchased,
 } from './api.js';
 import { readStoredPostcode } from './inventory/postcodeStorage.js';
 import { InventorySearch } from './components/InventorySearch.jsx';
@@ -52,6 +54,7 @@ import {
 } from './inventory/modules.js';
 import { BARCODE_LOOKUP_LOADING_TEXT } from './inventory/barcodeLookup.js';
 import { guessExpiryForItem } from './inventory/expiryGuess.js';
+import { inferStorageLocation } from './inventory/smartInventory.js';
 import { classifyItem } from './inventory/classifyItem.js';
 import {
   countItemsBySubCategory,
@@ -485,6 +488,9 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
   );
   const [hasExpiry, setHasExpiry] = useState(Boolean(item.expiryDate));
   const [expiryDate, setExpiryDate] = useState(item.expiryDate ?? '');
+  const [quantity, setQuantity] = useState(item.quantity ?? 1);
+  const [unit, setUnit] = useState(item.unit ?? '');
+  const [isLow, setIsLow] = useState(Boolean(item.isLow));
   const expiringHint = !needToBuy && hasExpiry && expiryDate && isExpiringSoon({
     ...item,
     status: STATUS.FRESH,
@@ -515,6 +521,10 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
       category,
       subCategory,
       expiryDate: hasExpiry && expiryDate ? expiryDate : null,
+      quantity: Number(quantity) > 0 ? Number(quantity) : 1,
+      unit: unit.trim(),
+      isLow,
+      storageLocation: inferStorageLocation(category, item.foodGroup, item.storageLocation),
     });
     onClose();
   };
@@ -581,6 +591,44 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
             onChange={setSubCategory}
           />
         </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-muted mb-1 block text-xs font-semibold uppercase tracking-wide">
+              Quantity
+            </label>
+            <input
+              type="number"
+              min="0.1"
+              step="0.1"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              className="input-field"
+            />
+          </div>
+          <div>
+            <label className="text-muted mb-1 block text-xs font-semibold uppercase tracking-wide">
+              Unit
+            </label>
+            <input
+              type="text"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              placeholder="g, ml, pack"
+              className="input-field"
+            />
+          </div>
+        </div>
+
+        <label className="surface-inset mb-4 flex cursor-pointer items-center gap-2 px-3 py-3 text-sm text-slate-700 dark:text-slate-300">
+          <input
+            type="checkbox"
+            checked={isLow}
+            onChange={(e) => setIsLow(e.target.checked)}
+            className="h-4 w-4 rounded border-black/15 bg-lm-raised text-orange-600 focus:ring-orange-500 dark:border-white/20 dark:bg-dm-raised"
+          />
+          Mark as running low
+        </label>
 
         <label className="surface-inset mb-3 flex cursor-pointer items-center gap-2 px-3 py-3 text-sm text-slate-700 dark:text-slate-300">
           <input
@@ -662,23 +710,56 @@ function ShoppingListBoughtButton({ itemName, onBought }) {
   );
 }
 
-function ShoppingListItemRow({ item, onOpenEditor, onDelete, onGotIt, onPreferredStoreChange }) {
+function ShoppingListItemRow({
+  item,
+  onOpenEditor,
+  onDelete,
+  onGotIt,
+  onPreferredStoreChange,
+  onToggleChecked,
+}) {
   const catMeta = getCategoryMeta(item.category, item.itemType);
   const { store, detail } = getShoppingSuggestionForItem(item);
+  const quantityLabel =
+    item.quantity && item.quantity !== 1
+      ? `${item.quantity}${item.unit ? ` ${item.unit}` : ''}`
+      : item.unit
+        ? item.unit
+        : null;
 
   return (
-    <li className="surface-row px-3 py-3">
+    <li className={`surface-row px-3 py-3 ${item.checked ? 'opacity-70' : ''}`}>
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-heading text-sm font-semibold">{item.name}</p>
-            {catMeta && (
-              <p className="mt-0.5 text-xs text-slate-500">
-                {itemTypeLabelEmoji(item.itemType)} {catMeta.emoji}{' '}
-                {catMeta.label}
+          <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={Boolean(item.checked)}
+              onChange={() => onToggleChecked(item.id, !item.checked)}
+              className="mt-1 h-4 w-4 rounded border-black/15 text-sky-600 focus:ring-sky-500 dark:border-white/20"
+              aria-label={`Mark ${item.name} as picked up`}
+            />
+            <div className="min-w-0 flex-1">
+              <p
+                className={`text-heading text-sm font-semibold ${item.checked ? 'line-through' : ''}`}
+              >
+                {item.name}
+                {quantityLabel ? (
+                  <span className="text-muted ml-1 text-xs font-medium">· {quantityLabel}</span>
+                ) : null}
               </p>
-            )}
-          </div>
+              {catMeta && (
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {itemTypeLabelEmoji(item.itemType)} {catMeta.emoji} {catMeta.label}
+                </p>
+              )}
+              {item.sourceRecipe?.title && (
+                <p className="mt-1 text-[11px] font-medium text-violet-700 dark:text-violet-300">
+                  For recipe: {item.sourceRecipe.title}
+                </p>
+              )}
+            </div>
+          </label>
           <IconActionButton
             variant="delete"
             onClick={() => onDelete(item.id)}
@@ -737,10 +818,32 @@ function InventoryItemRow({
   const catMeta = getCategoryMeta(item.category, item.itemType);
   const subMeta = getSubcategoryMeta(item.subCategory, item.itemType, item.category);
   const displayStatus = getDisplayStatus(item);
+  const quantityLabel =
+    item.quantity && item.quantity !== 1
+      ? `${item.quantity}${item.unit ? ` ${item.unit}` : ''}`
+      : item.unit
+        ? item.unit
+        : null;
+
   return (
     <li className="surface-row group flex items-center gap-2 px-3 py-2.5">
       <div className="min-w-0 flex-1">
-        <p className="text-heading truncate text-sm font-medium">{item.name}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-heading truncate text-sm font-medium">{item.name}</p>
+          {isExpiringSoon(item) && (
+            <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-900 shadow-sm">
+              Expiring Soon
+            </span>
+          )}
+          {item.isLow && (
+            <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              Low
+            </span>
+          )}
+        </div>
+        {quantityLabel && (
+          <p className="text-muted mt-0.5 text-[10px] font-semibold">Qty: {quantityLabel}</p>
+        )}
         {item.subCategory && item.subCategory !== SUBCATEGORY_OTHER && (
           <p className="text-muted mt-0.5 text-[10px] font-semibold">
             {subMeta.emoji} {subMeta.label}
@@ -1157,6 +1260,7 @@ function InventoryView({
   items,
   updateItems,
   patchItems,
+  replaceItemsFromServer,
   restockHistory,
   updateRestockHistory,
   onboarding,
@@ -1186,6 +1290,7 @@ function InventoryView({
   const pingInFlightRef = useRef(false);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
+  const [shopFeedback, setShopFeedback] = useState(null);
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
   const shoppingList = useMemo(
@@ -1439,50 +1544,57 @@ function InventoryView({
     }
   };
 
-  const addShoppingItem = (e) => {
+  const addShoppingItem = async (e) => {
     e.preventDefault();
     const name = shopDraft.trim();
     if (!name) return;
-    const needle = normalizeName(name);
-    let duplicateAlreadyListed = false;
-    updateItems((prev) => {
-      const existingIdx = prev.findIndex(
-        (i) => normalizeName(i.name) === needle && i.itemType === shopItemType,
-      );
-      if (existingIdx >= 0) {
-        const existing = prev[existingIdx];
-        if (isOnShoppingList(existing)) {
-          duplicateAlreadyListed = true;
-          return prev;
-        }
-        const next = [...prev];
-        next[existingIdx] = {
-          ...next[existingIdx],
-          status: STATUS.OUT,
-          itemType: shopItemType,
-          category: shopCategory,
-        };
-        return next;
-      }
-      const consumption = buildConsumptionFields({
+    setShopFeedback(null);
+    try {
+      const result = await addShoppingListItemApi({
         name,
         itemType: shopItemType,
         category: shopCategory,
+        quantity: 1,
       });
-      return [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          name,
-          itemType: shopItemType,
-          status: STATUS.OUT,
-          category: shopCategory,
-          expiryDate: null,
-          ...consumption,
-        },
-      ];
-    });
-    setShopDraft('');
+      replaceItemsFromServer(result.items);
+      if (result.warnings?.length) {
+        setShopFeedback({
+          type: 'info',
+          text: result.warnings.map((warning) => warning.message).join(' '),
+        });
+      }
+      setShopDraft('');
+    } catch (err) {
+      setShopFeedback({
+        type: 'error',
+        text: err.message || 'Could not add to shopping list.',
+      });
+    }
+  };
+
+  const toggleShoppingChecked = (id, checked) => {
+    updateItems((prev) =>
+      prev.map((entry) => (entry.id === id ? { ...entry, checked } : entry)),
+    );
+  };
+
+  const markItemStocked = async (id) => {
+    const item = items.find((entry) => entry.id === id);
+    if (item) rememberRestock(item);
+    setShopFeedback(null);
+    try {
+      const result = await markShoppingItemPurchased(id, { applyExpiry: true });
+      replaceItemsFromServer(result.items);
+      setShopFeedback({
+        type: 'success',
+        text: `${item?.name ?? 'Item'} moved to inventory with an estimated expiry date.`,
+      });
+    } catch (err) {
+      setShopFeedback({
+        type: 'error',
+        text: err.message || 'Could not move item to inventory.',
+      });
+    }
   };
 
   const saveItemEdits = (id, updates) => {
@@ -1597,24 +1709,6 @@ function InventoryView({
         },
       ];
     });
-  };
-
-  const markItemStocked = (id) => {
-    const item = items.find((entry) => entry.id === id);
-    if (item) rememberRestock(item);
-    const now = new Date().toISOString();
-    updateItems((prev) =>
-      prev.map((entry) =>
-        entry.id === id
-          ? {
-              ...entry,
-              status: STATUS.FRESH,
-              stockedAt: now,
-              createdAt: now,
-            }
-          : entry,
-      ),
-    );
   };
 
   const updatePreferredStore = (id, store) => {
@@ -1855,6 +1949,21 @@ function InventoryView({
             Tap a store badge to set where you buy each item — saved for your household.
           </p>
 
+          {shopFeedback && (
+            <p
+              role="status"
+              className={`mb-3 rounded-xl px-3 py-2 text-xs font-medium ${
+                shopFeedback.type === 'error'
+                  ? 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200'
+                  : shopFeedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+                    : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100'
+              }`}
+            >
+              {shopFeedback.text}
+            </p>
+          )}
+
           <InventorySection
             title="Shopping List — All Locations"
             emoji="🛒"
@@ -1870,6 +1979,7 @@ function InventoryView({
                 onDelete={(id) => deleteItem(id, { trackHistory: true })}
                 onGotIt={markItemStocked}
                 onPreferredStoreChange={updatePreferredStore}
+                onToggleChecked={toggleShoppingChecked}
               />
             ))}
           </InventorySection>
@@ -3250,6 +3360,7 @@ export default function App() {
     items,
     updateItems,
     patchItems,
+    replaceItemsFromServer,
     restockHistory,
     updateRestockHistory,
     settings,
@@ -3374,6 +3485,7 @@ export default function App() {
             items={items}
             updateItems={updateItems}
             patchItems={patchItems}
+            replaceItemsFromServer={replaceItemsFromServer}
             restockHistory={restockHistory}
             updateRestockHistory={updateRestockHistory}
             onboarding={onboarding}
@@ -3385,7 +3497,12 @@ export default function App() {
         )}
         {activeTab === 'recipes' && (
           <Suspense fallback={<TabPanelLoader />}>
-            <RecipesView items={items} updateItems={updateItems} savedRecipes={savedRecipes} />
+            <RecipesView
+              items={items}
+              updateItems={updateItems}
+              replaceItemsFromServer={replaceItemsFromServer}
+              savedRecipes={savedRecipes}
+            />
           </Suspense>
         )}
         {activeTab === 'settings' && (

@@ -318,6 +318,14 @@ export function useAppData(enabled) {
     });
   }, []);
 
+  const replaceItemsFromServer = useCallback((serverItems) => {
+    const migrated = migrateItems(serverItems);
+    skipSaveRef.current = true;
+    hasUnsyncedEditsRef.current = false;
+    setItems(migrated);
+    return migrated;
+  }, []);
+
   return {
     loading,
     error,
@@ -327,6 +335,7 @@ export function useAppData(enabled) {
     items,
     updateItems,
     patchItems,
+    replaceItemsFromServer,
     restockHistory,
     updateRestockHistory,
     settings,
