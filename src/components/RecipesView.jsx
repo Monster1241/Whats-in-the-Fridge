@@ -16,9 +16,7 @@ import { FridgeScoutChat } from './FridgeScoutChat.jsx';
 import {
   buildRecipeTweakPrompt,
   buildRecipeTweakSummary,
-  FRIDGE_SCOUT_NAME,
   FRIDGE_SCOUT_PERSONA,
-  FRIDGE_SCOUT_TAGLINE,
   RECIPE_TWEAK_MODES,
 } from '../recipes/kitchenAiBranding.js';
 import { classifyItem } from '../inventory/classifyItem.js';
@@ -687,18 +685,18 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
 
   return (
     <div className="pb-28">
-      <header className="mb-4">
-        <h1 className="text-heading text-2xl font-extrabold">What Can We Cook?</h1>
-        <p className="text-muted mt-1.5 text-sm">
-          {recipeView === RECIPE_VIEW.SCOUT
-            ? FRIDGE_SCOUT_TAGLINE
-            : recipeView === RECIPE_VIEW.SAVED
+      {recipeView !== RECIPE_VIEW.SCOUT && (
+        <header className="mb-4">
+          <h1 className="text-heading text-2xl font-extrabold">What Can We Cook?</h1>
+          <p className="text-muted mt-1.5 text-sm">
+            {recipeView === RECIPE_VIEW.SAVED
               ? 'Your bookmarked recipes — always available here'
               : recipeView === RECIPE_VIEW.SEARCH
                 ? 'Search built-in recipes and import free recipes from TheMealDB'
                 : 'AI picks and catalogue recipes you can cook with what you have'}
-        </p>
-      </header>
+          </p>
+        </header>
+      )}
 
       <div className="mb-4 grid grid-cols-4 gap-1.5 sm:gap-2">
         {[
@@ -914,20 +912,11 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </p>
       )}
 
-      <div className={recipeView === RECIPE_VIEW.SCOUT ? 'mb-5' : 'hidden'} aria-hidden={recipeView !== RECIPE_VIEW.SCOUT}>
-        <section className="fridge-scout-zone">
-          <div className="fridge-scout-zone__hero px-4 pb-5 pt-5">
-            <div className="fridge-scout-zone__hero-top">
-              <span className="fridge-scout-zone__badge">
-                <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                AI kitchen
-              </span>
-            </div>
-            <h2 className="fridge-scout-zone__title">{FRIDGE_SCOUT_NAME}</h2>
-            <p className="fridge-scout-zone__tagline">{FRIDGE_SCOUT_TAGLINE}</p>
-            <FridgeScoutChat ref={scoutChatRef} expanded />
-          </div>
-        </section>
+      <div
+        className={recipeView === RECIPE_VIEW.SCOUT ? 'mb-5 -mt-1' : 'hidden'}
+        aria-hidden={recipeView !== RECIPE_VIEW.SCOUT}
+      >
+        <FridgeScoutChat ref={scoutChatRef} expanded />
       </div>
 
       {recipeView === RECIPE_VIEW.MATCHED && aiRecipeCards.length > 0 && !isAiLoading && (
