@@ -684,7 +684,13 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   }
 
   return (
-    <div className="pb-28">
+    <div
+      className={
+        recipeView === RECIPE_VIEW.SCOUT
+          ? 'fridge-scout-page -mx-4 flex flex-col sm:-mx-5'
+          : 'pb-28'
+      }
+    >
       {recipeView !== RECIPE_VIEW.SCOUT && (
         <header className="mb-4">
           <h1 className="text-heading text-2xl font-extrabold">What Can We Cook?</h1>
@@ -698,7 +704,11 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         </header>
       )}
 
-      <div className="mb-4 grid grid-cols-4 gap-1.5 sm:gap-2">
+      <div
+        className={`grid grid-cols-4 gap-1.5 sm:gap-2 ${
+          recipeView === RECIPE_VIEW.SCOUT ? 'mb-2 shrink-0 px-4 sm:px-5' : 'mb-4'
+        }`}
+      >
         {[
           { id: RECIPE_VIEW.SCOUT, label: 'Fridge Scout', shortLabel: 'Scout', icon: Sparkles, count: 0 },
           { id: RECIPE_VIEW.MATCHED, label: 'Recommendations', shortLabel: 'Recs', icon: ChefHat, count: cookableRecipes.length },
@@ -913,10 +923,14 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       )}
 
       <div
-        className={recipeView === RECIPE_VIEW.SCOUT ? 'mb-5 -mt-1' : 'hidden'}
+        className={
+          recipeView === RECIPE_VIEW.SCOUT
+            ? 'flex min-h-0 flex-1 flex-col'
+            : 'hidden'
+        }
         aria-hidden={recipeView !== RECIPE_VIEW.SCOUT}
       >
-        <FridgeScoutChat ref={scoutChatRef} expanded />
+        <FridgeScoutChat ref={scoutChatRef} expanded fullscreen />
       </div>
 
       {recipeView === RECIPE_VIEW.MATCHED && aiRecipeCards.length > 0 && !isAiLoading && (

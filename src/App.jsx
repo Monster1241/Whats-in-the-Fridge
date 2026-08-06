@@ -136,7 +136,7 @@ function flowEnterClass(direction, base = 'animate-flow') {
 }
 
 const COLOR_LEGEND = [
-  { swatch: 'bg-emerald-600', label: 'Emerald', desc: 'In stock · plentiful · primary actions' },
+  { swatch: 'bg-emerald-600', label: 'Sage', desc: 'In stock · plentiful · primary actions' },
   { swatch: 'bg-amber-500', label: 'Amber', desc: 'Expiring soon (auto from expiry date)' },
   { swatch: 'bg-rose-600', label: 'Rose', desc: 'Out of stock — tap badge to mark need to buy' },
   { swatch: 'bg-sky-600', label: 'Sky', desc: 'Shopping list tab, tips & add-to-buy flow' },

@@ -78,7 +78,10 @@ function TypingIndicator() {
   );
 }
 
-export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = false }, ref) {
+export const FridgeScoutChat = forwardRef(function FridgeScoutChat(
+  { expanded = false, fullscreen = false },
+  ref,
+) {
   const [messages, setMessages] = useState(loadCachedMessages);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -230,7 +233,9 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat({ expanded = 
 
   return (
     <div
-      className={`fridge-scout-messenger ${expanded ? 'fridge-scout-messenger--expanded' : ''}`}
+      className={`fridge-scout-messenger ${expanded ? 'fridge-scout-messenger--expanded' : ''} ${
+        fullscreen ? 'fridge-scout-messenger--fullscreen' : ''
+      }`}
     >
       <header className="fridge-scout-messenger__topbar">
         <div className="fridge-scout-messenger__brand">
