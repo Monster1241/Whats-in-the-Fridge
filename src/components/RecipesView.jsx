@@ -48,6 +48,9 @@ const AI_RECIPES_CACHE_KEY = 'fridge.aiRecipes';
 const AI_EMPTY_MESSAGE =
   'No AI recommendations found. Try adding more inventory items or tweaking your craving search.';
 
+const GENERATED_RECIPES_INITIAL = 3;
+const GENERATED_RECIPES_STEP = 4;
+
 const QUICK_FILTER_CHIPS = [
   { id: 'Under 15 Mins', label: '⏱️ Under 15 Mins' },
   { id: 'One-Pan', label: '🍳 One-Pan' },
@@ -105,6 +108,24 @@ function EmptyState({ icon: Icon, title, description }) {
       <p className="text-heading text-sm font-semibold">{title}</p>
       <p className="text-muted mx-auto mt-2 max-w-xs text-xs leading-relaxed">{description}</p>
     </div>
+  );
+}
+
+function ViewMoreRecipesButton({ remaining, onClick }) {
+  if (remaining <= 0) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-black/[0.08] bg-lm-raised py-3 text-sm font-semibold text-violet-700 transition hover:border-violet-300 hover:bg-violet-50 active:scale-[0.99] dark:border-white/10 dark:bg-dm-raised dark:text-violet-300 dark:hover:border-violet-700 dark:hover:bg-violet-950/40"
+    >
+      View more
+      <span className="text-muted font-medium">
+        ({remaining} more recipe{remaining === 1 ? '' : 's'})
+      </span>
+      <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
+    </button>
   );
 }
 
@@ -427,6 +448,11 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   const [cravingMatches, setCravingMatches] = useState([]);
   const [lastCravingQuery, setLastCravingQuery] = useState('');
   const [cravingSearchLoading, setCravingSearchLoading] = useState(false);
+  const [generatedVisibleCounts, setGeneratedVisibleCounts] = useState({
+    craving: GENERATED_RECIPES_INITIAL,
+    ai: GENERATED_RECIPES_INITIAL,
+    catalogue: GENERATED_RECIPES_INITIAL,
+  });
   const [selectedQuickTag, setSelectedQuickTag] = useState('');
   const [scoutTweakingId, setScoutTweakingId] = useState(null);
   const [scoutTweakingMode, setScoutTweakingMode] = useState('');
@@ -455,11 +481,23 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
     [recipeLibrary],
   );
 
+  const showMoreGeneratedRecipes = useCallback((section) => {
+    setGeneratedVisibleCounts((prev) => ({
+      ...prev,
+      [section]: prev[section] + GENERATED_RECIPES_STEP,
+    }));
+  }, []);
+
   const handleGenerateAiRecipes = useCallback(async () => {
     if (isAiLoading) return;
     setIsAiLoading(true);
     setCravingSearchLoading(true);
     setAiError('');
+    setGeneratedVisibleCounts({
+      craving: GENERATED_RECIPES_INITIAL,
+      ai: GENERATED_RECIPES_INITIAL,
+      catalogue: GENERATED_RECIPES_INITIAL,
+    });
     const craving = cravingInput.trim();
     try {
       const [data, catalogueMatches] = await Promise.all([
@@ -1002,21 +1040,27 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
               : 'Craving matches'}
           </h2>
           <ul className="space-y-4">
-            {cravingMatchCards.map(({ recipe, analysis }) => (
-              <RecipeCard
-                key={recipe.id}
-                recipe={recipe}
-                analysis={analysis}
-                isSaved={isSaved(recipe.id)}
-                onToggleSave={handleToggleSave}
-                onMarkCooked={markCooked}
-                onAddNeedToShoppingList={addNeededToShoppingList}
-                onAskScoutToTweak={handleAskScoutToTweak}
-                scoutTweakingId={scoutTweakingId}
-                scoutTweakingMode={scoutTweakingMode}
-              />
-            ))}
+            {cravingMatchCards
+              .slice(0, generatedVisibleCounts.craving)
+              .map(({ recipe, analysis }) => (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  analysis={analysis}
+                  isSaved={isSaved(recipe.id)}
+                  onToggleSave={handleToggleSave}
+                  onMarkCooked={markCooked}
+                  onAddNeedToShoppingList={addNeededToShoppingList}
+                  onAskScoutToTweak={handleAskScoutToTweak}
+                  scoutTweakingId={scoutTweakingId}
+                  scoutTweakingMode={scoutTweakingMode}
+                />
+              ))}
           </ul>
+          <ViewMoreRecipesButton
+            remaining={cravingMatchCards.length - generatedVisibleCounts.craving}
+            onClick={() => showMoreGeneratedRecipes('craving')}
+          />
           <p className="text-muted mt-3 text-center text-[11px] leading-relaxed">
             From your built-in catalogue, saved library, and TheMealDB.
           </p>
@@ -1027,21 +1071,27 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         <section className="mb-6">
           <h2 className="text-heading mb-3 text-sm font-bold">AI recommendations</h2>
           <ul className="space-y-4">
-            {aiRecipeCards.map(({ recipe, analysis }) => (
-              <RecipeCard
-                key={recipe.id}
-                recipe={recipe}
-                analysis={analysis}
-                isSaved={isSaved(recipe.id)}
-                onToggleSave={handleToggleSave}
-                onMarkCooked={markCooked}
-                onAddNeedToShoppingList={addNeededToShoppingList}
-                onAskScoutToTweak={handleAskScoutToTweak}
-                scoutTweakingId={scoutTweakingId}
-                scoutTweakingMode={scoutTweakingMode}
-              />
-            ))}
+            {aiRecipeCards
+              .slice(0, generatedVisibleCounts.ai)
+              .map(({ recipe, analysis }) => (
+                <RecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  analysis={analysis}
+                  isSaved={isSaved(recipe.id)}
+                  onToggleSave={handleToggleSave}
+                  onMarkCooked={markCooked}
+                  onAddNeedToShoppingList={addNeededToShoppingList}
+                  onAskScoutToTweak={handleAskScoutToTweak}
+                  scoutTweakingId={scoutTweakingId}
+                  scoutTweakingMode={scoutTweakingMode}
+                />
+              ))}
           </ul>
+          <ViewMoreRecipesButton
+            remaining={aiRecipeCards.length - generatedVisibleCounts.ai}
+            onClick={() => showMoreGeneratedRecipes('ai')}
+          />
           <p className="text-muted mt-4 text-center text-[11px] leading-relaxed">
             Recommendations are powered by Gemini and saved to your household library.
           </p>
@@ -1104,22 +1154,33 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
         />
         )
       ) : (
-        <ul className="space-y-4">
-          {list.map(({ recipe, analysis }) => (
-            <RecipeCard
-              key={recipe.id}
-              recipe={recipe}
-              analysis={analysis}
-              isSaved={isSaved(recipe.id)}
-              onToggleSave={handleToggleSave}
-              onMarkCooked={markCooked}
-              onAddNeedToShoppingList={addNeededToShoppingList}
-              onAskScoutToTweak={handleAskScoutToTweak}
-              scoutTweakingId={scoutTweakingId}
-              scoutTweakingMode={scoutTweakingMode}
+        <>
+          <ul className="space-y-4">
+            {(recipeView === RECIPE_VIEW.MATCHED
+              ? list.slice(0, generatedVisibleCounts.catalogue)
+              : list
+            ).map(({ recipe, analysis }) => (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                analysis={analysis}
+                isSaved={isSaved(recipe.id)}
+                onToggleSave={handleToggleSave}
+                onMarkCooked={markCooked}
+                onAddNeedToShoppingList={addNeededToShoppingList}
+                onAskScoutToTweak={handleAskScoutToTweak}
+                scoutTweakingId={scoutTweakingId}
+                scoutTweakingMode={scoutTweakingMode}
+              />
+            ))}
+          </ul>
+          {recipeView === RECIPE_VIEW.MATCHED && (
+            <ViewMoreRecipesButton
+              remaining={list.length - generatedVisibleCounts.catalogue}
+              onClick={() => showMoreGeneratedRecipes('catalogue')}
             />
-          ))}
-        </ul>
+          )}
+        </>
       ))}
     </div>
   );
