@@ -10,6 +10,7 @@ import {
   sanitizeRecipeLibrary,
 } from '../recipeSchema.js';
 import { getRecipeMainIngredient } from '../../src/recipes/recipeUtils.js';
+import { ensureNumberedInstructions } from '../../src/recipes/instructionFormat.js';
 
 const MODEL_ID = process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
 const AI_RECIPE_COUNT = 5;
@@ -69,14 +70,14 @@ Recipe mix (required):
 - ${PANTRY_FIRST_RECIPE_COUNT} "pantry-first" recipes: build mainly from the household inventory. Prioritize items marked EXPIRING SOON. missingIngredients should be empty or only 1–2 common staples (salt, oil, etc.).
 - ${STRETCH_RECIPE_COUNT} "shop & cook" recipes: still inspired by what's in the fridge, but may need several ingredients not in stock. List every non-inventory ingredient in missingIngredients (2–6 items). Add the tag "Shop & Cook" to these recipes.
 
-Each recipe must include realistic prepTime and cookTime (e.g. "15 min"), a cuisine, a category, a full ingredient list, step-by-step instructions, estimated calories, macros (protein/carbs/fat as strings like "25g"), a tags array (e.g. "One-Pan", "High Protein", "Under 15 Mins"), and missingIngredients.
+Each recipe must include realistic prepTime and cookTime (e.g. "15 min"), a cuisine, a category, a full ingredient list, and instructions as a numbered step-by-step list (e.g. "1. Dice the onion...", "2. Heat a large pan over medium-high heat for 2 minutes..."). Each step must include prep actions, heat levels, and cooking times where relevant.
 Use clear ingredient names that match common Australian pantry labels.
 Do not duplicate any recipe titles provided in the user message.
 Return strict JSON only — no markdown fences or commentary.`;
 
 const REMIX_SYSTEM_INSTRUCTION = `You are FitChef, a nutrition-savvy recipe remix assistant for Australian households.
 Given an existing recipe, create one improved variant that follows the requested remix mode while keeping the dish recognisable and delicious.
-Return a fully-formed recipe with title, prepTime, cookTime, cuisine, category, ingredients, instructions, calories, macros, tags, and missingIngredients.
+Return a fully-formed recipe with title, prepTime, cookTime, cuisine, category, ingredients, numbered step-by-step instructions (prep, heat levels, timings), calories, macros, tags, and missingIngredients.
 Use clear Australian pantry ingredient names.
 Return strict JSON only — no markdown fences or commentary.`;
 
@@ -199,9 +200,11 @@ function normalizeGeneratedRecipe(entry, index, items, expiringIds, { idFactory 
   const ingredients = Array.isArray(entry?.ingredients)
     ? entry.ingredients.map((v) => String(v).trim()).filter(Boolean)
     : [];
-  const instructions = Array.isArray(entry?.instructions)
-    ? entry.instructions.map((v) => String(v).trim()).filter(Boolean)
-    : [];
+  const instructions = ensureNumberedInstructions(
+    Array.isArray(entry?.instructions)
+      ? entry.instructions.map((v) => String(v).trim()).filter(Boolean)
+      : [],
+  );
   const tags = Array.isArray(entry?.tags)
     ? entry.tags.map((v) => String(v).trim()).filter(Boolean)
     : [];

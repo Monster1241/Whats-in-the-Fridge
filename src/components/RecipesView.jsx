@@ -27,6 +27,7 @@ import { normalizeName } from '../inventory/itemUtils.js';
 import { BUILTIN_RECIPES } from '../recipes/recipeCatalog.js';
 import {
   analyzeRecipe,
+  getAllKnownRecipes,
   getRecipeById,
   MIN_MATCHED_RECIPES_TO_SHOW,
   recipeMatchesInventory,
@@ -108,7 +109,14 @@ function EmptyState({ icon: Icon, title, description }) {
 
 function CollapsibleInstructions({ recipe }) {
   const [open, setOpen] = useState(false);
-  const stepCount = recipe.instructions.length;
+  const steps = Array.isArray(recipe.instructions) ? recipe.instructions.filter(Boolean) : [];
+  const stepCount = steps.length;
+
+  if (stepCount === 0) {
+    return (
+      <p className="text-muted mb-4 text-xs italic">No cooking instructions available for this recipe.</p>
+    );
+  }
 
   return (
     <div className="surface-inset mb-4 p-3">
@@ -129,7 +137,7 @@ function CollapsibleInstructions({ recipe }) {
       </button>
       {open && (
         <ol className="mt-3 list-decimal space-y-2 border-t border-slate-200 pt-3 pl-5 text-sm leading-relaxed text-slate-700 dark:border-slate-600 dark:text-slate-300">
-          {recipe.instructions.map((step, index) => (
+          {steps.map((step, index) => (
             <li key={`${recipe.id}-step-${index}`}>{step}</li>
           ))}
         </ol>
@@ -496,7 +504,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
   );
 
   const cookableRecipes = useMemo(() => {
-    const scored = BUILTIN_RECIPES.map((recipe) => {
+    const scored = getAllKnownRecipes(recipeLibrary).map((recipe) => {
       const analysis = analyzeRecipe(recipe, items);
       return { recipe, analysis, score: analysis.stockedCount };
     });
@@ -521,7 +529,7 @@ export function RecipesView({ items, updateItems, savedRecipes }) {
       .slice(0, MIN_MATCHED_RECIPES_TO_SHOW - strict.length);
 
     return [...strict, ...filler];
-  }, [items]);
+  }, [items, recipeLibrary]);
 
   const localSearchResults = useMemo(
     () => searchLocalRecipes(searchQuery, recipeLibrary),

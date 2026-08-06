@@ -1,45 +1,7 @@
 import { searchExternalRecipes, lookupExternalRecipe, searchRecipesByIngredient } from '../api.js';
+import { mapMealToRecipe } from './themealdbMapper.js';
 
-/**
- * @param {Record<string, unknown>} meal
- * @returns {import('./recipeCatalog.js').Recipe}
- */
-export function mapMealToRecipe(meal) {
-  const ingredients = [];
-  for (let i = 1; i <= 20; i += 1) {
-    const name = String(meal[`strIngredient${i}`] ?? '').trim();
-    const measure = String(meal[`strMeasure${i}`] ?? '').trim();
-    if (!name) continue;
-    ingredients.push(measure ? `${measure} ${name}` : name);
-  }
-
-  let instructions = String(meal.strInstructions ?? '')
-    .split(/\r?\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (instructions.length === 0 && meal.strInstructions) {
-    instructions = [String(meal.strInstructions).trim()];
-  }
-
-  const id = `themealdb:${meal.idMeal}`;
-
-  return {
-    id,
-    title: String(meal.strMeal ?? 'Untitled recipe'),
-    prepTime: 'See instructions',
-    cuisine: meal.strArea ? String(meal.strArea) : undefined,
-    category: meal.strCategory ? String(meal.strCategory) : undefined,
-    ingredients,
-    instructions,
-    source: 'themealdb',
-    sourceUrl:
-      String(meal.strSource || '').trim() ||
-      String(meal.strYoutube || '').trim() ||
-      `https://www.themealdb.com/meal/${meal.idMeal}`,
-    imageUrl: meal.strMealThumb ? String(meal.strMealThumb) : undefined,
-  };
-}
+export { mapMealToRecipe, parseMealIngredients, formatMealInstructions } from './themealdbMapper.js';
 
 /**
  * @param {string} query

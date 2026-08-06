@@ -16,7 +16,8 @@
     "refresh:grocery": "node tasks/refreshGroceryData.js",
     "refresh:grocery:sneak": "node tasks/refreshGroceryData.js --mode sneakPeek",
     "refresh:grocery:reset": "node tasks/refreshGroceryData.js --mode officialReset",
-    "seed:weekly-deals": "node tasks/seedWeeklyDeals.js"
+    "seed:weekly-deals": "node tasks/seedWeeklyDeals.js",
+    "seed:recipes": "node server/scripts/seedRecipes.js"
   },
   "dependencies": {
     "@google/genai": "^2.15.0",
