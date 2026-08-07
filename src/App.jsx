@@ -1,4 +1,4 @@
-updaimport { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { AppSplashScreen } from './components/AppSplashScreen.jsx';
 import { UnloadingLoader } from './components/UnloadingLoader.jsx';
 import { AuthScreen } from './components/AuthScreen.jsx';
