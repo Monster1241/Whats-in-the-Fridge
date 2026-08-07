@@ -1901,8 +1901,7 @@ function InventoryView({
             >
               One tap is all you need: press the green{' '}
               <strong className="font-semibold">Add to pantry</strong> button on each item after you
-              buy it. It leaves this list and appears in Fridge with a suggested use-by date — no
-              checkbox required.
+              buy it. It leaves this list and appears in Fridge with a suggested use-by date.
             </TipBanner>
           )}
 
