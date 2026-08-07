@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+updaimport { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { AppSplashScreen } from './components/AppSplashScreen.jsx';
 import { UnloadingLoader } from './components/UnloadingLoader.jsx';
 import { AuthScreen } from './components/AuthScreen.jsx';
@@ -142,10 +142,11 @@ function flowEnterClass(direction, base = 'animate-flow') {
 
 const COLOR_LEGEND = [
   { swatch: 'bg-emerald-600', label: 'Emerald', desc: 'In stock · plentiful · primary actions' },
-  { swatch: 'bg-amber-500', label: 'Amber', desc: 'Expiring soon (auto from expiry date)' },
-  { swatch: 'bg-rose-600', label: 'Rose', desc: 'Out of stock — tap badge to mark need to buy' },
-  { swatch: 'bg-sky-600', label: 'Sky', desc: 'Shopping list tab, tips & add-to-buy flow' },
-  { swatch: 'bg-violet-600', label: 'Violet', desc: 'Saved recipes & invite partner' },
+  { swatch: 'bg-amber-500', label: 'Amber', desc: 'Expiring soon (within 3 days)' },
+  { swatch: 'bg-orange-500', label: 'Orange', desc: 'Almost finished or marked as running low' },
+  { swatch: 'bg-rose-600', label: 'Rose', desc: 'Out of stock — sends item to the shopping list' },
+  { swatch: 'bg-sky-600', label: 'Sky', desc: 'Shopping tab · list · add-to-pantry flow' },
+  { swatch: 'bg-violet-600', label: 'Violet', desc: 'Saved recipes & recipe-from-shopping links' },
 ];
 
 const SHOPPING_ACCENT = {
@@ -1846,8 +1847,9 @@ function InventoryView({
           title="Welcome to your household fridge"
           onDismiss={() => dismiss('welcome')}
         >
-          Track food and household supplies. Use the Shopping tab when you need to buy something.
-          Open Settings to share your household code and switch theme.
+          Track food and supplies together. Add items on Home, shop from the Shopping tab, and
+          check Recipes for meal ideas. Scan a grocery receipt to bulk-add items, then share your
+          household code in Settings so your partner can join.
         </TipBanner>
       )}
 
@@ -1859,7 +1861,8 @@ function InventoryView({
         >
           <span className="font-semibold text-emerald-700 dark:text-emerald-400">Green</span> in
           stock · <span className="font-semibold text-amber-700 dark:text-amber-400">Amber</span>{' '}
-          expiring · <span className="font-semibold text-rose-700 dark:text-rose-400">Rose</span>{' '}
+          expiring soon · <span className="font-semibold text-orange-600 dark:text-orange-400">Orange</span>{' '}
+          almost finished / low · <span className="font-semibold text-rose-700 dark:text-rose-400">Rose</span>{' '}
           out of stock · <span className={`font-semibold ${SHOPPING_ACCENT.textLabel}`}>Sky</span>{' '}
           shopping list
         </TipBanner>
@@ -1887,21 +1890,10 @@ function InventoryView({
               accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
               onDismiss={() => dismiss('shopping-tip')}
             >
-              Add what you need with the + button. When you have bought something at the store, tap{' '}
-              <strong className="font-semibold">Add to pantry</strong> on that item — it moves to your
-              Fridge tab automatically. Ping your partner if you want them to shop.
-            </TipBanner>
-          )}
-
-          {!isDismissed('shopping-bought-tip') && shoppingList.length > 0 && (
-            <TipBanner
-              title="How to mark items as bought"
-              accentClass="border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
-              onDismiss={() => dismiss('shopping-bought-tip')}
-            >
-              One tap is all you need: press the green{' '}
-              <strong className="font-semibold">Add to pantry</strong> button on each item after you
-              buy it. It leaves this list and appears in Fridge with a suggested use-by date.
+              Add items with the + field (duplicates merge automatically). After you buy something,
+              tap <strong className="font-semibold">Add to pantry</strong> — it moves to Fridge with a
+              suggested use-by date. Items from recipes show which dish they were for. Ping your partner
+              to send a shopping reminder.
             </TipBanner>
           )}
 
@@ -2335,10 +2327,11 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       icon: Refrigerator,
       title: 'Home — track what you have',
       steps: [
-        'Type an item name for suggestions, or scan a barcode on the add field.',
-        'Use Ambient, Fresh, and Freezer tabs for pantry, fridge, and frozen goods.',
-        'Tap a status badge on any row to edit details or mark it out of stock.',
-        `Food with an expiry date within ${EXPIRING_SOON_DAYS} days moves to Expiring Soon automatically.`,
+        'Type a name for suggestions, scan a barcode, or use Scan receipt / upload invoice to add a whole grocery shop at once.',
+        'Switch Ambient, Fresh, and Freezer to organise pantry, fridge, and frozen items.',
+        'Tap a row\'s status badge to edit quantity, expiry, storage, or mark an item out of stock.',
+        `Items expiring within ${EXPIRING_SOON_DAYS} days appear under Expiring Soon with an amber badge.`,
+        'Mark items as running low in the editor, or let the app flag almost-finished staples automatically.',
         'Use More options when adding to pick Home Essentials or Baby Care categories.',
       ],
     },
@@ -2346,25 +2339,35 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       icon: ShoppingCart,
       title: 'Shopping list — what to buy',
       steps: [
-        'Use the Shopping tab in the bottom bar for your shared buy list.',
-        'Out-of-stock items appear here; add more with the + field.',
-        'Tap a store badge to set where your household buys each item.',
-        'Tap Add to pantry on an item after you buy it — it returns to your Fridge with a use-by date.',
+        'Open the Shopping tab for your household\'s shared buy list.',
+        'Add items with + — matching names merge quantities instead of creating duplicates.',
+        'Tap a store badge to save where your household buys each item.',
+        'After you purchase something, tap Add to pantry on that row. It leaves the list and appears in Fridge with a suggested use-by date.',
+        'Ingredients added from Recipes show which dish they were for.',
         'Ping partner to shop sends a push notification to other household members.',
+      ],
+    },
+    {
+      icon: Flame,
+      title: 'Hot deals — weekly specials',
+      steps: [
+        'Browse supermarket deals on the Deals tab (Woolworths, Coles, ALDI, and more).',
+        'Tap Add to shopping list on a deal to send it straight to your shared buy list.',
+        'Deals are refreshed on a schedule — check back each week for new specials.',
       ],
     },
     ...(showRecipes
       ? [
           {
             icon: ChefHat,
-            title: 'Recipes — AI recommendations & catalogue',
+            title: 'Recipes — Scout, AI & catalogue',
             steps: [
-              'Open the Fridge Scout tab to chat with Scout or generate meals from your inventory.',
-              'Generated recipes appear in Recommendations — browse your catalogue there too.',
-              'Add cravings or quick filters like Under 15 Mins before generating.',
-              'Use Search to find built-in recipes or import from TheMealDB.',
-              'Save favourites with the bookmark icon.',
-              'Add missing ingredients straight to the shared shopping list.',
+              'Fridge Scout tab — chat with Scout for meal ideas, tweaks, and kitchen help.',
+              'Recommendations — enter a craving (e.g. Thai, pasta) and tap Generate for catalogue matches plus AI recipes from your pantry.',
+              'Use View more to load extra results without scrolling through everything at once.',
+              'Search finds built-in recipes and imports free meals from TheMealDB.',
+              'Bookmark favourites on any recipe card.',
+              'Tap Add missing ingredients to send what you still need to the shopping list (smart merge applies).',
             ],
           },
         ]
@@ -2373,9 +2376,10 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       icon: Users,
       title: 'Household — share with your partner',
       steps: [
-        'Share your invite code so someone can join the same fridge.',
-        'Everyone in the household sees the same inventory and shopping list.',
-        'Enable push notifications below to get alerts when food is expiring soon.',
+        'Copy your invite code in Settings so someone can join the same fridge.',
+        'Everyone in the household sees the same inventory, shopping list, and saved recipes.',
+        'Enable push notifications in Settings for expiry alerts and partner shopping pings.',
+        'Scanning a receipt? Items already on the shopping list are moved to Fridge automatically when names match.',
       ],
     },
     {
@@ -2384,7 +2388,8 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       steps: [
         'Turn modules on or off: Food & Kitchen, Home Essentials, and Baby Care.',
         'Switch light or dark mode, update your profile, and manage household members.',
-        'Clear all items only if you want to wipe inventory for everyone.',
+        'Use Show tips again under Data tools to bring back welcome banners on Home and Shopping.',
+        'Clear all items only if you want to wipe inventory for everyone in the household.',
       ],
     },
   ];
@@ -2404,7 +2409,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
           </h2>
           {!open && (
             <p className="text-muted mt-1 text-xs leading-relaxed">
-              Quick guide to Home, shopping list, recipes, and household sharing
+              Home, shopping, deals, recipes, receipt scan, and household sharing
             </p>
           )}
         </div>
@@ -2418,8 +2423,9 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       {open && (
         <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 dark:border-slate-600">
           <p className="text-muted text-sm leading-relaxed">
-            What&apos;s in the Fridge keeps a shared household inventory. Start on Home,
-            restock from Shopping List, and invite your partner with the code below.
+            What&apos;s in the Fridge keeps a shared household inventory for Australian homes. Track
+            what you have on Home, build a buy list on Shopping, spot specials on Deals, and cook
+            from Recipes. Invite your partner with the code below so you stay in sync.
           </p>
 
           {sections.map((section) => {
@@ -2451,15 +2457,19 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
               </li>
               <li>
                 <span className="font-semibold text-amber-700 dark:text-amber-400">Amber</span>{' '}
-                — expiring soon
+                — expiring within {EXPIRING_SOON_DAYS} days
+              </li>
+              <li>
+                <span className="font-semibold text-orange-600 dark:text-orange-400">Orange</span>{' '}
+                — almost finished or marked low
               </li>
               <li>
                 <span className="font-semibold text-rose-700 dark:text-rose-400">Rose</span>{' '}
-                — out of stock (shows on shopping list)
+                — out of stock (adds to shopping list)
               </li>
               <li>
                 <span className="font-semibold text-sky-700 dark:text-sky-400">Sky</span>{' '}
-                — shopping list tab and tips
+                — shopping tab and buy-list actions
               </li>
             </ul>
           </div>
