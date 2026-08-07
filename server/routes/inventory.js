@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { receiptUploadMiddleware } from '../middleware/receiptUpload.js';
 import { asyncRoute } from '../routeUtils.js';
+import {
+  handleConfirmReceiptScan,
+  handleScanReceipt,
+} from '../controllers/receiptScan.js';
 import {
   deleteInventoryItem,
   getInventoryForHousehold,
@@ -15,6 +20,21 @@ import { buildConsumptionFields } from '../../src/inventory/consumption.js';
 export const inventoryRouter = Router();
 
 inventoryRouter.use(requireAuth);
+
+inventoryRouter.post(
+  '/scan-receipt',
+  receiptUploadMiddleware('receipt'),
+  asyncRoute(handleScanReceipt, 'POST /api/inventory/scan-receipt', 'Could not scan receipt'),
+);
+
+inventoryRouter.post(
+  '/confirm-receipt-scan',
+  asyncRoute(
+    handleConfirmReceiptScan,
+    'POST /api/inventory/confirm-receipt-scan',
+    'Could not add receipt items',
+  ),
+);
 
 inventoryRouter.get(
   '/',

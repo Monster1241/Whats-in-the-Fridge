@@ -468,3 +468,23 @@ export async function markShoppingItemPurchased(id, options = {}) {
   });
   return parseJson(res);
 }
+
+export async function scanReceipt(file) {
+  const formData = new FormData();
+  formData.append('receipt', file);
+  const res = await fetch(`${API_BASE}/inventory/scan-receipt`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: formData,
+  });
+  return parseJson(res);
+}
+
+export async function confirmReceiptScan(items) {
+  const res = await fetch(`${API_BASE}/inventory/confirm-receipt-scan`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ items }),
+  });
+  return parseJson(res);
+}

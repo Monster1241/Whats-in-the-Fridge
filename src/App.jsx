@@ -19,6 +19,7 @@ import {
 } from './api.js';
 import { readStoredPostcode } from './inventory/postcodeStorage.js';
 import { InventorySearch } from './components/InventorySearch.jsx';
+import { ReceiptScanner } from './components/ReceiptScanner.jsx';
 import { IconActionButton } from './components/IconActionButton.jsx';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
@@ -1291,6 +1292,7 @@ function InventoryView({
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
   const [shopFeedback, setShopFeedback] = useState(null);
+  const [receiptFeedback, setReceiptFeedback] = useState(null);
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
   const shoppingList = useMemo(
@@ -2016,6 +2018,18 @@ function InventoryView({
       ) : (
         categoryGrouped && (
           <>
+            <ReceiptScanner
+              replaceItemsFromServer={replaceItemsFromServer}
+              onSuccess={(message) => setReceiptFeedback({ type: 'success', text: message })}
+            />
+            {receiptFeedback && (
+              <p
+                role="status"
+                className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+              >
+                {receiptFeedback.text}
+              </p>
+            )}
             <form onSubmit={addItem} className="surface-card mb-4 space-y-3 p-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
