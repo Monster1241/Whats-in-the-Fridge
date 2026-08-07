@@ -93,6 +93,7 @@ import {
   Flame,
   FlaskConical,
   Info,
+  Loader2,
   LogOut,
   MapPin,
   Moon,
@@ -690,21 +691,26 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
   );
 }
 
-function ShoppingListBoughtButton({ itemName, onBought }) {
+function ShoppingListBoughtButton({ itemName, onBought, busy = false }) {
   return (
     <button
       type="button"
       onClick={onBought}
-      className="group flex w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3.5 pl-4 pr-5 text-sm font-bold text-white shadow-lg shadow-emerald-900/25 transition hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] dark:shadow-emerald-950/40"
-      aria-label={`Mark ${itemName} as bought and return to inventory`}
+      disabled={busy}
+      className="group flex w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3.5 pl-4 pr-5 text-sm font-bold text-white shadow-lg shadow-emerald-900/25 transition hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70 dark:shadow-emerald-950/40"
+      aria-label={`Add ${itemName} to pantry`}
     >
       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 ring-2 ring-white/30 transition group-active:scale-95">
-        <CircleCheck className="h-5 w-5" strokeWidth={2.5} aria-hidden />
+        {busy ? (
+          <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+        ) : (
+          <CircleCheck className="h-5 w-5" strokeWidth={2.5} aria-hidden />
+        )}
       </span>
       <span className="flex flex-col items-start text-left leading-tight">
-        <span>Bought it</span>
+        <span>{busy ? 'Adding to pantry…' : 'Add to pantry'}</span>
         <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-100/90">
-          Back in stock
+          {busy ? 'One moment' : 'Tap when you have bought it'}
         </span>
       </span>
     </button>
@@ -717,7 +723,7 @@ function ShoppingListItemRow({
   onDelete,
   onGotIt,
   onPreferredStoreChange,
-  onToggleChecked,
+  stockingId,
 }) {
   const catMeta = getCategoryMeta(item.category, item.itemType);
   const { store, detail } = getShoppingSuggestionForItem(item);
@@ -729,38 +735,27 @@ function ShoppingListItemRow({
         : null;
 
   return (
-    <li className={`surface-row px-3 py-3 ${item.checked ? 'opacity-70' : ''}`}>
+    <li className="surface-row px-3 py-3">
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
-          <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={Boolean(item.checked)}
-              onChange={() => onToggleChecked(item.id, !item.checked)}
-              className="mt-1 h-4 w-4 rounded border-black/15 text-sky-600 focus:ring-sky-500 dark:border-white/20"
-              aria-label={`Mark ${item.name} as picked up`}
-            />
-            <div className="min-w-0 flex-1">
-              <p
-                className={`text-heading text-sm font-semibold ${item.checked ? 'line-through' : ''}`}
-              >
-                {item.name}
-                {quantityLabel ? (
-                  <span className="text-muted ml-1 text-xs font-medium">· {quantityLabel}</span>
-                ) : null}
+          <div className="min-w-0 flex-1">
+            <p className="text-heading text-sm font-semibold">
+              {item.name}
+              {quantityLabel ? (
+                <span className="text-muted ml-1 text-xs font-medium">· {quantityLabel}</span>
+              ) : null}
+            </p>
+            {catMeta && (
+              <p className="mt-0.5 text-xs text-slate-500">
+                {itemTypeLabelEmoji(item.itemType)} {catMeta.emoji} {catMeta.label}
               </p>
-              {catMeta && (
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {itemTypeLabelEmoji(item.itemType)} {catMeta.emoji} {catMeta.label}
-                </p>
-              )}
-              {item.sourceRecipe?.title && (
-                <p className="mt-1 text-[11px] font-medium text-violet-700 dark:text-violet-300">
-                  For recipe: {item.sourceRecipe.title}
-                </p>
-              )}
-            </div>
-          </label>
+            )}
+            {item.sourceRecipe?.title && (
+              <p className="mt-1 text-[11px] font-medium text-violet-700 dark:text-violet-300">
+                For recipe: {item.sourceRecipe.title}
+              </p>
+            )}
+          </div>
           <IconActionButton
             variant="delete"
             onClick={() => onDelete(item.id)}
@@ -793,6 +788,7 @@ function ShoppingListItemRow({
 
         <ShoppingListBoughtButton
           itemName={item.name}
+          busy={stockingId === item.id}
           onBought={() => onGotIt(item.id)}
         />
 
@@ -1292,6 +1288,7 @@ function InventoryView({
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
   const [shopFeedback, setShopFeedback] = useState(null);
+  const [stockingId, setStockingId] = useState(null);
   const [receiptFeedback, setReceiptFeedback] = useState(null);
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
@@ -1574,28 +1571,25 @@ function InventoryView({
     }
   };
 
-  const toggleShoppingChecked = (id, checked) => {
-    updateItems((prev) =>
-      prev.map((entry) => (entry.id === id ? { ...entry, checked } : entry)),
-    );
-  };
-
   const markItemStocked = async (id) => {
     const item = items.find((entry) => entry.id === id);
     if (item) rememberRestock(item);
     setShopFeedback(null);
+    setStockingId(id);
     try {
       const result = await markShoppingItemPurchased(id, { applyExpiry: true });
       replaceItemsFromServer(result.items);
       setShopFeedback({
         type: 'success',
-        text: `${item?.name ?? 'Item'} moved to inventory with an estimated expiry date.`,
+        text: `${item?.name ?? 'Item'} added to your Fridge with an estimated expiry date.`,
       });
     } catch (err) {
       setShopFeedback({
         type: 'error',
         text: err.message || 'Could not move item to inventory.',
       });
+    } finally {
+      setStockingId(null);
     }
   };
 
@@ -1811,7 +1805,7 @@ function InventoryView({
         </h1>
         <p className="text-muted mt-1.5 text-sm leading-relaxed">
           {isShoppingPage
-            ? 'Shared list for your household — tap check when bought.'
+            ? 'Shared list for your household — tap Add to pantry when you have bought an item.'
             : `Track food & supplies · expiring within ${EXPIRING_SOON_DAYS} days`}
         </p>
       </header>
@@ -1893,7 +1887,22 @@ function InventoryView({
               accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
               onDismiss={() => dismiss('shopping-tip')}
             >
-              Add missing items, tap check when bought, or ping your partner with an app notification.
+              Add what you need with the + button. When you have bought something at the store, tap{' '}
+              <strong className="font-semibold">Add to pantry</strong> on that item — it moves to your
+              Fridge tab automatically. Ping your partner if you want them to shop.
+            </TipBanner>
+          )}
+
+          {!isDismissed('shopping-bought-tip') && shoppingList.length > 0 && (
+            <TipBanner
+              title="How to mark items as bought"
+              accentClass="border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40"
+              onDismiss={() => dismiss('shopping-bought-tip')}
+            >
+              One tap is all you need: press the green{' '}
+              <strong className="font-semibold">Add to pantry</strong> button on each item after you
+              buy it. It leaves this list and appears in Fridge with a suggested use-by date — no
+              checkbox required.
             </TipBanner>
           )}
 
@@ -1981,7 +1990,7 @@ function InventoryView({
                 onDelete={(id) => deleteItem(id, { trackHistory: true })}
                 onGotIt={markItemStocked}
                 onPreferredStoreChange={updatePreferredStore}
-                onToggleChecked={toggleShoppingChecked}
+                stockingId={stockingId}
               />
             ))}
           </InventorySection>
@@ -2341,7 +2350,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'Use the Shopping tab in the bottom bar for your shared buy list.',
         'Out-of-stock items appear here; add more with the + field.',
         'Tap a store badge to set where your household buys each item.',
-        'Tap the check when bought — the item returns to in stock.',
+        'Tap Add to pantry on an item after you buy it — it returns to your Fridge with a use-by date.',
         'Ping partner to shop sends a push notification to other household members.',
       ],
     },

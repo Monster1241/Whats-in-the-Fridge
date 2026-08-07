@@ -7,7 +7,9 @@ import {
   FOOD_GROUP,
   sanitizeQuantity,
   STORAGE_LOCATION,
+  sumQuantities,
 } from '../../src/inventory/smartInventory.js';
+import { normalizeName } from '../../src/inventory/itemUtils.js';
 import { getInventoryForHousehold, saveInventoryItems } from '../db.js';
 import { sanitizeInventoryItems } from '../inventorySanitize.js';
 
@@ -234,13 +236,16 @@ export async function confirmReceiptItems(householdId, scannedItems) {
   }
 
   const existing = await getInventoryForHousehold(householdId);
+  const nextItems = [...existing];
   const now = new Date().toISOString();
-  const drafts = [];
+  const addedIds = new Set();
+  let movedFromShoppingCount = 0;
 
   for (const entry of scannedItems.slice(0, MAX_RECEIPT_ITEMS)) {
     const name = String(entry?.name ?? '').trim();
     if (!name) continue;
 
+    const needle = normalizeName(name);
     const category = normalizeReceiptCategory(entry.category);
     const storageLocation = normalizeStorageLocation(
       entry.storageLocation ?? entry.storage,
@@ -254,6 +259,8 @@ export async function confirmReceiptItems(householdId, scannedItems) {
       entry.expiryDate && /^\d{4}-\d{2}-\d{2}$/.test(String(entry.expiryDate))
         ? String(entry.expiryDate)
         : calculateExpiryDate(foodGroup, storageLocation);
+    const quantity = sanitizeQuantity(entry.quantity);
+    const unit = String(entry.unit ?? '').trim();
 
     const consumption = buildConsumptionFields({
       name,
@@ -261,14 +268,13 @@ export async function confirmReceiptItems(householdId, scannedItems) {
       category: inventoryCategory,
     });
 
-    drafts.push({
-      id: randomUUID(),
+    const stockedFields = {
       name,
       itemType: ITEM_TYPE.FOOD,
       category: inventoryCategory,
       status: STATUS.FRESH,
-      quantity: sanitizeQuantity(entry.quantity),
-      unit: String(entry.unit ?? '').trim(),
+      quantity,
+      unit,
       foodGroup,
       storageLocation,
       expiryDate,
@@ -279,27 +285,73 @@ export async function confirmReceiptItems(householdId, scannedItems) {
       checked: false,
       sourceRecipe: null,
       ...consumption,
-    });
+    };
+
+    const shoppingIdx = nextItems.findIndex(
+      (item) =>
+        normalizeName(item.name) === needle &&
+        item.itemType === ITEM_TYPE.FOOD &&
+        item.status === STATUS.OUT,
+    );
+
+    if (shoppingIdx >= 0) {
+      const shoppingItem = nextItems[shoppingIdx];
+      nextItems[shoppingIdx] = {
+        ...shoppingItem,
+        ...stockedFields,
+        id: shoppingItem.id,
+        dateAdded: shoppingItem.dateAdded ?? shoppingItem.stockedAt ?? now,
+        quantity: sumQuantities(shoppingItem.unit, shoppingItem.quantity, unit, quantity),
+        unit: shoppingItem.unit || unit,
+        preferredStore: shoppingItem.preferredStore ?? null,
+      };
+      addedIds.add(shoppingItem.id);
+      movedFromShoppingCount += 1;
+      continue;
+    }
+
+    const inStockIdx = nextItems.findIndex(
+      (item) =>
+        normalizeName(item.name) === needle &&
+        item.itemType === ITEM_TYPE.FOOD &&
+        item.status !== STATUS.OUT,
+    );
+
+    if (inStockIdx >= 0) {
+      const inStockItem = nextItems[inStockIdx];
+      nextItems[inStockIdx] = {
+        ...inStockItem,
+        ...stockedFields,
+        id: inStockItem.id,
+        dateAdded: inStockItem.dateAdded ?? inStockItem.stockedAt ?? now,
+        quantity: sumQuantities(inStockItem.unit, inStockItem.quantity, unit, quantity),
+        unit: inStockItem.unit || unit,
+        expiryDate: expiryDate || inStockItem.expiryDate || null,
+        preferredStore: inStockItem.preferredStore ?? null,
+      };
+      addedIds.add(inStockItem.id);
+      continue;
+    }
+
+    const id = randomUUID();
+    nextItems.push({ id, ...stockedFields });
+    addedIds.add(id);
   }
 
-  if (!drafts.length) {
+  if (!addedIds.size) {
     const err = new Error('No valid items to add.');
     err.status = 400;
     throw err;
   }
 
-  const saved = await saveInventoryItems(
-    householdId,
-    sanitizeInventoryItems([...existing, ...drafts]),
-  );
-
-  const addedIds = new Set(drafts.map((item) => item.id));
+  const saved = await saveInventoryItems(householdId, sanitizeInventoryItems(nextItems));
   const added = saved.filter((item) => addedIds.has(item.id));
 
   return {
     items: saved,
     added,
     addedCount: added.length,
+    movedFromShoppingCount,
   };
 }
 

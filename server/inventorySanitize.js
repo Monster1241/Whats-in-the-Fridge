@@ -106,17 +106,24 @@ export function sanitizeInventoryItems(items) {
       byKey.set(key, item);
       continue;
     }
+    const mergedStatus =
+      prev.status === 'fresh' || item.status === 'fresh'
+        ? 'fresh'
+        : prev.status === 'out' || item.status === 'out'
+          ? 'out'
+          : 'fresh';
     byKey.set(key, {
       ...prev,
       ...item,
       id: prev.id || item.id,
-      status: prev.status === 'out' || item.status === 'out' ? 'out' : 'fresh',
+      status: mergedStatus,
       expiryDate: prev.expiryDate || item.expiryDate || null,
       preferredStore: prev.preferredStore ?? item.preferredStore ?? null,
       quantity: sanitizeQuantity(prev.quantity) + sanitizeQuantity(item.quantity),
       unit: prev.unit || item.unit || '',
-      checked: prev.checked || item.checked,
-      sourceRecipe: prev.sourceRecipe ?? item.sourceRecipe ?? null,
+      checked: mergedStatus === 'out' ? prev.checked || item.checked : false,
+      sourceRecipe:
+        mergedStatus === 'out' ? prev.sourceRecipe ?? item.sourceRecipe ?? null : null,
     });
   }
   return [...byKey.values()];

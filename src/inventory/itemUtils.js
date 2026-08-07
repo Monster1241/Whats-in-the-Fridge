@@ -148,7 +148,7 @@ function preferSubCategory(a, b, itemType, category) {
 
 function mergeDuplicateItems(a, b) {
   const status =
-    isOnShoppingList(a) || isOnShoppingList(b) ? STATUS.OUT : STATUS.FRESH;
+    !isOnShoppingList(a) || !isOnShoppingList(b) ? STATUS.FRESH : STATUS.OUT;
   const newer = pickNewerStocked(a, b);
   const id = getItemId(a) || getItemId(b);
   const itemType = a.itemType;
@@ -176,8 +176,8 @@ function mergeDuplicateItems(a, b) {
     quantity: (a.quantity ?? 1) + (b.quantity ?? 1),
     unit: a.unit || b.unit || '',
     isLow: Boolean(a.isLow || b.isLow),
-    checked: Boolean(a.checked || b.checked),
-    sourceRecipe: a.sourceRecipe ?? b.sourceRecipe ?? null,
+    checked: status === STATUS.OUT ? Boolean(a.checked || b.checked) : false,
+    sourceRecipe: status === STATUS.OUT ? a.sourceRecipe ?? b.sourceRecipe ?? null : null,
     foodGroup: a.foodGroup ?? b.foodGroup ?? null,
     storageLocation: a.storageLocation ?? b.storageLocation ?? null,
     dateAdded: a.dateAdded ?? b.dateAdded ?? newer.stockedAt ?? newer.createdAt,

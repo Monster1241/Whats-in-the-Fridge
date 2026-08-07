@@ -121,8 +121,12 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
       }));
       const result = await confirmReceiptScan(payload);
       replaceItemsFromServer?.(result.items);
+      const moved = result.movedFromShoppingCount ?? 0;
+      const base = `Added ${result.addedCount ?? payload.length} item${payload.length === 1 ? '' : 's'} to your inventory.`;
       onSuccess?.(
-        `Added ${result.addedCount ?? payload.length} item${payload.length === 1 ? '' : 's'} to your inventory.`,
+        moved > 0
+          ? `${base} ${moved} matched item${moved === 1 ? '' : 's'} removed from your shopping list.`
+          : base,
       );
       close();
     } catch (err) {
