@@ -61,6 +61,10 @@ import {
   recordUserItemCorrection,
 } from './inventory/itemKnowledge.js';
 import { inferStorageLocation } from './inventory/smartInventory.js';
+import {
+  formatInventoryQuantityLabel,
+  normalizeAmbientQuantityFields,
+} from './inventory/quantityDisplay.js';
 import { classifyItem } from './inventory/classifyItem.js';
 import {
   countItemsBySubCategory,
@@ -523,19 +527,34 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
   };
 
   const handleSave = () => {
+    const { quantity: nextQuantity, unit: nextUnit } = normalizeAmbientQuantityFields({
+      name: item.name,
+      itemType,
+      category,
+      quantity: Number(quantity) > 0 ? Number(quantity) : 1,
+      unit: unit.trim(),
+    });
     onSave({
       status: needToBuy ? STATUS.OUT : STATUS.FRESH,
       itemType,
       category,
       subCategory,
       expiryDate: hasExpiry && expiryDate ? expiryDate : null,
-      quantity: Number(quantity) > 0 ? Number(quantity) : 1,
-      unit: unit.trim(),
+      quantity: nextQuantity,
+      unit: nextUnit,
       isLow,
       storageLocation: inferStorageLocation(category, item.foodGroup, item.storageLocation),
     });
     onClose();
   };
+
+  const shelfQuantityPreview = formatInventoryQuantityLabel({
+    name: item.name,
+    itemType,
+    category,
+    quantity: Number(quantity) > 0 ? Number(quantity) : 1,
+    unit: unit.trim(),
+  });
 
   return (
     <div
@@ -622,11 +641,20 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
               type="text"
               value={unit}
               onChange={(e) => setUnit(e.target.value)}
-              placeholder="g, ml, pack"
+              placeholder={
+                itemType === ITEM_TYPE.FOOD && category === FOOD_CATEGORY.AMBIENT
+                  ? 'g or ml (total)'
+                  : 'g, ml, pack'
+              }
               className="input-field"
             />
           </div>
         </div>
+        {itemType === ITEM_TYPE.FOOD && category === FOOD_CATEGORY.AMBIENT && shelfQuantityPreview && (
+          <p className="text-muted -mt-2 mb-4 text-xs">
+            Shown on shelf as <span className="font-semibold">{shelfQuantityPreview}</span>
+          </p>
+        )}
 
         <label className="surface-inset mb-4 flex cursor-pointer items-center gap-2 px-3 py-3 text-sm text-slate-700 dark:text-slate-300">
           <input
@@ -733,12 +761,7 @@ function ShoppingListItemRow({
 }) {
   const catMeta = getCategoryMeta(item.category, item.itemType);
   const { store, detail } = getShoppingSuggestionForItem(item);
-  const quantityLabel =
-    item.quantity && item.quantity !== 1
-      ? `${item.quantity}${item.unit ? ` ${item.unit}` : ''}`
-      : item.unit
-        ? item.unit
-        : null;
+  const quantityLabel = formatInventoryQuantityLabel(item);
 
   return (
     <li className="surface-row px-3 py-3">
@@ -821,12 +844,7 @@ function InventoryItemRow({
   const catMeta = getCategoryMeta(item.category, item.itemType);
   const subMeta = getSubcategoryMeta(item.subCategory, item.itemType, item.category);
   const displayStatus = getDisplayStatus(item);
-  const quantityLabel =
-    item.quantity && item.quantity !== 1
-      ? `${item.quantity}${item.unit ? ` ${item.unit}` : ''}`
-      : item.unit
-        ? item.unit
-        : null;
+  const quantityLabel = formatInventoryQuantityLabel(item);
 
   return (
     <li className="surface-row group flex items-center gap-2 px-3 py-2.5">
@@ -1675,8 +1693,11 @@ function InventoryView({
 
   const saveItemEdits = (id, updates) => {
     const item = items.find((entry) => entry.id === id);
+    const merged = item ? { ...item, ...updates } : updates;
+    const { quantity, unit } = normalizeAmbientQuantityFields(merged);
+    const normalizedUpdates = { ...updates, quantity, unit };
     updateItems((prev) =>
-      prev.map((entry) => (entry.id === id ? { ...entry, ...updates } : entry)),
+      prev.map((entry) => (entry.id === id ? { ...entry, ...normalizedUpdates } : entry)),
     );
     if (item) {
       updateItemKnowledge((prev) => recordUserItemCorrection(prev, item, updates));

@@ -1,4 +1,5 @@
 import { FOOD_CATEGORY } from './constants.js';
+import { formatInventoryQuantityLabel } from './quantityDisplay.js';
 
 /** @typedef {'Produce' | 'Dairy' | 'Meat' | 'Pantry' | 'Bakery' | 'Other'} FoodGroup */
 /** @typedef {'Fridge' | 'Freezer' | 'Pantry'} StorageLocation */
@@ -254,17 +255,18 @@ export function findInStockMatch(items, name, neededQuantity = 1) {
 
   const available = sanitizeQuantity(match.quantity);
   const needed = sanitizeQuantity(neededQuantity);
+  const availableLabel = formatInventoryQuantityLabel(match) ?? `${available}${match.unit ? ` ${match.unit}` : ''}`;
   if (available >= needed) {
     return {
       item: match,
       sufficient: true,
-      message: `You already have ${available}${match.unit ? ` ${match.unit}` : ''} of ${match.name} in your pantry.`,
+      message: `You already have ${availableLabel} of ${match.name} in your pantry.`,
     };
   }
 
   return {
     item: match,
     sufficient: false,
-    message: `You have ${available}${match.unit ? ` ${match.unit}` : ''} of ${match.name}; you may not need the full amount.`,
+    message: `You have ${availableLabel} of ${match.name}; you may not need the full amount.`,
   };
 }
