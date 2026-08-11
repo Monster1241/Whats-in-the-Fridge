@@ -13,7 +13,7 @@ import { normalizeName } from '../../src/inventory/itemUtils.js';
 import { getInventoryForHousehold, saveInventoryItems } from '../db.js';
 import { sanitizeInventoryItems } from '../inventorySanitize.js';
 
-const RECEIPT_MODEL = process.env.RECEIPT_SCAN_MODEL?.trim() || 'gemini-2.0-flash';
+const RECEIPT_MODEL = process.env.RECEIPT_SCAN_MODEL?.trim() || 'gemini-3.1-flash-lite';
 const MAX_RECEIPT_ITEMS = 80;
 
 const RECEIPT_CATEGORIES = new Set([
