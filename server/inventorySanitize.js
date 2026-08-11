@@ -81,6 +81,7 @@ export function sanitizeInventoryItems(items) {
           ? null
           : String(item.preferredStore).trim() || null,
       consumptionDuration: sanitizeConsumptionDuration(item?.consumptionDuration),
+      consumptionLearned: item?.consumptionLearned === true,
       stockedAt,
       createdAt: stockedAt,
       dateAdded: enriched.dateAdded,

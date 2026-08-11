@@ -388,6 +388,16 @@ function sanitizeRestockHistory(history) {
           : entry?.itemType === 'Baby'
             ? 'Baby'
             : 'Food';
+      const intervalsDays = Array.isArray(entry?.intervalsDays)
+        ? entry.intervalsDays
+            .map((value) => Math.max(1, Math.min(365, Math.round(Number(value) || 0))))
+            .filter((value) => value > 0)
+            .slice(-6)
+        : [];
+      const learnedDurationDays =
+        typeof entry?.learnedDurationDays === 'number' && entry.learnedDurationDays > 0
+          ? Math.max(1, Math.min(365, Math.round(entry.learnedDurationDays)))
+          : null;
       return {
         name,
         itemType,
@@ -401,6 +411,8 @@ function sanitizeRestockHistory(history) {
           typeof entry?.lastAt === 'string' && entry.lastAt
             ? entry.lastAt.slice(0, 32)
             : new Date().toISOString(),
+        intervalsDays,
+        learnedDurationDays,
       };
     })
     .filter(Boolean)

@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncRoute } from '../routeUtils.js';
-import { getInventoryForHousehold, saveInventoryItems } from '../db.js';
+import { getHouseholdMeta, getInventoryForHousehold, saveInventoryItems, updateHouseholdAppState } from '../db.js';
 import { sanitizeInventoryItems } from '../inventorySanitize.js';
+import { applyRestockLearningToItem } from '../../src/inventory/restockLearning.js';
 import {
   addRecipeIngredientsToShoppingList,
   addShoppingListItem,
@@ -72,13 +73,25 @@ shoppingListRouter.post(
     const result = markShoppingItemPurchased(existing, itemId, {
       applyExpiry: req.body?.applyExpiry !== false,
     });
+
+    const meta = await getHouseholdMeta(req.user.household_id);
+    let restockHistory = meta?.restockHistory ?? [];
+    const learning = applyRestockLearningToItem(restockHistory, result.item);
+    restockHistory = learning.restockHistory;
+    const itemsWithLearning = result.items.map((entry) =>
+      String(entry.id) === String(learning.item.id) ? learning.item : entry,
+    );
+
     const saved = await saveInventoryItems(
       req.user.household_id,
-      sanitizeInventoryItems(result.items),
+      sanitizeInventoryItems(itemsWithLearning),
     );
+    await updateHouseholdAppState(req.user.household_id, { restockHistory });
+
     res.status(200).json({
-      item: result.item,
+      item: saved.find((entry) => String(entry.id) === String(itemId)) ?? learning.item,
       items: saved,
+      restockHistory,
       shoppingList: getShoppingListItems(saved),
     });
   }, 'POST /api/shopping-list/mark-purchased', 'Could not mark item purchased'),

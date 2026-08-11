@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { logDevOnlySensitive, redactEmail } from './privacy.js';
 
 function getFromAddress() {
   return (
@@ -15,7 +16,7 @@ export async function sendVerificationEmail(to, code) {
   const apiKey = process.env.RESEND_API_KEY?.trim();
 
   if (!apiKey) {
-    console.log(`[EMAIL VERIFY] ${to} → code: ${code}`);
+    logDevOnlySensitive('[EMAIL VERIFY]', to, `code ${code}`);
     console.log('[EMAIL VERIFY] Set RESEND_API_KEY in .env / Vercel to send real emails.');
     return { sent: false, mode: 'console' };
   }
@@ -45,12 +46,12 @@ export async function sendVerificationEmail(to, code) {
 
   if (error) {
     console.error('[EMAIL VERIFY] Resend failed:', error.message);
-    console.log(`[EMAIL VERIFY] ${to} → code: ${code} (fallback — check Resend dashboard)`);
+    logDevOnlySensitive('[EMAIL VERIFY] fallback', to, `code ${code}`);
     const err = new Error(error.message || 'Could not send verification email.');
     err.status = 502;
     throw err;
   }
 
-  console.log(`[EMAIL VERIFY] Sent to ${to} (id: ${data?.id})`);
+  console.log(`[EMAIL VERIFY] Sent to ${redactEmail(to)} (id: ${data?.id ?? 'ok'})`);
   return { sent: true, mode: 'resend', id: data?.id };
 }

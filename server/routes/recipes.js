@@ -3,11 +3,12 @@ import { asyncRoute } from '../routeUtils.js';
 import { requireAuth } from '../middleware/auth.js';
 import { chatPantryChef, generateAILiveMatches, remixRecipe } from '../controllers/aiRecipe.js';
 import { formatGeminiErrorForClient } from '../errors.js';
+import { safeErrorForLog } from '../privacy.js';
 
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
 
 function sendGeminiRouteError(res, error, fallback = 'Failed to generate AI recipe.') {
-  console.error('Gemini API Error Detail:', error);
+  console.error('Gemini API Error Detail:', safeErrorForLog(error));
   const { status, message } = formatGeminiErrorForClient(error, fallback);
   res.status(status).json({ error: message });
 }

@@ -174,7 +174,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
         inventoryCategory: item.inventoryCategory,
       }));
       const result = await confirmReceiptScan(payload);
-      replaceItemsFromServer?.(result.items);
+      replaceItemsFromServer?.(result.items, { restockHistory: result.restockHistory });
       const moved = result.movedFromShoppingCount ?? 0;
       const base = `Added ${result.addedCount ?? payload.length} item${payload.length === 1 ? '' : 's'} to your inventory.`;
       onSuccess?.(

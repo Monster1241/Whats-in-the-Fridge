@@ -1,4 +1,5 @@
 import { sendError } from './http.js';
+import { safeErrorForLog } from './privacy.js';
 
 /**
  * @param {(req: import('express').Request, res: import('express').Response) => Promise<void>} handler
@@ -10,7 +11,7 @@ export function asyncRoute(handler, logLabel, fallback = 'Request failed') {
     try {
       await handler(req, res);
     } catch (err) {
-      console.error(logLabel, err);
+      console.error(logLabel, safeErrorForLog(err));
       sendError(res, err, fallback);
     }
   };

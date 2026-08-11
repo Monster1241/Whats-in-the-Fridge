@@ -8,6 +8,26 @@ export function PrivacyPolicy() {
         shopping lists, recipes, and supermarket deals. This policy explains what we collect, how we use
         it, and the choices you have. By using the App, you agree to this policy.
       </p>
+      <p className="text-muted text-sm">
+        Last updated: August 2026
+      </p>
+
+      <section>
+        <h2 className="text-heading text-base font-bold">Our privacy principle</h2>
+        <p>
+          <strong className="text-heading">We do not sell or share your sensitive household data</strong>{' '}
+          with advertisers, data brokers, or unrelated third parties. Your inventory, shopping list,
+          receipt contents, and chat messages stay scoped to your household (and the service providers
+          needed to run the App — see below).
+        </p>
+        <p className="mt-3">
+          We <strong className="text-heading">may use how the App is used</strong> — for example, how
+          often items are restocked or how long they last in your home — to improve features{' '}
+          <em>for your household</em> (such as personalized &quot;predicted low&quot; alerts) and to
+          make the product more reliable. That usage learning is stored with your household data, not
+          sold externally.
+        </p>
+      </section>
 
       <section>
         <h2 className="text-heading text-base font-bold">Who we are</h2>
@@ -36,7 +56,8 @@ export function PrivacyPolicy() {
           <li>
             <strong className="text-heading">Household data</strong> — inventory items, shopping list
             status, expiry dates, saved recipes, app settings, onboarding preferences, and restock
-            history. This data is scoped to your household and shared with members you invite.
+            history (including anonymized usage intervals such as how many days items typically last).
+            This data is scoped to your household and shared only with members you invite.
           </li>
           <li>
             <strong className="text-heading">Push notification tokens</strong> — if you enable
@@ -71,9 +92,36 @@ export function PrivacyPolicy() {
           <li>TheMealDB (optional recipe search, via our server proxy)</li>
           <li>Vercel (application hosting)</li>
           <li>Resend (optional transactional email)</li>
+          <li>
+            Google Gemini (optional AI features — recipes, Fridge Scout chat, receipt scanning).
+            Prompts may include your household inventory or receipt images for that request only; we
+            do not store receipt images after scanning, and we do not use your data to train AI models.
+          </li>
         </ul>
         <p className="mt-3 font-semibold text-slate-700 dark:text-slate-300">
           We do not sell your personal information or household data to third parties.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="text-heading text-base font-bold">Sensitive data we do not sell or share</h2>
+        <ul className="list-disc space-y-2 pl-5">
+          <li>Your full inventory, shopping list, and expiry details</li>
+          <li>Receipt or invoice images and extracted line items (beyond your household database)</li>
+          <li>Fridge Scout chat content (beyond processing that request)</li>
+          <li>Email address, authentication tokens, or push notification tokens</li>
+          <li>Household invite codes with anyone outside your invited members</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 className="text-heading text-base font-bold">Product improvement data</h2>
+        <p>
+          To improve the App, we may derive <strong className="text-heading">non-sensitive usage
+          patterns</strong> from how you use features — for example, typical days between restocks for
+          an item name, which tips you dismiss, or error rates. This helps us tune predictions and fix
+          bugs. Where possible, this stays tied to your household account for personalization; we do
+          not publish individual household inventories or sell usage profiles to third parties.
         </p>
       </section>
 
@@ -82,7 +130,8 @@ export function PrivacyPolicy() {
         <ul className="list-disc space-y-2 pl-5">
           <li>Provide and sync household inventory and shopping features</li>
           <li>Send optional push notifications you enable (expiry alerts, partner shopping pings)</li>
-          <li>Improve reliability and security (rate limiting, error monitoring)</li>
+          <li>Personalize predicted-low alerts from your household&apos;s restock patterns</li>
+          <li>Improve reliability and security (rate limiting, error monitoring without logging inventory contents)</li>
           <li>Comply with legal obligations where applicable</li>
         </ul>
       </section>

@@ -7,6 +7,7 @@ import {
   isOnShoppingList,
 } from './constants.js';
 import { isItemTypeEnabled } from './modules.js';
+import { getLearnedDurationDays } from './restockHistory.js';
 
 /** Fraction of consumptionDuration elapsed before flagging Almost Finished. */
 export const CONSUMPTION_ALERT_THRESHOLD = 0.85;
@@ -188,23 +189,58 @@ function isExpiryUrgent(item, expiringSoonDays = EXPIRING_SOON_DAYS) {
 }
 
 /**
- * @param {{ consumptionDuration?: number, stockedAt?: string, createdAt?: string, name?: string, itemType?: string, category?: string }} item
+ * Resolve how many days of supply to use for predicted-low timing.
+ * Prefers household-learned intervals, then stored duration, then defaults.
+ * @param {{ name?: string, itemType?: string, category?: string, consumptionDuration?: number, consumptionLearned?: boolean }} item
+ * @param {import('./restockHistory.js').RestockHistoryEntry[]|null|undefined} [restockHistory]
+ * @returns {{ days: number, source: 'learned'|'stored'|'default' }}
  */
-export function getConsumptionProgress(item) {
-  const duration =
-    item.consumptionDuration ??
-    getDefaultConsumptionDuration(item.name ?? '', item.itemType ?? ITEM_TYPE.FOOD, item.category ?? '');
+export function resolveConsumptionDuration(item, restockHistory) {
+  const learned = restockHistory ? getLearnedDurationDays(restockHistory, item) : null;
+  if (learned != null) {
+    return { days: learned, source: 'learned' };
+  }
+
+  if (
+    item?.consumptionLearned === true &&
+    typeof item.consumptionDuration === 'number' &&
+    item.consumptionDuration > 0
+  ) {
+    return { days: item.consumptionDuration, source: 'learned' };
+  }
+
+  if (typeof item?.consumptionDuration === 'number' && item.consumptionDuration > 0) {
+    return { days: item.consumptionDuration, source: 'stored' };
+  }
+
+  return {
+    days: getDefaultConsumptionDuration(
+      item?.name ?? '',
+      item?.itemType ?? ITEM_TYPE.FOOD,
+      item?.category ?? '',
+    ),
+    source: 'default',
+  };
+}
+
+/**
+ * @param {{ consumptionDuration?: number, stockedAt?: string, createdAt?: string, name?: string, itemType?: string, category?: string, consumptionLearned?: boolean }} item
+ * @param {import('./restockHistory.js').RestockHistoryEntry[]|null|undefined} [restockHistory]
+ */
+export function getConsumptionProgress(item, restockHistory) {
+  const { days: duration } = resolveConsumptionDuration(item, restockHistory);
   if (!duration || duration <= 0) return 0;
   const stockedAt = item.stockedAt ?? item.createdAt;
   return Math.min(1, daysSinceStocked(stockedAt) / duration);
 }
 
 /**
- * @param {{ status: string, consumptionDuration?: number, stockedAt?: string, createdAt?: string, name?: string, itemType?: string, category?: string }} item
+ * @param {{ status: string, consumptionDuration?: number, stockedAt?: string, createdAt?: string, name?: string, itemType?: string, category?: string, consumptionLearned?: boolean }} item
+ * @param {import('./restockHistory.js').RestockHistoryEntry[]|null|undefined} [restockHistory]
  */
-export function isAlmostFinished(item) {
+export function isAlmostFinished(item, restockHistory) {
   if (!item || isOnShoppingList(item)) return false;
-  return getConsumptionProgress(item) >= CONSUMPTION_ALERT_THRESHOLD;
+  return getConsumptionProgress(item, restockHistory) >= CONSUMPTION_ALERT_THRESHOLD;
 }
 
 /**
@@ -221,40 +257,45 @@ export function calculateItemStatus(item) {
 
 /**
  * @param {{ name: string, itemType: string, category: string }} item
+ * @param {{ restockHistory?: import('./restockHistory.js').RestockHistoryEntry[] }} [options]
  */
-export function buildConsumptionFields(item) {
+export function buildConsumptionFields(item, options = {}) {
   const now = new Date().toISOString();
+  const { days, source } = resolveConsumptionDuration(item, options.restockHistory);
   return {
-    consumptionDuration: getDefaultConsumptionDuration(item.name, item.itemType, item.category),
+    consumptionDuration: days,
+    consumptionLearned: source === 'learned',
     stockedAt: now,
     createdAt: now,
   };
 }
 
 /**
- * @param {{ consumptionDuration?: number, stockedAt?: string, createdAt?: string, name?: string }} item
+ * @param {{ consumptionDuration?: number, stockedAt?: string, createdAt?: string, name?: string, itemType?: string, category?: string, consumptionLearned?: boolean }} item
+ * @param {import('./restockHistory.js').RestockHistoryEntry[]|null|undefined} [restockHistory]
  */
-export function getConsumptionUrgencyLabel(item) {
-  const duration =
-    item.consumptionDuration ??
-    getDefaultConsumptionDuration(item.name ?? '', item.itemType ?? ITEM_TYPE.FOOD, item.category ?? '');
+export function getConsumptionUrgencyLabel(item, restockHistory) {
+  const { days: duration, source } = resolveConsumptionDuration(item, restockHistory);
   const elapsed = Math.round(daysSinceStocked(item.stockedAt ?? item.createdAt));
   const remaining = Math.max(0, Math.round(duration - elapsed));
-  const pct = Math.min(100, Math.round(getConsumptionProgress(item) * 100));
-  return `Usually ~${duration}d supply · ~${remaining}d left (${pct}% used)`;
+  const pct = Math.min(100, Math.round(getConsumptionProgress(item, restockHistory) * 100));
+  const prefix =
+    source === 'learned' ? 'Your household usually' : 'Usually';
+  return `${prefix} ~${duration}d supply · ~${remaining}d left (${pct}% used)`;
 }
 
 /**
  * @param {Array<{ status: string, itemType: string, name: string }>} items
  * @param {Record<string, boolean>} enabledModules
+ * @param {import('./restockHistory.js').RestockHistoryEntry[]|null|undefined} [restockHistory]
  */
-export function filterPredictedLowItems(items, enabledModules) {
+export function filterPredictedLowItems(items, enabledModules, restockHistory) {
   return (items ?? [])
     .filter(
       (item) =>
         isItemTypeEnabled(enabledModules, item.itemType) &&
         !isOnShoppingList(item) &&
-        isAlmostFinished(item),
+        isAlmostFinished(item, restockHistory),
     )
-    .sort((a, b) => getConsumptionProgress(b) - getConsumptionProgress(a));
+    .sort((a, b) => getConsumptionProgress(b, restockHistory) - getConsumptionProgress(a, restockHistory));
 }

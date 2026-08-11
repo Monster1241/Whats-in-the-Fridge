@@ -68,7 +68,7 @@ import { dealStoreToPreferred, mapDealToInventory } from './inventory/mapDealToI
 import { findInventoryItem, getItemId, normalizeName } from './inventory/itemUtils.js';
 import {
   getFrequentlyRestocked,
-  recordRestockEvent,
+  recordConsumptionInterval,
   restockHistoryKey,
 } from './inventory/restockHistory.js';
 import { filterKitchenStatusItems } from './inventory/kitchenStatus.js';
@@ -930,8 +930,8 @@ function KitchenStatusCard({ item, onFinished, onRestock }) {
 const PREDICTED_LOW_ACTION_BTN =
   'touch-manipulation relative z-10 select-none transition active:scale-[0.98]';
 
-function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
-  const urgencyLabel = getConsumptionUrgencyLabel(item);
+function PredictedLowCard({ item, restockHistory, onRestock, onStillGotIt, onDelete }) {
+  const urgencyLabel = getConsumptionUrgencyLabel(item, restockHistory);
   const catMeta = getCategoryMeta(item.category, item.itemType);
 
   return (
@@ -977,7 +977,7 @@ function PredictedLowCard({ item, onRestock, onStillGotIt, onDelete }) {
   );
 }
 
-function PredictedLowBanner({ items, onRestock, onStillGotIt, onDelete, onDismiss }) {
+function PredictedLowBanner({ items, restockHistory, onRestock, onStillGotIt, onDelete, onDismiss }) {
   const [pendingKeys, setPendingKeys] = useState(() => new Set());
 
   const itemKey = useCallback(
@@ -1010,7 +1010,7 @@ function PredictedLowBanner({ items, onRestock, onStillGotIt, onDelete, onDismis
             Predicted to be Running Low
           </h2>
           <p className="text-muted mt-1 text-xs leading-relaxed">
-            Based on how long items usually last in your household (~85% of typical supply used).
+            Based on how long items usually last in your household. After you restock or run out twice, timings personalize (~85% used).
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -1033,6 +1033,7 @@ function PredictedLowBanner({ items, onRestock, onStillGotIt, onDelete, onDismis
           <PredictedLowCard
             key={itemKey(item)}
             item={item}
+            restockHistory={restockHistory}
             onRestock={(entry) => runAction(onRestock, entry)}
             onStillGotIt={(entry) => runAction(onStillGotIt, entry)}
             onDelete={(entry) => runAction(onDelete, entry)}
@@ -1309,8 +1310,8 @@ function InventoryView({
   );
 
   const predictedLowItems = useMemo(
-    () => filterPredictedLowItems(items, enabledModules),
-    [items, enabledModules],
+    () => filterPredictedLowItems(items, enabledModules, restockHistory),
+    [items, enabledModules, restockHistory],
   );
 
   const categoryGrouped = useMemo(() => {
@@ -1517,11 +1518,14 @@ function InventoryView({
     if (!name || name === BARCODE_LOOKUP_LOADING_TEXT) return;
     const existing = findInventoryItem(items, name, addItemType);
     if (existing) return;
-    const consumption = buildConsumptionFields({
-      name,
-      itemType: addItemType,
-      category: addCategory,
-    });
+    const consumption = buildConsumptionFields(
+      {
+        name,
+        itemType: addItemType,
+        category: addCategory,
+      },
+      { restockHistory },
+    );
     updateItems((prev) => [
       ...prev,
       {
@@ -1574,12 +1578,11 @@ function InventoryView({
 
   const markItemStocked = async (id) => {
     const item = items.find((entry) => entry.id === id);
-    if (item) rememberRestock(item);
     setShopFeedback(null);
     setStockingId(id);
     try {
       const result = await markShoppingItemPurchased(id, { applyExpiry: true });
-      replaceItemsFromServer(result.items);
+      replaceItemsFromServer(result.items, { restockHistory: result.restockHistory });
       setShopFeedback({
         type: 'success',
         text: `${item?.name ?? 'Item'} added to your Fridge with an estimated expiry date.`,
@@ -1600,14 +1603,14 @@ function InventoryView({
     );
   };
 
-  const rememberRestock = (item) => {
+  const rememberDepletion = (item) => {
     if (!item) return;
-    updateRestockHistory((prev) => recordRestockEvent(prev, item));
+    updateRestockHistory((prev) => recordConsumptionInterval(prev, item));
   };
 
   const deleteItem = (id, { trackHistory = false } = {}) => {
     const item = items.find((entry) => entry.id === id);
-    if (trackHistory && item) rememberRestock(item);
+    if (trackHistory && item) rememberDepletion(item);
     updateItems((prev) => prev.filter((entry) => entry.id !== id));
   };
 
@@ -1629,7 +1632,7 @@ function InventoryView({
                 ? { ...entry, status: STATUS.OUT }
                 : entry,
             ),
-            restockFrom: target,
+            depletionFrom: target,
           };
         },
         { saveNow: true },
@@ -1662,7 +1665,7 @@ function InventoryView({
           if (!target) return prev;
           return {
             items: prev.filter((entry) => !findInventoryItem([entry], target)),
-            restockFrom: target,
+            depletionFrom: target,
           };
         },
         { saveNow: true },
@@ -1687,11 +1690,14 @@ function InventoryView({
         };
         return next;
       }
-      const consumption = buildConsumptionFields({
-        name: entry.name,
-        itemType: entry.itemType,
-        category: entry.category,
-      });
+      const consumption = buildConsumptionFields(
+        {
+          name: entry.name,
+          itemType: entry.itemType,
+          category: entry.category,
+        },
+        { restockHistory },
+      );
       return [
         ...prev,
         {
@@ -1741,9 +1747,12 @@ function InventoryView({
       void patchItems((prev) => {
         const target = findInventoryItem(prev, item);
         if (!target) return prev;
-        return prev.map((entry) =>
-          findInventoryItem([entry], target) ? { ...entry, status: STATUS.OUT } : entry,
-        );
+        return {
+          items: prev.map((entry) =>
+            findInventoryItem([entry], target) ? { ...entry, status: STATUS.OUT } : entry,
+          ),
+          depletionFrom: target,
+        };
       }, { saveNow: true });
     },
     [patchItems],
@@ -1779,7 +1788,7 @@ function InventoryView({
           if (!target) return prev;
           return {
             items: prev.filter((entry) => !findInventoryItem([entry], target)),
-            restockFrom: target,
+            depletionFrom: target,
           };
         },
         { saveNow: true },
@@ -1825,6 +1834,7 @@ function InventoryView({
           {!isDismissed('predicted-low') && (
             <PredictedLowBanner
               items={predictedLowItems}
+              restockHistory={restockHistory}
               onRestock={predictiveRestock}
               onStillGotIt={resetConsumptionTimer}
               onDelete={predictiveDelete}
@@ -3260,6 +3270,23 @@ function SettingsView({
           </div>
         </div>
       )}
+
+      <section className="surface-card mb-5 p-4">
+        <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Your privacy</h2>
+        <p className="text-muted text-sm leading-relaxed">
+          We never sell your inventory, receipts, or chat messages. Household data is shared only with
+          people you invite. We use non-sensitive usage patterns (like how long items last in your home)
+          to improve predictions for your household — not to share your shopping habits externally.
+          Receipt photos are processed for scanning and are not kept on our servers afterward.
+        </p>
+        <p className="text-muted mt-2 text-xs">
+          See{' '}
+          <a href="/privacy" className="font-semibold text-emerald-700 underline dark:text-emerald-400">
+            Privacy Policy
+          </a>{' '}
+          for full details.
+        </p>
+      </section>
 
       <section className="surface-card mb-5 p-4">
         <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Data sources</h2>

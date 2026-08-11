@@ -10,8 +10,9 @@ import {
   sumQuantities,
 } from '../../src/inventory/smartInventory.js';
 import { normalizeName } from '../../src/inventory/itemUtils.js';
-import { getInventoryForHousehold, saveInventoryItems } from '../db.js';
+import { getInventoryForHousehold, getHouseholdMeta, saveInventoryItems, updateHouseholdAppState } from '../db.js';
 import { sanitizeInventoryItems } from '../inventorySanitize.js';
+import { applyRestockLearningToItem } from '../../src/inventory/restockLearning.js';
 
 const RECEIPT_MODEL = process.env.RECEIPT_SCAN_MODEL?.trim() || 'gemini-3.1-flash-lite';
 const MAX_RECEIPT_ITEMS = 80;
@@ -227,8 +228,9 @@ export async function scanReceiptFile(file) {
 /**
  * @param {string} householdId
  * @param {Array<Record<string, unknown>>} scannedItems
+ * @param {import('../../src/inventory/restockHistory.js').RestockHistoryEntry[]} [initialRestockHistory]
  */
-export async function confirmReceiptItems(householdId, scannedItems) {
+export async function confirmReceiptItems(householdId, scannedItems, initialRestockHistory = []) {
   if (!Array.isArray(scannedItems) || scannedItems.length === 0) {
     const err = new Error('At least one item is required to confirm.');
     err.status = 400;
@@ -240,6 +242,7 @@ export async function confirmReceiptItems(householdId, scannedItems) {
   const now = new Date().toISOString();
   const addedIds = new Set();
   let movedFromShoppingCount = 0;
+  let restockHistory = Array.isArray(initialRestockHistory) ? [...initialRestockHistory] : [];
 
   for (const entry of scannedItems.slice(0, MAX_RECEIPT_ITEMS)) {
     const name = String(entry?.name ?? '').trim();
@@ -262,11 +265,14 @@ export async function confirmReceiptItems(householdId, scannedItems) {
     const quantity = sanitizeQuantity(entry.quantity);
     const unit = String(entry.unit ?? '').trim();
 
-    const consumption = buildConsumptionFields({
-      name,
-      itemType: ITEM_TYPE.FOOD,
-      category: inventoryCategory,
-    });
+    const consumption = buildConsumptionFields(
+      {
+        name,
+        itemType: ITEM_TYPE.FOOD,
+        category: inventoryCategory,
+      },
+      { restockHistory },
+    );
 
     const stockedFields = {
       name,
@@ -296,7 +302,7 @@ export async function confirmReceiptItems(householdId, scannedItems) {
 
     if (shoppingIdx >= 0) {
       const shoppingItem = nextItems[shoppingIdx];
-      nextItems[shoppingIdx] = {
+      const mergedItem = {
         ...shoppingItem,
         ...stockedFields,
         id: shoppingItem.id,
@@ -305,6 +311,9 @@ export async function confirmReceiptItems(householdId, scannedItems) {
         unit: shoppingItem.unit || unit,
         preferredStore: shoppingItem.preferredStore ?? null,
       };
+      const learning = applyRestockLearningToItem(restockHistory, mergedItem, now);
+      restockHistory = learning.restockHistory;
+      nextItems[shoppingIdx] = learning.item;
       addedIds.add(shoppingItem.id);
       movedFromShoppingCount += 1;
       continue;
@@ -319,7 +328,7 @@ export async function confirmReceiptItems(householdId, scannedItems) {
 
     if (inStockIdx >= 0) {
       const inStockItem = nextItems[inStockIdx];
-      nextItems[inStockIdx] = {
+      const mergedItem = {
         ...inStockItem,
         ...stockedFields,
         id: inStockItem.id,
@@ -329,12 +338,18 @@ export async function confirmReceiptItems(householdId, scannedItems) {
         expiryDate: expiryDate || inStockItem.expiryDate || null,
         preferredStore: inStockItem.preferredStore ?? null,
       };
+      const learning = applyRestockLearningToItem(restockHistory, mergedItem, now);
+      restockHistory = learning.restockHistory;
+      nextItems[inStockIdx] = learning.item;
       addedIds.add(inStockItem.id);
       continue;
     }
 
     const id = randomUUID();
-    nextItems.push({ id, ...stockedFields });
+    const createdItem = { id, ...stockedFields };
+    const learning = applyRestockLearningToItem(restockHistory, createdItem, now);
+    restockHistory = learning.restockHistory;
+    nextItems.push(learning.item);
     addedIds.add(id);
   }
 
@@ -345,6 +360,7 @@ export async function confirmReceiptItems(householdId, scannedItems) {
   }
 
   const saved = await saveInventoryItems(householdId, sanitizeInventoryItems(nextItems));
+  await updateHouseholdAppState(householdId, { restockHistory });
   const added = saved.filter((item) => addedIds.has(item.id));
 
   return {
@@ -352,6 +368,7 @@ export async function confirmReceiptItems(householdId, scannedItems) {
     added,
     addedCount: added.length,
     movedFromShoppingCount,
+    restockHistory,
   };
 }
 
@@ -376,6 +393,11 @@ export async function handleConfirmReceiptScan(req, res) {
     return;
   }
 
-  const result = await confirmReceiptItems(householdId, req.body?.items);
+  const meta = await getHouseholdMeta(householdId);
+  const result = await confirmReceiptItems(
+    householdId,
+    req.body?.items,
+    meta?.restockHistory ?? [],
+  );
   res.status(201).json(result);
 }

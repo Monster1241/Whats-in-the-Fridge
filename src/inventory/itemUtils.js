@@ -227,6 +227,7 @@ export function migrateItem(item) {
     expiryDate: item.expiryDate ?? null,
     preferredStore: normalizePreferredStore(item.preferredStore),
     consumptionDuration,
+    consumptionLearned: item.consumptionLearned === true,
     stockedAt,
     createdAt: stockedAt,
     quantity: smartFields.quantity,

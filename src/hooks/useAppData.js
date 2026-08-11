@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchAppState, saveAppState } from '../api.js';
-import { migrateItems, inventoryChangedByMigration } from '../inventory/itemUtils.js';
+import { migrateItems, inventoryChangedByMigration, normalizeName } from '../inventory/itemUtils.js';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules } from '../inventory/modules.js';
-import { recordRestockEvent } from '../inventory/restockHistory.js';
+import {
+  applyConsumptionLearningFields,
+  processItemDepletion,
+  processItemRestock,
+} from '../inventory/restockLearning.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'light',
@@ -16,9 +20,10 @@ function resolvePatchResult(result, prevItems) {
     return {
       items: result.items,
       restockFrom: result.restockFrom ?? null,
+      depletionFrom: result.depletionFrom ?? null,
     };
   }
-  return { items: result, restockFrom: null };
+  return { items: result, restockFrom: null, depletionFrom: null };
 }
 
 export function useAppData(enabled) {
@@ -199,19 +204,43 @@ export function useAppData(enabled) {
 
   /**
    * Apply an inventory patch and optionally save immediately (used for banner actions).
-   * @param {(prev: unknown[]) => unknown[] | { items: unknown[], restockFrom?: object }} recipe
+   * @param {(prev: unknown[]) => unknown[] | { items: unknown[], restockFrom?: object, depletionFrom?: object }} recipe
    * @param {{ saveNow?: boolean }} [options]
    */
   const patchItems = useCallback(
     async (recipe, { saveNow = false } = {}) => {
       const prevItems = latestRef.current.items;
       const raw = typeof recipe === 'function' ? recipe(prevItems) : recipe;
-      const { items: nextItems, restockFrom } = resolvePatchResult(raw, prevItems);
+      let { items: nextItems, restockFrom, depletionFrom } = resolvePatchResult(raw, prevItems);
       if (!Array.isArray(nextItems) || nextItems === prevItems) return false;
 
       let nextRestock = latestRef.current.restockHistory;
+      let restockHistoryChanged = false;
+
+      if (depletionFrom) {
+        const depletion = processItemDepletion(nextRestock, depletionFrom);
+        nextRestock = depletion.restockHistory;
+        restockHistoryChanged = true;
+      }
+
       if (restockFrom) {
-        nextRestock = recordRestockEvent(nextRestock, restockFrom);
+        const learning = processItemRestock(nextRestock, restockFrom);
+        nextRestock = learning.restockHistory;
+        restockHistoryChanged = true;
+        const now = new Date().toISOString();
+        nextItems = nextItems.map((entry) => {
+          if (
+            normalizeName(entry.name) !== normalizeName(restockFrom.name)
+            || entry.itemType !== restockFrom.itemType
+          ) {
+            return entry;
+          }
+          return applyConsumptionLearningFields(entry, {
+            consumptionDuration: learning.consumptionDuration,
+            consumptionLearned: learning.consumptionLearned,
+            now,
+          });
+        });
       }
 
       const snapshot = {
@@ -228,7 +257,7 @@ export function useAppData(enabled) {
       }
 
       setItems(nextItems);
-      if (restockFrom) {
+      if (restockHistoryChanged) {
         setRestockHistory(nextRestock);
       }
 
@@ -318,11 +347,19 @@ export function useAppData(enabled) {
     });
   }, []);
 
-  const replaceItemsFromServer = useCallback((serverItems) => {
+  const replaceItemsFromServer = useCallback((serverItems, options = {}) => {
     const migrated = migrateItems(serverItems);
     skipSaveRef.current = true;
     hasUnsyncedEditsRef.current = false;
     setItems(migrated);
+    if (Array.isArray(options.restockHistory)) {
+      setRestockHistory(options.restockHistory);
+      latestRef.current = {
+        ...latestRef.current,
+        items: migrated,
+        restockHistory: options.restockHistory,
+      };
+    }
     return migrated;
   }, []);
 
