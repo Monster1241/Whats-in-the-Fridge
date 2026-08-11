@@ -12,6 +12,22 @@ import {
   sumQuantities,
 } from '../src/inventory/smartInventory.js';
 import { buildConsumptionFields } from '../src/inventory/consumption.js';
+import { normalizeAmbientQuantityFields } from '../src/inventory/quantityDisplay.js';
+
+/**
+ * @param {Record<string, unknown>} fields
+ */
+function withNormalizedQuantity(fields) {
+  const { quantity, unit } = normalizeAmbientQuantityFields({
+    name: String(fields.name ?? ''),
+    itemType: fields.itemType,
+    category: fields.category,
+    storageLocation: fields.storageLocation,
+    quantity: fields.quantity,
+    unit: fields.unit,
+  });
+  return { ...fields, quantity, unit };
+}
 
 /**
  * @param {Array<Record<string, unknown>>} items
@@ -36,7 +52,18 @@ export function addShoppingListItem(items, payload) {
   const sourceRecipe = payload?.sourceRecipe ?? null;
   const warnings = [];
 
-  const stockCheck = findInStockMatch(items, name, quantity);
+  const normalizedQty = normalizeAmbientQuantityFields({
+    name,
+    itemType,
+    category,
+    storageLocation,
+    quantity,
+    unit,
+  });
+  const normalizedQuantity = normalizedQty.quantity;
+  const normalizedUnit = normalizedQty.unit;
+
+  const stockCheck = findInStockMatch(items, name, normalizedQuantity);
   if (stockCheck?.sufficient) {
     warnings.push({ type: 'already_in_stock', message: stockCheck.message });
   } else if (stockCheck?.message) {
@@ -51,50 +78,57 @@ export function addShoppingListItem(items, payload) {
 
   if (existingIdx >= 0) {
     const existing = list[existingIdx];
-    if (!areUnitsCompatible(existing.unit, unit)) {
+    if (!areUnitsCompatible(existing.unit, normalizedUnit)) {
       warnings.push({
         type: 'unit_mismatch',
-        message: `Could not merge quantities because units differ (${existing.unit || 'count'} vs ${unit || 'count'}).`,
+        message: `Could not merge quantities because units differ (${existing.unit || 'count'} vs ${normalizedUnit || 'count'}).`,
       });
       const id = randomUUID();
-      list.push({
-        id,
-        name,
-        itemType,
-        category: category ?? existing.category,
-        status: STATUS.OUT,
-        quantity,
-        unit,
-        foodGroup,
-        storageLocation,
-        checked: false,
-        sourceRecipe,
-        expiryDate: null,
-        ...buildConsumptionFields({ name, itemType, category: category ?? existing.category }),
-        ...enrichInventoryFields({
+      list.push(
+        withNormalizedQuantity({
+          id,
           name,
+          itemType,
           category: category ?? existing.category,
+          status: STATUS.OUT,
+          quantity: normalizedQuantity,
+          unit: normalizedUnit,
           foodGroup,
           storageLocation,
-          quantity,
-          unit,
           checked: false,
           sourceRecipe,
+          expiryDate: null,
+          ...buildConsumptionFields({ name, itemType, category: category ?? existing.category }),
+          ...enrichInventoryFields({
+            name,
+            category: category ?? existing.category,
+            foodGroup,
+            storageLocation,
+            quantity: normalizedQuantity,
+            unit: normalizedUnit,
+            checked: false,
+            sourceRecipe,
+          }),
         }),
-      });
+      );
       return { items: list, item: list[list.length - 1], merged: false, warnings };
     }
 
-    const mergedQuantity = sumQuantities(existing.unit, existing.quantity, unit, quantity);
-    const merged = {
+    const mergedQuantity = sumQuantities(
+      existing.unit,
+      existing.quantity,
+      normalizedUnit,
+      normalizedQuantity,
+    );
+    const merged = withNormalizedQuantity({
       ...existing,
       quantity: mergedQuantity,
-      unit: existing.unit || unit,
+      unit: existing.unit || normalizedUnit,
       checked: false,
       sourceRecipe: sourceRecipe ?? existing.sourceRecipe ?? null,
       foodGroup: existing.foodGroup ?? foodGroup,
       storageLocation: existing.storageLocation ?? storageLocation,
-    };
+    });
     list[existingIdx] = merged;
     return { items: list, item: merged, merged: true, warnings };
   }
@@ -105,14 +139,14 @@ export function addShoppingListItem(items, payload) {
     category,
   });
   const id = randomUUID();
-  const created = {
+  const created = withNormalizedQuantity({
     id,
     name,
     itemType,
     category,
     status: STATUS.OUT,
-    quantity,
-    unit,
+    quantity: normalizedQuantity,
+    unit: normalizedUnit,
     foodGroup,
     storageLocation,
     checked: false,
@@ -124,12 +158,12 @@ export function addShoppingListItem(items, payload) {
       category,
       foodGroup,
       storageLocation,
-      quantity,
-      unit,
+      quantity: normalizedQuantity,
+      unit: normalizedUnit,
       checked: false,
       sourceRecipe,
     }),
-  };
+  });
   list.push(created);
   return { items: list, item: created, merged: false, warnings };
 }
@@ -206,7 +240,7 @@ export function markShoppingItemPurchased(items, itemId, options = {}) {
       ? calculateExpiryDate(foodGroup, storageLocation)
       : null);
 
-  const transferred = {
+  const transferred = withNormalizedQuantity({
     ...item,
     ...enriched,
     status: STATUS.FRESH,
@@ -216,7 +250,7 @@ export function markShoppingItemPurchased(items, itemId, options = {}) {
     createdAt: now,
     expiryDate,
     sourceRecipe: null,
-  };
+  });
 
   list[idx] = transferred;
   return { items: list, item: transferred };

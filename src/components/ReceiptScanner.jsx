@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, Loader2, ScanLine, Trash2, Upload, X } from 'lucide-react';
 import { confirmReceiptScan, scanReceipt } from '../api.js';
+import { formatInventoryQuantityLabel, normalizeAmbientQuantityFields } from '../inventory/quantityDisplay.js';
+import { ITEM_TYPE } from '../inventory/constants.js';
 import { prepareReceiptFileForUpload } from '../utils/prepareReceiptImage.js';
 
 const ACCEPTED_TYPES =
@@ -44,6 +46,20 @@ function clearReceiptScanPending() {
   } catch {
     // ignore
   }
+}
+
+/**
+ * @param {{ name: string, quantity?: unknown, unit?: string, storageLocation?: string, inventoryCategory?: string }} item
+ */
+function receiptShelfQuantityLabel(item) {
+  return formatInventoryQuantityLabel({
+    name: item.name,
+    itemType: ITEM_TYPE.FOOD,
+    category: item.inventoryCategory,
+    storageLocation: item.storageLocation,
+    quantity: Number(item.quantity) || 1,
+    unit: item.unit ?? '',
+  });
 }
 
 /**
@@ -164,15 +180,26 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
     setConfirming(true);
     setError('');
     try {
-      const payload = items.map(({ clientId, ...item }) => ({
-        name: item.name,
-        quantity: Number(item.quantity) || 1,
-        unit: item.unit ?? '',
-        category: item.category,
-        storageLocation: item.storageLocation,
-        expiryDate: item.expiryDate,
-        inventoryCategory: item.inventoryCategory,
-      }));
+      const payload = items.map(({ clientId, ...item }) => {
+        const inventoryCategory = item.inventoryCategory;
+        const { quantity, unit } = normalizeAmbientQuantityFields({
+          name: item.name,
+          itemType: ITEM_TYPE.FOOD,
+          category: inventoryCategory,
+          storageLocation: item.storageLocation,
+          quantity: Number(item.quantity) || 1,
+          unit: item.unit ?? '',
+        });
+        return {
+          name: item.name,
+          quantity,
+          unit,
+          category: item.category,
+          storageLocation: item.storageLocation,
+          expiryDate: item.expiryDate,
+          inventoryCategory,
+        };
+      });
       const result = await confirmReceiptScan(payload);
       replaceItemsFromServer?.(result.items, {
         restockHistory: result.restockHistory,
@@ -289,7 +316,10 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
 
               {phase === 'review' && items.length > 0 && (
                 <ul className="space-y-3">
-                  {items.map((item) => (
+                  {items.map((item) => {
+                    const shelfLabel =
+                      item.storageLocation === 'Pantry' ? receiptShelfQuantityLabel(item) : null;
+                    return (
                     <li
                       key={item.clientId}
                       className="surface-inset rounded-xl p-3"
@@ -339,7 +369,9 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                             onChange={(event) =>
                               updateItem(item.clientId, { unit: event.target.value })
                             }
-                            placeholder="g, kg, pack"
+                            placeholder={
+                              item.storageLocation === 'Pantry' ? 'g or ml (total)' : 'g, kg, pack'
+                            }
                             className="input-field text-sm"
                           />
                         </div>
@@ -380,6 +412,14 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                           </select>
                         </div>
                       </div>
+                      {shelfLabel && (
+                          <p className="text-muted mt-2 text-[11px]">
+                            Shelf total:{' '}
+                            <span className="font-semibold text-amber-700 dark:text-amber-300">
+                              {shelfLabel}
+                            </span>
+                          </p>
+                        )}
                       {item.expiryDate && (
                         <p className="text-muted mt-2 text-[11px]">
                           Suggested expiry:{' '}
@@ -389,7 +429,8 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                         </p>
                       )}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
 

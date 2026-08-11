@@ -1,4 +1,5 @@
 import { FOOD_GROUP_OPTIONS, STORAGE_LOCATION_OPTIONS, enrichInventoryFields, sanitizeQuantity } from '../src/inventory/smartInventory.js';
+import { normalizeAmbientQuantityFields } from '../src/inventory/quantityDisplay.js';
 
 function sanitizeConsumptionDuration(value) {
   const n = Number(value);
@@ -63,15 +64,26 @@ export function sanitizeInventoryItems(items) {
       dateAdded: item?.dateAdded ?? stockedAt,
     });
 
+    const itemType =
+      item?.itemType === 'Household'
+        ? 'Household'
+        : item?.itemType === 'Baby'
+          ? 'Baby'
+          : 'Food';
+
+    const { quantity: normalizedQuantity, unit: normalizedUnit } = normalizeAmbientQuantityFields({
+      name: String(item?.name ?? ''),
+      itemType,
+      category: item?.category,
+      storageLocation: enriched.storageLocation,
+      quantity: item?.quantity ?? enriched.quantity,
+      unit: item?.unit ?? enriched.unit,
+    });
+
     return {
       id: item?.id,
       name: item?.name,
-      itemType:
-        item?.itemType === 'Household'
-          ? 'Household'
-          : item?.itemType === 'Baby'
-            ? 'Baby'
-            : 'Food',
+      itemType,
       category: item?.category,
       subCategory: item?.subCategory ?? null,
       status,
@@ -85,8 +97,8 @@ export function sanitizeInventoryItems(items) {
       stockedAt,
       createdAt: stockedAt,
       dateAdded: enriched.dateAdded,
-      quantity: enriched.quantity,
-      unit: enriched.unit,
+      quantity: normalizedQuantity,
+      unit: normalizedUnit,
       foodGroup: FOOD_GROUP_OPTIONS.includes(enriched.foodGroup) ? enriched.foodGroup : 'Other',
       storageLocation: STORAGE_LOCATION_OPTIONS.includes(enriched.storageLocation)
         ? enriched.storageLocation

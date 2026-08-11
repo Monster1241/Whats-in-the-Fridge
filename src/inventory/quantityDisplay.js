@@ -36,6 +36,15 @@ const SIZE_IN_NAME_PATTERN =
   /(\d+(?:\.\d+)?)\s*(kg|g|gram|grams|gm|gms|ml|l|litre|liter|litres|liters)\b/gi;
 
 /**
+ * @param {{ itemType?: string, category?: string, storageLocation?: string }} item
+ */
+function isAmbientPantryItem(item) {
+  if (item?.itemType !== ITEM_TYPE.FOOD) return false;
+  if (item.category === FOOD_CATEGORY.AMBIENT) return true;
+  return String(item.storageLocation ?? '').trim() === 'Pantry';
+}
+
+/**
  * @param {string} unit
  */
 function normalizeMassVolumeUnit(unit) {
@@ -139,7 +148,7 @@ function formatMassVolumeTotal(quantity, unit) {
 }
 
 /**
- * @param {{ name?: string, itemType?: string, category?: string, quantity?: number, unit?: string }} item
+ * @param {{ name?: string, itemType?: string, category?: string, storageLocation?: string, quantity?: number, unit?: string }} item
  * @returns {string|null}
  */
 export function formatInventoryQuantityLabel(item) {
@@ -149,10 +158,7 @@ export function formatInventoryQuantityLabel(item) {
   const unit = String(item.unit ?? '').trim();
   const unitLower = unit.toLowerCase();
 
-  const isAmbientFood =
-    item.itemType === ITEM_TYPE.FOOD && item.category === FOOD_CATEGORY.AMBIENT;
-
-  if (isAmbientFood) {
+  if (isAmbientPantryItem(item)) {
     if (isMassVolumeUnit(unitLower)) {
       return formatMassVolumeTotal(qty, unitLower);
     }
@@ -174,10 +180,10 @@ export function formatInventoryQuantityLabel(item) {
 
 /**
  * Normalize ambient pantry quantities to total base units for storage consistency.
- * @param {{ name: string, itemType?: string, category?: string, quantity?: number, unit?: string }} item
+ * @param {{ name: string, itemType?: string, category?: string, storageLocation?: string, quantity?: number, unit?: string }} item
  */
 export function normalizeAmbientQuantityFields(item) {
-  if (item.itemType !== ITEM_TYPE.FOOD || item.category !== FOOD_CATEGORY.AMBIENT) {
+  if (!isAmbientPantryItem(item)) {
     return { quantity: sanitizeQuantity(item.quantity), unit: String(item.unit ?? '').trim() };
   }
 

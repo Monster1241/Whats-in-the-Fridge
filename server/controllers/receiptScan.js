@@ -14,6 +14,7 @@ import { recordUsageInsightEvent } from '../../src/inventory/usageInsights.js';
 import { getInventoryForHousehold, getHouseholdMeta, saveInventoryItems, updateHouseholdAppState } from '../db.js';
 import { sanitizeInventoryItems } from '../inventorySanitize.js';
 import { applyRestockLearningToItem } from '../../src/inventory/restockLearning.js';
+import { normalizeAmbientQuantityFields } from '../../src/inventory/quantityDisplay.js';
 
 const RECEIPT_MODEL = process.env.RECEIPT_SCAN_MODEL?.trim() || 'gemini-3.1-flash-lite';
 const MAX_RECEIPT_ITEMS = 80;
@@ -49,7 +50,8 @@ const RECEIPT_RESPONSE_SCHEMA = {
 const RECEIPT_INSTRUCTION = `Analyze this receipt or invoice image/PDF. Extract all purchased grocery and food items only.
 Skip non-food lines (bags, discounts, loyalty, tax, subtotal, payment method, store branding).
 Normalize abbreviated merchant product names into plain, clean household item names (e.g. "CHKN BRST 500G" -> "Chicken Breast", "APPL GALA 1KG" -> "Gala Apples").
-Extract clean quantities and units (grams, g, kg, ml, L, packs, liters, or unit counts).
+Extract clean quantities and units (grams, g, kg, ml, L, or unit counts).
+For Pantry storage items, always use total amount in g or ml (e.g. two 420g cans -> quantity 840, unit "g"). Keep pack size in the product name when helpful.
 Categorize each item into exactly one of: Produce, Dairy, Meat, Pantry, Bakery, Frozen, Beverage, Other.
 Set storageLocation to Fridge, Freezer, or Pantry using:
 - Meat and Dairy -> Fridge (unless clearly frozen)
@@ -161,14 +163,24 @@ function enrichScannedItem(entry) {
   const foodGroup = mapReceiptCategoryToFoodGroup(category);
   const expiryDate = calculateExpiryDate(foodGroup, storageLocation);
 
-  return {
+  const inventoryCategory = mapStorageToFoodCategory(storageLocation);
+  const { quantity, unit } = normalizeAmbientQuantityFields({
     name,
+    itemType: ITEM_TYPE.FOOD,
+    category: inventoryCategory,
+    storageLocation,
     quantity: sanitizeQuantity(entry.quantity),
     unit: String(entry.unit ?? '').trim(),
+  });
+
+  return {
+    name,
+    quantity,
+    unit,
     category,
     storageLocation,
     foodGroup,
-    inventoryCategory: mapStorageToFoodCategory(storageLocation),
+    inventoryCategory,
     expiryDate,
   };
 }
@@ -263,8 +275,14 @@ export async function confirmReceiptItems(householdId, scannedItems, initialRest
       entry.expiryDate && /^\d{4}-\d{2}-\d{2}$/.test(String(entry.expiryDate))
         ? String(entry.expiryDate)
         : calculateExpiryDate(foodGroup, storageLocation);
-    const quantity = sanitizeQuantity(entry.quantity);
-    const unit = String(entry.unit ?? '').trim();
+    const { quantity, unit } = normalizeAmbientQuantityFields({
+      name,
+      itemType: ITEM_TYPE.FOOD,
+      category: inventoryCategory,
+      storageLocation,
+      quantity: sanitizeQuantity(entry.quantity),
+      unit: String(entry.unit ?? '').trim(),
+    });
 
     const consumption = buildConsumptionFields(
       {
