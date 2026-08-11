@@ -500,3 +500,16 @@ export async function confirmReceiptScan(items) {
   });
   return parseJson(res);
 }
+
+export async function classifyInventoryItem(name, options = {}) {
+  const res = await fetch(`${API_BASE}/inventory/classify-item`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({
+      name,
+      itemType: options.itemType,
+      remember: options.remember !== false,
+    }),
+  });
+  return parseJson(res);
+}

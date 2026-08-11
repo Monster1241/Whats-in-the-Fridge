@@ -9,6 +9,7 @@ import {
 import { toFriendlyError } from './errors.js';
 import { sanitizeRecipeLibrary } from './recipeSchema.js';
 import { sanitizeInventoryItems } from './inventorySanitize.js';
+import { normalizeUsageInsights } from '../src/inventory/usageInsights.js';
 import { verifyFirebaseIdToken } from './firebaseAdmin.js';
 import {
   createHousehold,
@@ -419,6 +420,55 @@ function sanitizeRestockHistory(history) {
     .slice(0, 50);
 }
 
+function sanitizeItemKnowledge(knowledge) {
+  if (!Array.isArray(knowledge)) return [];
+  return knowledge
+    .map((entry) => {
+      const name = String(entry?.name ?? '').trim().slice(0, 120);
+      if (!name) return null;
+      const itemType =
+        entry?.itemType === 'Household'
+          ? 'Household'
+          : entry?.itemType === 'Baby'
+            ? 'Baby'
+            : 'Food';
+      return {
+        name,
+        itemType,
+        category: String(entry?.category ?? '').trim().slice(0, 64) || 'Fresh',
+        subCategory: String(entry?.subCategory ?? 'Other').trim().slice(0, 64) || 'Other',
+        storageLocation:
+          entry?.storageLocation === 'Fridge' ||
+          entry?.storageLocation === 'Freezer' ||
+          entry?.storageLocation === 'Pantry'
+            ? entry.storageLocation
+            : null,
+        consumptionDurationDays:
+          typeof entry?.consumptionDurationDays === 'number' && entry.consumptionDurationDays > 0
+            ? Math.max(1, Math.min(365, Math.round(entry.consumptionDurationDays)))
+            : null,
+        source:
+          entry?.source === 'user' || entry?.source === 'merged' || entry?.source === 'ai'
+            ? entry.source
+            : 'ai',
+        confidence:
+          typeof entry?.confidence === 'number'
+            ? Math.max(0, Math.min(1, entry.confidence))
+            : null,
+        updatedAt:
+          typeof entry?.updatedAt === 'string' && entry.updatedAt
+            ? entry.updatedAt.slice(0, 32)
+            : new Date().toISOString(),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 120);
+}
+
+function sanitizeUsageInsights(raw) {
+  return normalizeUsageInsights(raw);
+}
+
 export async function handleGetState(req, res) {
   const auth = await requireVerified(req, res);
   if (!auth) return;
@@ -435,7 +485,7 @@ export async function handlePutState(req, res) {
   if (!requireHouseholdSession(auth, res)) return;
 
   const householdId = getScopedHouseholdId(auth);
-  const { items, settings, enabledModules, savedRecipeIds, recipeLibrary, onboarding, restockHistory } =
+  const { items, settings, enabledModules, savedRecipeIds, recipeLibrary, onboarding, restockHistory, itemKnowledge, usageInsights } =
     req.body ?? {};
   const partial = {};
 
@@ -475,6 +525,20 @@ export async function handlePutState(req, res) {
       return;
     }
     partial.restockHistory = sanitizeRestockHistory(restockHistory);
+  }
+  if (itemKnowledge !== undefined) {
+    if (!Array.isArray(itemKnowledge)) {
+      res.status(400).json({ error: 'itemKnowledge must be an array' });
+      return;
+    }
+    partial.itemKnowledge = sanitizeItemKnowledge(itemKnowledge);
+  }
+  if (usageInsights !== undefined) {
+    if (typeof usageInsights !== 'object' || usageInsights === null) {
+      res.status(400).json({ error: 'usageInsights must be an object' });
+      return;
+    }
+    partial.usageInsights = sanitizeUsageInsights(usageInsights);
   }
 
   const state = await updateHouseholdAppState(householdId, partial);

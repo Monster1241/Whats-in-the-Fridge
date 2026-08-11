@@ -4,6 +4,10 @@ import { requireAuth } from '../middleware/auth.js';
 import { receiptUploadMiddleware } from '../middleware/receiptUpload.js';
 import { asyncRoute } from '../routeUtils.js';
 import {
+  handleClassifyItem,
+  handleRecordUsageInsight,
+} from '../controllers/itemIntelligence.js';
+import {
   handleConfirmReceiptScan,
   handleScanReceipt,
 } from '../controllers/receiptScan.js';
@@ -20,6 +24,20 @@ import { buildConsumptionFields } from '../../src/inventory/consumption.js';
 export const inventoryRouter = Router();
 
 inventoryRouter.use(requireAuth);
+
+inventoryRouter.post(
+  '/classify-item',
+  asyncRoute(handleClassifyItem, 'POST /api/inventory/classify-item', 'Could not classify item'),
+);
+
+inventoryRouter.post(
+  '/usage-insight',
+  asyncRoute(
+    handleRecordUsageInsight,
+    'POST /api/inventory/usage-insight',
+    'Could not record usage insight',
+  ),
+);
 
 inventoryRouter.post(
   '/scan-receipt',

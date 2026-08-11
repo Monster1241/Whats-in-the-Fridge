@@ -119,9 +119,10 @@ export function PrivacyPolicy() {
         <p>
           To improve the App, we may derive <strong className="text-heading">non-sensitive usage
           patterns</strong> from how you use features — for example, typical days between restocks for
-          an item name, which tips you dismiss, or error rates. This helps us tune predictions and fix
-          bugs. Where possible, this stays tied to your household account for personalization; we do
-          not publish individual household inventories or sell usage profiles to third parties.
+          an item name, which tips you dismiss, smart item classifications, or error rates. This helps
+          us tune predictions and fix bugs. Where possible, this stays tied to your household account
+          for personalization; we do not publish individual household inventories or sell usage profiles
+          to third parties.
         </p>
       </section>
 

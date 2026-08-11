@@ -10,6 +10,7 @@ import {
   sumQuantities,
 } from '../../src/inventory/smartInventory.js';
 import { normalizeName } from '../../src/inventory/itemUtils.js';
+import { recordUsageInsightEvent } from '../../src/inventory/usageInsights.js';
 import { getInventoryForHousehold, getHouseholdMeta, saveInventoryItems, updateHouseholdAppState } from '../db.js';
 import { sanitizeInventoryItems } from '../inventorySanitize.js';
 import { applyRestockLearningToItem } from '../../src/inventory/restockLearning.js';
@@ -360,7 +361,14 @@ export async function confirmReceiptItems(householdId, scannedItems, initialRest
   }
 
   const saved = await saveInventoryItems(householdId, sanitizeInventoryItems(nextItems));
-  await updateHouseholdAppState(householdId, { restockHistory });
+  await updateHouseholdAppState(householdId, {
+    restockHistory,
+    usageInsights: recordUsageInsightEvent(
+      (await getHouseholdMeta(householdId))?.usageInsights,
+      'receiptScanConfirmed',
+      added.length,
+    ),
+  });
   const added = saved.filter((item) => addedIds.has(item.id));
 
   return {

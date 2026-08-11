@@ -502,6 +502,8 @@ export async function createHousehold(ownerUserId) {
     recipeLibrary: [],
     onboarding: { dismissed: [] },
     restockHistory: [],
+    itemKnowledge: [],
+    usageInsights: {},
   };
   const result = await households.insertOne(doc);
   return {
@@ -538,6 +540,9 @@ export async function getHouseholdMeta(householdId) {
     recipeLibrary: Array.isArray(doc.recipeLibrary) ? doc.recipeLibrary : [],
     onboarding: doc.onboarding ?? { dismissed: [] },
     restockHistory: Array.isArray(doc.restockHistory) ? doc.restockHistory : [],
+    itemKnowledge: Array.isArray(doc.itemKnowledge) ? doc.itemKnowledge : [],
+    usageInsights:
+      doc.usageInsights && typeof doc.usageInsights === 'object' ? doc.usageInsights : {},
   };
 }
 
@@ -568,6 +573,8 @@ export async function getHouseholdAppState(householdId) {
     recipeLibrary: meta.recipeLibrary,
     onboarding: meta.onboarding,
     restockHistory: meta.restockHistory,
+    itemKnowledge: meta.itemKnowledge,
+    usageInsights: meta.usageInsights,
     householdCode: meta.invite_code,
     inviteCode: meta.invite_code,
   };
@@ -593,6 +600,8 @@ export async function updateHouseholdAppState(householdId, partial) {
   if (partial.recipeLibrary !== undefined) householdUpdate.recipeLibrary = partial.recipeLibrary;
   if (partial.onboarding !== undefined) householdUpdate.onboarding = partial.onboarding;
   if (partial.restockHistory !== undefined) householdUpdate.restockHistory = partial.restockHistory;
+  if (partial.itemKnowledge !== undefined) householdUpdate.itemKnowledge = partial.itemKnowledge;
+  if (partial.usageInsights !== undefined) householdUpdate.usageInsights = partial.usageInsights;
 
   if (Object.keys(householdUpdate).length > 1) {
     await households.updateOne({ _id: householdOid }, { $set: householdUpdate });

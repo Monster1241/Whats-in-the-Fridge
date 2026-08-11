@@ -7,6 +7,7 @@ import {
   processItemDepletion,
   processItemRestock,
 } from '../inventory/restockLearning.js';
+import { normalizeUsageInsights, recordUsageInsightEvent } from '../inventory/usageInsights.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'light',
@@ -37,6 +38,8 @@ export function useAppData(enabled) {
   const [recipeLibrary, setRecipeLibrary] = useState([]);
   const [onboarding, setOnboarding] = useState({ dismissed: [] });
   const [restockHistory, setRestockHistory] = useState([]);
+  const [itemKnowledge, setItemKnowledge] = useState([]);
+  const [usageInsights, setUsageInsights] = useState(() => normalizeUsageInsights(null));
   const [householdCode, setHouseholdCode] = useState('');
 
   const skipSaveRef = useRef(true);
@@ -44,9 +47,27 @@ export function useAppData(enabled) {
   const saveEpochRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const hasUnsyncedEditsRef = useRef(false);
-  const latestRef = useRef({ items, settings, savedIds, recipeLibrary, onboarding, restockHistory });
+  const latestRef = useRef({
+    items,
+    settings,
+    savedIds,
+    recipeLibrary,
+    onboarding,
+    restockHistory,
+    itemKnowledge,
+    usageInsights,
+  });
 
-  latestRef.current = { items, settings, savedIds, recipeLibrary, onboarding, restockHistory };
+  latestRef.current = {
+    items,
+    settings,
+    savedIds,
+    recipeLibrary,
+    onboarding,
+    restockHistory,
+    itemKnowledge,
+    usageInsights,
+  };
 
   const applyState = useCallback((state) => {
     hasUnsyncedEditsRef.current = false;
@@ -61,6 +82,8 @@ export function useAppData(enabled) {
       state.onboarding?.dismissed ? state.onboarding : { dismissed: [] },
     );
     setRestockHistory(Array.isArray(state.restockHistory) ? state.restockHistory : []);
+    setItemKnowledge(Array.isArray(state.itemKnowledge) ? state.itemKnowledge : []);
+    setUsageInsights(normalizeUsageInsights(state.usageInsights));
     setHouseholdCode(state.householdCode || state.inviteCode || '');
     skipSaveRef.current = !needsPersist;
   }, []);
@@ -145,6 +168,8 @@ export function useAppData(enabled) {
           recipeLibrary: nextRecipeLibrary,
           onboarding: nextOnboarding,
           restockHistory: nextRestockHistory,
+          itemKnowledge: latestRef.current.itemKnowledge,
+          usageInsights: latestRef.current.usageInsights,
         });
         if (epoch !== saveEpochRef.current) return;
         hasUnsyncedEditsRef.current = false;
@@ -163,7 +188,7 @@ export function useAppData(enabled) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     };
-  }, [items, settings, savedIds, recipeLibrary, onboarding, restockHistory, loading, error, enabled]);
+  }, [items, settings, savedIds, recipeLibrary, onboarding, restockHistory, itemKnowledge, usageInsights, loading, error, enabled]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark');
@@ -177,6 +202,18 @@ export function useAppData(enabled) {
     setRestockHistory((prev) => (typeof updater === 'function' ? updater(prev) : updater));
   }, []);
 
+  const updateItemKnowledge = useCallback((updater) => {
+    setItemKnowledge((prev) => (typeof updater === 'function' ? updater(prev) : updater));
+  }, []);
+
+  const recordUsageEvent = useCallback((event, amount = 1) => {
+    setUsageInsights((prev) => recordUsageInsightEvent(prev, event, amount));
+  }, []);
+
+  const syncUsageInsights = useCallback((insights) => {
+    setUsageInsights(normalizeUsageInsights(insights));
+  }, []);
+
   const persistSnapshot = useCallback(async (snapshot, epoch) => {
     saveInFlightRef.current = true;
     try {
@@ -187,6 +224,8 @@ export function useAppData(enabled) {
         recipeLibrary: snapshot.recipeLibrary,
         onboarding: snapshot.onboarding,
         restockHistory: snapshot.restockHistory,
+        itemKnowledge: snapshot.itemKnowledge,
+        usageInsights: snapshot.usageInsights,
       });
       if (epoch !== saveEpochRef.current) return;
       hasUnsyncedEditsRef.current = false;
@@ -352,13 +391,15 @@ export function useAppData(enabled) {
     skipSaveRef.current = true;
     hasUnsyncedEditsRef.current = false;
     setItems(migrated);
-    if (Array.isArray(options.restockHistory)) {
-      setRestockHistory(options.restockHistory);
-      latestRef.current = {
-        ...latestRef.current,
-        items: migrated,
-        restockHistory: options.restockHistory,
-      };
+    const patch = {};
+    if (Array.isArray(options.restockHistory)) patch.restockHistory = options.restockHistory;
+    if (Array.isArray(options.itemKnowledge)) patch.itemKnowledge = options.itemKnowledge;
+    if (options.usageInsights) patch.usageInsights = normalizeUsageInsights(options.usageInsights);
+    if (Object.keys(patch).length) {
+      if (patch.restockHistory) setRestockHistory(patch.restockHistory);
+      if (patch.itemKnowledge) setItemKnowledge(patch.itemKnowledge);
+      if (patch.usageInsights) setUsageInsights(patch.usageInsights);
+      latestRef.current = { ...latestRef.current, items: migrated, ...patch };
     }
     return migrated;
   }, []);
@@ -375,6 +416,11 @@ export function useAppData(enabled) {
     replaceItemsFromServer,
     restockHistory,
     updateRestockHistory,
+    itemKnowledge,
+    updateItemKnowledge,
+    usageInsights,
+    recordUsageEvent,
+    syncUsageInsights,
     settings,
     updateSettings,
     enabledModules,
