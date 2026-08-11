@@ -4,6 +4,8 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
+  'image/heic',
+  'image/heif',
   'application/pdf',
 ]);
 
@@ -18,7 +20,7 @@ export const receiptUpload = multer({
       return;
     }
     cb(
-      new Error('Unsupported file type. Use JPG, PNG, WEBP, or PDF.'),
+      new Error('Unsupported file type. Use JPG, PNG, WEBP, HEIC, or PDF.'),
     );
   },
 });

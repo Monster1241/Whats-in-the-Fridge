@@ -471,13 +471,25 @@ export async function markShoppingItemPurchased(id, options = {}) {
 
 export async function scanReceipt(file) {
   const formData = new FormData();
-  formData.append('receipt', file);
-  const res = await fetch(`${API_BASE}/inventory/scan-receipt`, {
-    method: 'POST',
-    headers: authHeaders(),
-    body: formData,
-  });
-  return parseJson(res);
+  formData.append('receipt', file, file.name || 'receipt.jpg');
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 55000);
+  try {
+    const res = await fetch(`${API_BASE}/inventory/scan-receipt`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData,
+      signal: controller.signal,
+    });
+    return parseJson(res);
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Receipt scan timed out. Try a smaller photo or try again in a moment.');
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export async function confirmReceiptScan(items) {

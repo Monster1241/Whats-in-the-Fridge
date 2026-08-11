@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, Loader2, ScanLine, Trash2, Upload, X } from 'lucide-react';
 import { confirmReceiptScan, scanReceipt } from '../api.js';
+import { prepareReceiptFileForUpload } from '../utils/prepareReceiptImage.js';
 
-const ACCEPTED_TYPES = 'image/jpeg,image/png,image/webp,application/pdf';
+const ACCEPTED_TYPES =
+  'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.heic,.heif';
+const RECEIPT_SCAN_SESSION_KEY = 'witf:receipt-scan-pending';
 const RECEIPT_CATEGORIES = [
   'Produce',
   'Dairy',
@@ -24,6 +27,25 @@ function formatFileLabel(file) {
   return `${file.name} · ${mb < 0.1 ? '<0.1' : mb.toFixed(1)} MB`;
 }
 
+function markReceiptScanPending() {
+  try {
+    sessionStorage.setItem(
+      RECEIPT_SCAN_SESSION_KEY,
+      JSON.stringify({ pending: true, at: Date.now() }),
+    );
+  } catch {
+    // sessionStorage may be unavailable in private mode
+  }
+}
+
+function clearReceiptScanPending() {
+  try {
+    sessionStorage.removeItem(RECEIPT_SCAN_SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 /**
  * @param {{ replaceItemsFromServer?: (items: unknown[]) => unknown[], onSuccess?: (message: string) => void }} props
  */
@@ -36,6 +58,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
   const [confirming, setConfirming] = useState(false);
   const fileInputRef = useRef(null);
   const dropRef = useRef(null);
+  const processingRef = useRef(false);
 
   const resetState = useCallback(() => {
     setPhase('idle');
@@ -49,7 +72,27 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
   const close = useCallback(() => {
     setOpen(false);
     resetState();
+    clearReceiptScanPending();
   }, [resetState]);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(RECEIPT_SCAN_SESSION_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (data?.pending) {
+        setOpen(true);
+        setPhase('error');
+        setError(
+          'Your browser refreshed while choosing a photo. Please select the receipt again.',
+        );
+      }
+    } catch {
+      clearReceiptScanPending();
+    } finally {
+      clearReceiptScanPending();
+    }
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -61,13 +104,17 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
   }, [open, phase, confirming, close]);
 
   const processFile = useCallback(async (file) => {
-    if (!file) return;
+    if (!file || processingRef.current) return;
+    processingRef.current = true;
     setError('');
-    setFileLabel(formatFileLabel(file));
     setPhase('scanning');
+    markReceiptScanPending();
 
     try {
-      const result = await scanReceipt(file);
+      const prepared = await prepareReceiptFileForUpload(file);
+      setFileLabel(formatFileLabel(prepared));
+      const result = await scanReceipt(prepared);
+      clearReceiptScanPending();
       setItems(
         (result.items ?? []).map((item, index) => ({
           ...item,
@@ -76,9 +123,11 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
       );
       setPhase('review');
     } catch (err) {
+      clearReceiptScanPending();
       setPhase('error');
       setError(err.message || 'Could not scan receipt.');
     } finally {
+      processingRef.current = false;
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }, []);
@@ -93,6 +142,11 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
     dropRef.current?.classList.remove('ring-2', 'ring-emerald-400');
     const file = event.dataTransfer.files?.[0];
     void processFile(file);
+  };
+
+  const openFilePicker = () => {
+    markReceiptScanPending();
+    fileInputRef.current?.click();
   };
 
   const updateItem = (clientId, patch) => {
@@ -183,10 +237,12 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                 <Upload className="h-7 w-7" aria-hidden />
               </div>
               <p className="text-heading text-sm font-semibold">Drop receipt here</p>
-              <p className="text-muted mt-1 text-xs">JPG, PNG, WEBP, or PDF · max 12 MB</p>
+              <p className="text-muted mt-1 text-xs">
+                JPG, PNG, WEBP, HEIC, or PDF · photos are compressed before upload
+              </p>
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={openFilePicker}
                 className="mt-5 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 active:scale-[0.98]"
               >
                 Choose file
@@ -201,7 +257,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
               <p className="text-muted mt-1 max-w-xs text-xs leading-relaxed">
                 {fileLabel
                   ? `Reading ${fileLabel} and normalizing product names with Gemini.`
-                  : 'Extracting grocery items with Gemini.'}
+                  : 'Preparing your photo and extracting grocery items.'}
               </p>
             </div>
           )}
@@ -333,6 +389,19 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                   ))}
                 </ul>
               )}
+
+              {phase === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetState();
+                    openFilePicker();
+                  }}
+                  className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white"
+                >
+                  Try another photo
+                </button>
+              )}
             </>
           )}
         </div>
@@ -376,19 +445,19 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
           )}
         </div>
       </div>
+    </div>
+  ) : null;
 
+  return (
+    <>
       <input
         ref={fileInputRef}
         type="file"
         accept={ACCEPTED_TYPES}
         className="sr-only"
         onChange={onFileChange}
+        tabIndex={-1}
       />
-    </div>
-  ) : null;
-
-  return (
-    <>
       <button
         type="button"
         onClick={() => {
