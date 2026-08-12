@@ -115,7 +115,7 @@ Without `RESEND_API_KEY`, the 6-digit code is printed in the server console only
 
 ## Security & Compliance
 
-AI recipe endpoints rely on Google Gemini quota limits and client-side loading guards (no Express rate limiting). Gemini quota errors return HTTP **429** with `{ "error": "Daily Google AI quota reached. Please try again tomorrow." }`.
+AI recipe, receipt, and classify endpoints are Express rate-limited (per signed-in user / IP) in addition to Google Gemini quota. Auth (`/api/auth/*`) and household join are also rate-limited. Gemini quota errors still return HTTP **429** with `{ "error": "Daily Google AI quota reached. Please try again tomorrow." }`. Legacy `/api/auth/signup` and `/login` return **410** — Firebase Auth only.
 
 Public legal pages are available at standalone routes (linked from Settings and the sign-in screen):
 

@@ -66,7 +66,8 @@ export function PrivacyPolicy() {
           </li>
           <li>
             <strong className="text-heading">Technical data</strong> — standard server logs (IP
-            address, request timestamps) for security, rate limiting, and abuse prevention.
+            address, request timestamps) and short-lived rate-limit counters (IP or account id) for
+            security and abuse prevention.
           </li>
         </ul>
       </section>
@@ -123,6 +124,17 @@ export function PrivacyPolicy() {
           us tune predictions and fix bugs. Where possible, this stays tied to your household account
           for personalization; we do not publish individual household inventories or sell usage profiles
           to third parties.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="text-heading text-base font-bold">Rate limiting</h2>
+        <p>
+          We rate-limit <strong className="text-heading">authentication</strong>,{' '}
+          <strong className="text-heading">household join</strong>, and{' '}
+          <strong className="text-heading">AI (Gemini)</strong> requests per IP address or signed-in
+          account. When a limit is reached the App returns HTTP 429. Counters store only an identifier
+          and timestamps — never inventory names, receipts, or chat content.
         </p>
       </section>
 

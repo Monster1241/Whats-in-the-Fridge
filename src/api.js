@@ -40,7 +40,11 @@ async function parseJson(res) {
   }
   if (!res.ok) {
     const detail = body.error || (text && text.length < 300 ? text : '');
-    throw new Error(detail || `Request failed (${res.status})`);
+    const err = new Error(detail || `Request failed (${res.status})`);
+    err.status = res.status;
+    err.body = body;
+    err.conflict = res.status === 409 || body.conflict === true;
+    throw err;
   }
   return body;
 }
@@ -249,6 +253,16 @@ export async function saveAppState(partial) {
     method: 'PUT',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(partial),
+  });
+  return parseJson(res);
+}
+
+/** POST /api/inventory/sync — revision/409 inventory delta (not PUT /api/state). */
+export async function syncInventory(payload) {
+  const res = await fetch(`${API_BASE}/inventory/sync`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
   });
   return parseJson(res);
 }

@@ -744,7 +744,7 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
         ingredients: neededIngredients.map((name) => ({ name, quantity: 1 })),
       });
       if (replaceItemsFromServer) {
-        replaceItemsFromServer(result.items);
+        replaceItemsFromServer(result.items, { inventoryRevision: result.inventoryRevision });
       } else {
         updateItems(result.items);
       }

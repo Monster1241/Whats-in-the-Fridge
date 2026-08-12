@@ -13,11 +13,14 @@ import {
 } from '../controllers/receiptScan.js';
 import {
   deleteInventoryItem,
+  getHouseholdAppState,
   getInventoryForHousehold,
   insertInventoryItem,
+  syncHouseholdInventory,
   updateInventoryItem,
 } from '../db.js';
 import { sanitizeInventoryItemInput, sanitizeInventoryItems } from '../inventorySanitize.js';
+import { geminiRateLimit } from '../rateLimit.js';
 import { STATUS } from '../../src/inventory/constants.js';
 import { calculateExpiryDate } from '../../src/inventory/smartInventory.js';
 import { buildConsumptionFields } from '../../src/inventory/consumption.js';
@@ -29,6 +32,7 @@ inventoryRouter.use(requireAuth);
 
 inventoryRouter.post(
   '/classify-item',
+  geminiRateLimit,
   asyncRoute(handleClassifyItem, 'POST /api/inventory/classify-item', 'Could not classify item'),
 );
 
@@ -43,6 +47,7 @@ inventoryRouter.post(
 
 inventoryRouter.post(
   '/scan-receipt',
+  geminiRateLimit,
   receiptUploadMiddleware('receipt'),
   asyncRoute(handleScanReceipt, 'POST /api/inventory/scan-receipt', 'Could not scan receipt'),
 );
@@ -54,6 +59,45 @@ inventoryRouter.post(
     'POST /api/inventory/confirm-receipt-scan',
     'Could not add receipt items',
   ),
+);
+
+inventoryRouter.post(
+  '/sync',
+  asyncRoute(async (req, res) => {
+    const body = req.body ?? {};
+    const inventoryDelta = body.inventoryDelta;
+    if (!inventoryDelta || typeof inventoryDelta !== 'object' || Array.isArray(inventoryDelta)) {
+      res.status(400).json({ error: 'inventoryDelta must be an object' });
+      return;
+    }
+
+    const upserts = Array.isArray(inventoryDelta.upserts) ? inventoryDelta.upserts : [];
+    const deletedIds = Array.isArray(inventoryDelta.deletedIds) ? inventoryDelta.deletedIds : [];
+    const delta = {
+      upserts: upserts.map((item) => sanitizeInventoryItemInput(item)).filter(Boolean),
+      deletedIds: deletedIds.map((id) => String(id)).filter(Boolean),
+    };
+
+    try {
+      const state = await syncHouseholdInventory(
+        req.user.household_id,
+        delta,
+        Number(body.inventoryRevision) || 0,
+      );
+      res.status(200).json(state);
+    } catch (err) {
+      if (err?.status === 409) {
+        const state = await getHouseholdAppState(req.user.household_id);
+        res.status(409).json({
+          error: err.message || 'Inventory was updated on another device.',
+          conflict: true,
+          state,
+        });
+        return;
+      }
+      throw err;
+    }
+  }, 'POST /api/inventory/sync', 'Could not sync inventory'),
 );
 
 inventoryRouter.get(

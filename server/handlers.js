@@ -2,13 +2,10 @@ import { ensureDb } from './ensureDb.js';
 import { getEnvDiagnostics, getMongoUri } from './env.js';
 import {
   getBearerUser,
-  hashPassword,
   signToken,
-  verifyPassword,
 } from './auth.js';
 import { toFriendlyError } from './errors.js';
 import { sanitizeRecipeLibrary } from './recipeSchema.js';
-import { sanitizeInventoryItems } from './inventorySanitize.js';
 import { normalizeUsageInsights } from '../src/inventory/usageInsights.js';
 import { verifyFirebaseIdToken } from './firebaseAdmin.js';
 import {
@@ -209,50 +206,10 @@ export async function handleFirebaseSession(req, res) {
   }
 }
 
-export async function handleSignup(req, res) {
-  const { email, password } = req.body ?? {};
-  if (!email?.trim() || !password) {
-    res.status(400).json({ error: 'Email and password are required.' });
-    return;
-  }
-  if (String(password).length < 8) {
-    res.status(400).json({ error: 'Password must be at least 8 characters.' });
-    return;
-  }
-
-  try {
-    await ensureDb();
-    const user = await createUser({
-      email,
-      passwordHash: await hashPassword(password),
-    });
-    res.status(201).json(await authPayload(user));
-  } catch (err) {
-    const friendly = toFriendlyError(err);
-    res.status(friendly.status || 500).json({ error: friendly.message });
-  }
-}
-
-export async function handleLogin(req, res) {
-  const { email, password } = req.body ?? {};
-  if (!email?.trim() || !password) {
-    res.status(400).json({ error: 'Email and password are required.' });
-    return;
-  }
-
-  try {
-    await ensureDb();
-    let user = await findUserByEmail(email);
-    if (!user?.password_hash || !(await verifyPassword(password, user.password_hash))) {
-      res.status(401).json({ error: 'Invalid email or password.' });
-      return;
-    }
-
-    res.status(200).json(await authPayload(user));
-  } catch (err) {
-    const friendly = toFriendlyError(err);
-    res.status(friendly.status || 500).json({ error: friendly.message });
-  }
+export function handleLegacyPasswordAuthDisabled(_req, res) {
+  res.status(410).json({
+    error: 'Password signup and login are no longer available. Sign in with Firebase.',
+  });
 }
 
 export async function handleMe(req, res) {
@@ -485,17 +442,18 @@ export async function handlePutState(req, res) {
   if (!requireHouseholdSession(auth, res)) return;
 
   const householdId = getScopedHouseholdId(auth);
-  const { items, settings, enabledModules, savedRecipeIds, recipeLibrary, onboarding, restockHistory, itemKnowledge, usageInsights } =
-    req.body ?? {};
+  const {
+    settings,
+    enabledModules,
+    savedRecipeIds,
+    recipeLibrary,
+    onboarding,
+    restockHistory,
+    itemKnowledge,
+    usageInsights,
+  } = req.body ?? {};
   const partial = {};
 
-  if (items !== undefined) {
-    if (!Array.isArray(items)) {
-      res.status(400).json({ error: 'items must be an array' });
-      return;
-    }
-    partial.items = sanitizeInventoryItems(items);
-  }
   if (settings !== undefined) partial.settings = settings;
   if (enabledModules !== undefined) {
     if (typeof enabledModules !== 'object' || enabledModules === null) {

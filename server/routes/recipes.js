@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { chatPantryChef, generateAILiveMatches, remixRecipe } from '../controllers/aiRecipe.js';
 import { formatGeminiErrorForClient } from '../errors.js';
 import { safeErrorForLog } from '../privacy.js';
+import { geminiRateLimit } from '../rateLimit.js';
 
 const THEMEALDB_BASE = 'https://www.themealdb.com/api/json/v1/1';
 
@@ -68,6 +69,7 @@ recipesRouter.get(
 recipesRouter.post(
   '/ai-match',
   requireAuth,
+  geminiRateLimit,
   async (req, res) => {
     try {
       await generateAILiveMatches(req, res);
@@ -80,6 +82,7 @@ recipesRouter.post(
 recipesRouter.post(
   '/remix',
   requireAuth,
+  geminiRateLimit,
   async (req, res) => {
     try {
       await remixRecipe(req, res);
@@ -92,6 +95,7 @@ recipesRouter.post(
 recipesRouter.post(
   '/chat',
   requireAuth,
+  geminiRateLimit,
   async (req, res) => {
     try {
       await chatPantryChef(req, res);

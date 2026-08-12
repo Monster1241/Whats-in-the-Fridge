@@ -204,6 +204,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
       replaceItemsFromServer?.(result.items, {
         restockHistory: result.restockHistory,
         usageInsights: result.usageInsights,
+        inventoryRevision: result.inventoryRevision,
       });
       const moved = result.movedFromShoppingCount ?? 0;
       const base = `Added ${result.addedCount ?? payload.length} item${payload.length === 1 ? '' : 's'} to your inventory.`;

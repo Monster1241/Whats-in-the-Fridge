@@ -2,28 +2,24 @@ import { Router } from 'express';
 import {
   handleDeleteAccount,
   handleFirebaseSession,
-  handleLogin,
+  handleLegacyPasswordAuthDisabled,
   handleMe,
   handleSaveFcmToken,
-  handleSignup,
   handleVerifyEmail,
 } from '../handlers.js';
 import { asyncRoute } from '../routeUtils.js';
+import { authRateLimit } from '../rateLimit.js';
 
 export const authRouter = Router();
+
+authRouter.use(authRateLimit);
 
 authRouter.post(
   '/session',
   asyncRoute(handleFirebaseSession, 'POST /api/auth/session', 'Could not establish session'),
 );
-authRouter.post(
-  '/signup',
-  asyncRoute(handleSignup, 'POST /api/auth/signup', 'Signup failed'),
-);
-authRouter.post(
-  '/login',
-  asyncRoute(handleLogin, 'POST /api/auth/login', 'Login failed'),
-);
+authRouter.post('/signup', handleLegacyPasswordAuthDisabled);
+authRouter.post('/login', handleLegacyPasswordAuthDisabled);
 authRouter.get('/me', asyncRoute(handleMe, 'GET /api/auth/me', 'Session check failed'));
 authRouter.post(
   '/save-token',

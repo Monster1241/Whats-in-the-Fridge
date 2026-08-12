@@ -389,12 +389,14 @@ export async function confirmReceiptItems(householdId, scannedItems, initialRest
   });
   const added = saved.filter((item) => addedIds.has(item.id));
 
+  const nextMeta = await getHouseholdMeta(householdId);
   return {
     items: saved,
     added,
     addedCount: added.length,
     movedFromShoppingCount,
     restockHistory,
+    inventoryRevision: nextMeta?.inventoryRevision ?? 0,
   };
 }
 

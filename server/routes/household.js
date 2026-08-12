@@ -8,6 +8,7 @@ import {
   handleRemoveHouseholdMember,
 } from '../handlers.js';
 import { asyncRoute } from '../routeUtils.js';
+import { householdJoinRateLimit } from '../rateLimit.js';
 
 export const householdRouter = Router();
 
@@ -17,6 +18,7 @@ householdRouter.post(
 );
 householdRouter.post(
   '/join',
+  householdJoinRateLimit,
   asyncRoute(handleJoinHousehold, 'POST /api/household/join', 'Could not join household'),
 );
 householdRouter.get(

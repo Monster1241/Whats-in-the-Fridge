@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchAppState, saveAppState } from '../api.js';
+import { fetchAppState, saveAppState, syncInventory } from '../api.js';
 import { migrateItems, inventoryChangedByMigration, normalizeName } from '../inventory/itemUtils.js';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules } from '../inventory/modules.js';
 import {
@@ -8,7 +8,13 @@ import {
   processItemRestock,
 } from '../inventory/restockLearning.js';
 import { normalizeUsageInsights, recordUsageInsightEvent } from '../inventory/usageInsights.js';
-import { diffAppState, toApiStateSnapshot } from '../utils/diffAppState.js';
+import {
+  applyInventoryDeltaLocal,
+  buildInventorySyncPayload,
+  buildStateSavePayload,
+  diffInventoryItems,
+  toApiStateSnapshot,
+} from '../utils/diffAppState.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'light',
@@ -49,6 +55,7 @@ export function useAppData(enabled) {
   const saveInFlightRef = useRef(false);
   const hasUnsyncedEditsRef = useRef(false);
   const lastSyncedRef = useRef(null);
+  const inventoryRevisionRef = useRef(0);
   const latestRef = useRef({
     items,
     settings,
@@ -58,6 +65,7 @@ export function useAppData(enabled) {
     restockHistory,
     itemKnowledge,
     usageInsights,
+    inventoryRevision: 0,
   });
 
   latestRef.current = {
@@ -69,12 +77,15 @@ export function useAppData(enabled) {
     restockHistory,
     itemKnowledge,
     usageInsights,
+    inventoryRevision: inventoryRevisionRef.current,
   };
 
   const applyState = useCallback((state) => {
     hasUnsyncedEditsRef.current = false;
     const migrated = migrateItems(state.items);
     const needsPersist = inventoryChangedByMigration(state.items, migrated);
+    const revision = Number(state.inventoryRevision ?? 0);
+    inventoryRevisionRef.current = revision;
     setItems(migrated);
     setSettings({ ...DEFAULT_SETTINGS, ...state.settings });
     setEnabledModules(normalizeEnabledModules(state.enabledModules));
@@ -96,9 +107,115 @@ export function useAppData(enabled) {
       restockHistory: Array.isArray(state.restockHistory) ? state.restockHistory : [],
       itemKnowledge: Array.isArray(state.itemKnowledge) ? state.itemKnowledge : [],
       usageInsights: normalizeUsageInsights(state.usageInsights),
+      inventoryRevision: revision,
     });
+    latestRef.current = {
+      ...latestRef.current,
+      items: migrated,
+      settings: { ...DEFAULT_SETTINGS, ...state.settings },
+      savedIds: Array.isArray(state.savedRecipeIds) ? state.savedRecipeIds : [],
+      recipeLibrary: Array.isArray(state.recipeLibrary) ? state.recipeLibrary : [],
+      onboarding: state.onboarding?.dismissed ? state.onboarding : { dismissed: [] },
+      restockHistory: Array.isArray(state.restockHistory) ? state.restockHistory : [],
+      itemKnowledge: Array.isArray(state.itemKnowledge) ? state.itemKnowledge : [],
+      usageInsights: normalizeUsageInsights(state.usageInsights),
+      inventoryRevision: revision,
+    };
     skipSaveRef.current = !needsPersist;
   }, []);
+
+  const persistLatest = useCallback(async (epoch, { retryOnConflict = true } = {}) => {
+    const localSnapshot = toApiStateSnapshot(latestRef.current);
+    const base = lastSyncedRef.current;
+    const inventoryPayload = buildInventorySyncPayload(
+      base,
+      localSnapshot,
+      Number(base?.inventoryRevision ?? inventoryRevisionRef.current ?? 0),
+    );
+    const metaPartial = buildStateSavePayload(base, localSnapshot);
+    if (!inventoryPayload && Object.keys(metaPartial).length === 0) {
+      if (epoch !== saveEpochRef.current) return;
+      hasUnsyncedEditsRef.current = false;
+      setSaveError(null);
+      return;
+    }
+
+    saveInFlightRef.current = true;
+    try {
+      let state = null;
+      if (inventoryPayload) {
+        state = await syncInventory(inventoryPayload);
+        inventoryRevisionRef.current = Number(state?.inventoryRevision ?? inventoryRevisionRef.current);
+        latestRef.current = {
+          ...latestRef.current,
+          inventoryRevision: inventoryRevisionRef.current,
+        };
+      }
+      if (Object.keys(metaPartial).length > 0) {
+        state = await saveAppState(metaPartial);
+      }
+      if (epoch !== saveEpochRef.current) return;
+      skipSaveRef.current = true;
+      if (state) applyState(state);
+      hasUnsyncedEditsRef.current = false;
+      setSaveError(null);
+    } catch (err) {
+      if (retryOnConflict && err?.conflict && err.body?.state) {
+        const serverState = err.body.state;
+        const itemDelta = diffInventoryItems(base?.items ?? [], localSnapshot.items ?? []);
+        skipSaveRef.current = true;
+        applyState(serverState);
+
+        const mergedItems = applyInventoryDeltaLocal(migrateItems(serverState.items ?? []), itemDelta);
+        const metaDiff = buildStateSavePayload(
+          toApiStateSnapshot({
+            ...serverState,
+            savedIds: serverState.savedRecipeIds,
+            inventoryRevision: serverState.inventoryRevision,
+          }),
+          localSnapshot,
+        );
+
+        const nextLocal = {
+          items: mergedItems,
+          settings: metaDiff.settings ?? { ...DEFAULT_SETTINGS, ...serverState.settings },
+          savedIds: metaDiff.savedRecipeIds ?? serverState.savedRecipeIds ?? [],
+          recipeLibrary: metaDiff.recipeLibrary ?? serverState.recipeLibrary ?? [],
+          onboarding: metaDiff.onboarding ?? serverState.onboarding ?? { dismissed: [] },
+          restockHistory: metaDiff.restockHistory ?? serverState.restockHistory ?? [],
+          itemKnowledge: metaDiff.itemKnowledge ?? serverState.itemKnowledge ?? [],
+          usageInsights: metaDiff.usageInsights
+            ?? normalizeUsageInsights(serverState.usageInsights),
+          inventoryRevision: Number(serverState.inventoryRevision ?? 0),
+        };
+        latestRef.current = nextLocal;
+        inventoryRevisionRef.current = nextLocal.inventoryRevision;
+        setItems(mergedItems);
+        if (metaDiff.settings) setSettings(nextLocal.settings);
+        if (metaDiff.savedRecipeIds) setSavedIds(nextLocal.savedIds);
+        if (metaDiff.recipeLibrary) setRecipeLibrary(nextLocal.recipeLibrary);
+        if (metaDiff.onboarding) setOnboarding(nextLocal.onboarding);
+        if (metaDiff.restockHistory) setRestockHistory(nextLocal.restockHistory);
+        if (metaDiff.itemKnowledge) setItemKnowledge(nextLocal.itemKnowledge);
+        if (metaDiff.usageInsights) setUsageInsights(nextLocal.usageInsights);
+        skipSaveRef.current = true;
+        try {
+          await persistLatest(epoch, { retryOnConflict: false });
+        } catch (retryErr) {
+          if (epoch !== saveEpochRef.current) return;
+          setSaveError(retryErr.message || 'Failed to save to MongoDB.');
+        }
+        return;
+      }
+      if (epoch !== saveEpochRef.current) return;
+      setSaveError(err.message || 'Failed to save to MongoDB.');
+      throw err;
+    } finally {
+      if (epoch === saveEpochRef.current) {
+        saveInFlightRef.current = false;
+      }
+    }
+  }, [applyState]);
 
   const reload = useCallback(async () => {
     if (!enabled) return null;
@@ -163,45 +280,10 @@ export function useAppData(enabled) {
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       saveTimerRef.current = null;
-      const {
-        items: nextItems,
-        settings: nextSettings,
-        savedIds: nextSaved,
-        recipeLibrary: nextRecipeLibrary,
-        onboarding: nextOnboarding,
-        restockHistory: nextRestockHistory,
-      } = latestRef.current;
-      saveInFlightRef.current = true;
       try {
-        const nextSnapshot = toApiStateSnapshot({
-          items: nextItems,
-          settings: nextSettings,
-          savedIds: nextSaved,
-          recipeLibrary: nextRecipeLibrary,
-          onboarding: nextOnboarding,
-          restockHistory: nextRestockHistory,
-          itemKnowledge: latestRef.current.itemKnowledge,
-          usageInsights: latestRef.current.usageInsights,
-        });
-        const partial = diffAppState(lastSyncedRef.current, nextSnapshot);
-        if (Object.keys(partial).length === 0) {
-          if (epoch !== saveEpochRef.current) return;
-          hasUnsyncedEditsRef.current = false;
-          setSaveError(null);
-          return;
-        }
-        await saveAppState(partial);
-        if (epoch !== saveEpochRef.current) return;
-        lastSyncedRef.current = { ...lastSyncedRef.current, ...partial };
-        hasUnsyncedEditsRef.current = false;
-        setSaveError(null);
-      } catch (err) {
-        if (epoch !== saveEpochRef.current) return;
-        setSaveError(err.message || 'Failed to save to MongoDB.');
-      } finally {
-        if (epoch === saveEpochRef.current) {
-          saveInFlightRef.current = false;
-        }
+        await persistLatest(epoch);
+      } catch {
+        // saveError already set
       }
     }, SAVE_DELAY_MS);
 
@@ -209,7 +291,25 @@ export function useAppData(enabled) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     };
-  }, [items, settings, savedIds, recipeLibrary, onboarding, restockHistory, itemKnowledge, usageInsights, loading, error, enabled]);
+  }, [items, settings, savedIds, recipeLibrary, onboarding, restockHistory, itemKnowledge, usageInsights, loading, error, enabled, persistLatest]);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const flush = () => {
+      if (!hasUnsyncedEditsRef.current || saveInFlightRef.current) return;
+      const epoch = ++saveEpochRef.current;
+      void persistLatest(epoch).catch(() => {});
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [enabled, persistLatest]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', settings.theme === 'dark');
@@ -233,33 +333,6 @@ export function useAppData(enabled) {
 
   const syncUsageInsights = useCallback((insights) => {
     setUsageInsights(normalizeUsageInsights(insights));
-  }, []);
-
-  const persistSnapshot = useCallback(async (snapshot, epoch) => {
-    saveInFlightRef.current = true;
-    try {
-      const nextSnapshot = toApiStateSnapshot(snapshot);
-      const partial = diffAppState(lastSyncedRef.current, nextSnapshot);
-      if (Object.keys(partial).length === 0) {
-        if (epoch !== saveEpochRef.current) return;
-        hasUnsyncedEditsRef.current = false;
-        setSaveError(null);
-        return;
-      }
-      await saveAppState(partial);
-      if (epoch !== saveEpochRef.current) return;
-      lastSyncedRef.current = { ...lastSyncedRef.current, ...partial };
-      hasUnsyncedEditsRef.current = false;
-      setSaveError(null);
-    } catch (err) {
-      if (epoch !== saveEpochRef.current) return;
-      setSaveError(err.message || 'Failed to save to MongoDB.');
-      throw err;
-    } finally {
-      if (epoch === saveEpochRef.current) {
-        saveInFlightRef.current = false;
-      }
-    }
   }, []);
 
   /**
@@ -303,12 +376,11 @@ export function useAppData(enabled) {
         });
       }
 
-      const snapshot = {
+      latestRef.current = {
         ...latestRef.current,
         items: nextItems,
         restockHistory: nextRestock,
       };
-      latestRef.current = snapshot;
 
       if (saveNow) {
         clearTimeout(saveTimerRef.current);
@@ -329,13 +401,13 @@ export function useAppData(enabled) {
       hasUnsyncedEditsRef.current = true;
       const epoch = ++saveEpochRef.current;
       try {
-        await persistSnapshot(snapshot, epoch);
+        await persistLatest(epoch);
         return true;
       } catch {
         return false;
       }
     },
-    [persistSnapshot],
+    [persistLatest],
   );
 
   const updateSettings = useCallback((updater) => {
@@ -416,14 +488,14 @@ export function useAppData(enabled) {
     if (Array.isArray(options.restockHistory)) patch.restockHistory = options.restockHistory;
     if (Array.isArray(options.itemKnowledge)) patch.itemKnowledge = options.itemKnowledge;
     if (options.usageInsights) patch.usageInsights = normalizeUsageInsights(options.usageInsights);
-    if (Object.keys(patch).length) {
-      if (patch.restockHistory) setRestockHistory(patch.restockHistory);
-      if (patch.itemKnowledge) setItemKnowledge(patch.itemKnowledge);
-      if (patch.usageInsights) setUsageInsights(patch.usageInsights);
-      latestRef.current = { ...latestRef.current, items: migrated, ...patch };
-    } else {
-      latestRef.current = { ...latestRef.current, items: migrated };
+    if (typeof options.inventoryRevision === 'number') {
+      inventoryRevisionRef.current = options.inventoryRevision;
+      patch.inventoryRevision = options.inventoryRevision;
     }
+    latestRef.current = { ...latestRef.current, items: migrated, ...patch };
+    if (patch.restockHistory) setRestockHistory(patch.restockHistory);
+    if (patch.itemKnowledge) setItemKnowledge(patch.itemKnowledge);
+    if (patch.usageInsights) setUsageInsights(patch.usageInsights);
     lastSyncedRef.current = toApiStateSnapshot(latestRef.current);
     return migrated;
   }, []);

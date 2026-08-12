@@ -136,7 +136,20 @@ async function ensureIndexes(db) {
     },
   );
   await db.collection('inventory').createIndex({ household_id: 1 });
-  await db.collection('inventory').createIndex({ household_id: 1, id: 1 });
+  try {
+    await db.collection('inventory').dropIndex('household_id_1_id_1');
+  } catch {
+    // Index may not exist yet.
+  }
+  try {
+    await db.collection('inventory').createIndex(
+      { household_id: 1, id: 1 },
+      { unique: true, sparse: true },
+    );
+  } catch (err) {
+    console.error('[db] Unique inventory index failed, using non-unique:', err.message);
+    await db.collection('inventory').createIndex({ household_id: 1, id: 1 });
+  }
   await ensureWeeklyDealIndexes(db.collection(WEEKLY_DEALS_COLLECTION));
   await ensureStoreCatalogueIndexes(db.collection(STORE_CATALOGUES_COLLECTION));
 }
@@ -507,6 +520,7 @@ export async function createHousehold(ownerUserId) {
     restockHistory: [],
     itemKnowledge: [],
     usageInsights: {},
+    inventoryRevision: 0,
   };
   const result = await households.insertOne(doc);
   return {
@@ -546,6 +560,7 @@ export async function getHouseholdMeta(householdId) {
     itemKnowledge: Array.isArray(doc.itemKnowledge) ? doc.itemKnowledge : [],
     usageInsights:
       doc.usageInsights && typeof doc.usageInsights === 'object' ? doc.usageInsights : {},
+    inventoryRevision: Number(doc.inventoryRevision ?? 0),
   };
 }
 
@@ -578,9 +593,96 @@ export async function getHouseholdAppState(householdId) {
     restockHistory: meta.restockHistory,
     itemKnowledge: meta.itemKnowledge,
     usageInsights: meta.usageInsights,
+    inventoryRevision: meta.inventoryRevision ?? 0,
     householdCode: meta.invite_code,
     inviteCode: meta.invite_code,
   };
+}
+
+export async function bumpInventoryRevision(householdId) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const result = await getDb().collection('households').findOneAndUpdate(
+    { _id: new ObjectId(scopedId) },
+    { $inc: { inventoryRevision: 1 }, $set: { updated_at: new Date() } },
+    { returnDocument: 'after' },
+  );
+  return Number(result?.inventoryRevision ?? 0);
+}
+
+/**
+ * Compare-and-swap increment. Throws 409 if the client revision is stale.
+ * @param {string} householdId
+ * @param {number} expectedRevision
+ */
+export async function claimInventoryRevision(householdId, expectedRevision) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const expected = Number(expectedRevision);
+  if (!Number.isFinite(expected) || expected < 0) {
+    const err = new Error('Inventory was updated on another device.');
+    err.status = 409;
+    err.conflict = true;
+    throw err;
+  }
+
+  const filter = { _id: new ObjectId(scopedId) };
+  if (expected === 0) {
+    filter.$or = [{ inventoryRevision: 0 }, { inventoryRevision: { $exists: false } }];
+  } else {
+    filter.inventoryRevision = expected;
+  }
+
+  const result = await getDb().collection('households').findOneAndUpdate(
+    filter,
+    { $inc: { inventoryRevision: 1 }, $set: { updated_at: new Date() } },
+    { returnDocument: 'after' },
+  );
+  if (!result) {
+    const err = new Error('Inventory was updated on another device.');
+    err.status = 409;
+    err.conflict = true;
+    throw err;
+  }
+  return Number(result.inventoryRevision ?? 0);
+}
+
+/**
+ * Apply only local upserts/deletes. Never deletes items that were not listed.
+ * @param {string} householdId
+ * @param {{ upserts?: Array<Record<string, unknown>>, deletedIds?: string[] }} delta
+ */
+export async function applyInventoryDelta(householdId, delta = {}) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const inventory = getDb().collection('inventory');
+  const upserts = Array.isArray(delta.upserts) ? delta.upserts : [];
+  const deletedIds = Array.isArray(delta.deletedIds)
+    ? delta.deletedIds.map((id) => String(id)).filter(Boolean)
+    : [];
+  const now = new Date().toISOString();
+  /** @type {import('mongodb').AnyBulkWriteOperation[]} */
+  const ops = [];
+
+  for (const item of upserts) {
+    if (!item?.id) continue;
+    const doc = buildInventoryDoc(item, scopedId, now);
+    ops.push({
+      updateOne: {
+        filter: { household_id: scopedId, id: String(item.id) },
+        update: { $set: doc },
+        upsert: true,
+      },
+    });
+  }
+
+  if (deletedIds.length) {
+    ops.push({
+      deleteMany: {
+        filter: { household_id: scopedId, id: { $in: deletedIds } },
+      },
+    });
+  }
+
+  if (!ops.length) return;
+  await inventory.bulkWrite(ops, { ordered: false });
 }
 
 export async function updateHouseholdAppState(householdId, partial) {
@@ -610,10 +712,24 @@ export async function updateHouseholdAppState(householdId, partial) {
     await households.updateOne({ _id: householdOid }, { $set: householdUpdate });
   }
 
-  if (partial.items !== undefined) {
-    await replaceInventoryForHousehold(scopedId, partial.items);
-  }
+  return getHouseholdAppState(scopedId);
+}
 
+/**
+ * Apply inventory upserts/deletes with revision CAS. Never wipes unlisted items.
+ * @param {string} householdId
+ * @param {{ upserts?: Array<Record<string, unknown>>, deletedIds?: string[] }} delta
+ * @param {number} expectedRevision
+ */
+export async function syncHouseholdInventory(householdId, delta = {}, expectedRevision = 0) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const upserts = Array.isArray(delta.upserts) ? delta.upserts : [];
+  const deletedIds = Array.isArray(delta.deletedIds) ? delta.deletedIds : [];
+  const hasWork = upserts.length > 0 || deletedIds.length > 0;
+  if (hasWork) {
+    await claimInventoryRevision(scopedId, Number(expectedRevision) || 0);
+    await applyInventoryDelta(scopedId, { upserts, deletedIds });
+  }
   return getHouseholdAppState(scopedId);
 }
 
@@ -732,7 +848,9 @@ export async function replaceInventoryForHousehold(householdId, items) {
   const now = new Date().toISOString();
 
   if (incoming.length === 0) {
+    const existingCount = await inventory.countDocuments({ household_id: scopedId });
     await inventory.deleteMany({ household_id: scopedId });
+    if (existingCount > 0) await bumpInventoryRevision(scopedId);
     return;
   }
 
@@ -782,6 +900,7 @@ export async function replaceInventoryForHousehold(householdId, items) {
 
   if (ops.length) {
     await inventory.bulkWrite(ops, { ordered: false });
+    await bumpInventoryRevision(scopedId);
   }
 }
 
@@ -831,6 +950,7 @@ export async function insertInventoryItem(householdId, item) {
     updated_at: new Date(),
   };
   const result = await inventory.insertOne(doc);
+  await bumpInventoryRevision(scopedId);
   return mapInventoryDocument({ ...doc, _id: result.insertedId });
 }
 
@@ -847,6 +967,7 @@ export async function updateInventoryItem(householdId, itemId, patch) {
     err.status = 404;
     throw err;
   }
+  await bumpInventoryRevision(scopedId);
   return mapInventoryDocument(result);
 }
 
@@ -859,6 +980,7 @@ export async function deleteInventoryItem(householdId, itemId) {
     err.status = 404;
     throw err;
   }
+  await bumpInventoryRevision(scopedId);
 }
 
 export async function saveInventoryItems(householdId, items) {

@@ -48,12 +48,14 @@ shoppingListRouter.post(
     }
 
     const saved = await getInventoryForHousehold(req.user.household_id);
+    const meta = await getHouseholdMeta(req.user.household_id);
     res.status(200).json({
       item: saved.find((entry) => String(entry.id) === String(sanitizedItem.id)) ?? sanitizedItem,
       merged: result.merged,
       warnings: result.warnings,
       items: saved,
       shoppingList: getShoppingListItems(saved),
+      inventoryRevision: meta?.inventoryRevision ?? 0,
     });
   }, 'POST /api/shopping-list/add', 'Could not add shopping list item'),
 );
@@ -67,11 +69,13 @@ shoppingListRouter.post(
       req.user.household_id,
       sanitizeInventoryItems(result.items),
     );
+    const meta = await getHouseholdMeta(req.user.household_id);
     res.status(200).json({
       addedCount: result.addedCount,
       warnings: result.warnings,
       items: saved,
       shoppingList: getShoppingListItems(saved),
+      inventoryRevision: meta?.inventoryRevision ?? 0,
     });
   }, 'POST /api/shopping-list/add-from-recipe', 'Could not add recipe ingredients'),
 );
@@ -103,12 +107,14 @@ shoppingListRouter.post(
     await updateInventoryItem(req.user.household_id, itemId, sanitizedItem);
     await updateHouseholdAppState(req.user.household_id, { restockHistory });
     const saved = await getInventoryForHousehold(req.user.household_id);
+    const nextMeta = await getHouseholdMeta(req.user.household_id);
 
     res.status(200).json({
       item: saved.find((entry) => String(entry.id) === String(itemId)) ?? learning.item,
       items: saved,
       restockHistory,
       shoppingList: getShoppingListItems(saved),
+      inventoryRevision: nextMeta?.inventoryRevision ?? 0,
     });
   }, 'POST /api/shopping-list/mark-purchased', 'Could not mark item purchased'),
 );
