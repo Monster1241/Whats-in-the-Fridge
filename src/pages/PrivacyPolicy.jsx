@@ -107,7 +107,7 @@ export function PrivacyPolicy() {
       <section>
         <h2 className="text-heading text-base font-bold">Sensitive data we do not sell or share</h2>
         <ul className="list-disc space-y-2 pl-5">
-          <li>Your full inventory, shopping list, and expiry details</li>
+          <li>Your full inventory, shopping list, and expiry details (including in push notification text)</li>
           <li>Receipt or invoice images and extracted line items (beyond your household database)</li>
           <li>Fridge Scout chat content (beyond processing that request)</li>
           <li>Email address, authentication tokens, or push notification tokens</li>
@@ -142,7 +142,10 @@ export function PrivacyPolicy() {
         <h2 className="text-heading text-base font-bold">How we use your data</h2>
         <ul className="list-disc space-y-2 pl-5">
           <li>Provide and sync household inventory and shopping features</li>
-          <li>Send optional push notifications you enable (expiry alerts, partner shopping pings)</li>
+          <li>
+            Send optional push notifications you enable (expiry alerts, partner shopping pings).
+            Notification bodies do not include item names.
+          </li>
           <li>Personalize predicted-low alerts from your household&apos;s restock patterns</li>
           <li>Improve reliability and security (rate limiting, error monitoring without logging inventory contents)</li>
           <li>Comply with legal obligations where applicable</li>

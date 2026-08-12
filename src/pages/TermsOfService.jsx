@@ -13,8 +13,9 @@ export function TermsOfService() {
         <h2 className="text-heading text-base font-bold">The service</h2>
         <p>
           The App is provided as a <strong className="text-heading">progressive web app (PWA)</strong>{' '}
-          you access through a web browser on your phone, tablet, or computer. You may add it to your
-          home screen for an app-like experience. No native app store download is required unless you
+          you access through a web browser on your phone, tablet, or computer. You can install it to
+          your home screen. A cached app shell may load offline; live household inventory, shopping,
+          and recipes require a network connection. No native app store download is required unless you
           choose to install it that way in the future.
         </p>
       </section>

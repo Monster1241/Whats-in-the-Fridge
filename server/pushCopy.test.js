@@ -1,0 +1,27 @@
+import { describe, expect, it } from 'vitest';
+import { buildExpiryAlertMessage, buildShoppingPingNotification } from './pushCopy.js';
+
+describe('buildExpiryAlertMessage', () => {
+  it('omits item names', () => {
+    const one = buildExpiryAlertMessage(1);
+    expect(one.body).not.toMatch(/milk|bread|tomato/i);
+    expect(one.body).toMatch(/open the app/i);
+
+    const many = buildExpiryAlertMessage(3);
+    expect(many.title).toBe('3 items expiring soon');
+    expect(many.body).not.toMatch(/milk|bread/i);
+  });
+
+  it('returns null for empty counts', () => {
+    expect(buildExpiryAlertMessage(0)).toBeNull();
+  });
+});
+
+describe('buildShoppingPingNotification', () => {
+  it('uses a count instead of item names', () => {
+    const msg = buildShoppingPingNotification('partner@example.com', 2);
+    expect(msg.body).toContain('Partner');
+    expect(msg.body).toContain('2 items');
+    expect(msg.body).not.toMatch(/milk|eggs/i);
+  });
+});

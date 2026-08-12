@@ -39,7 +39,7 @@ Open `http://localhost:5173`. The Vite dev server proxies `/api` requests to the
 | `households` | `invite_code`, `settings`, `savedRecipeIds`, `onboarding` | Shared household state |
 | `inventory` | `household_id`, `name`, `category`, `status`, `expiryDate` | Food items (scoped per household) |
 
-Invite codes look like **`XYZ-123`** (6 characters). Partners sign up, then choose **Join existing household** and enter that code.
+Invite codes look like **`WXYZ-2345`** (8 characters). Existing `XYZ-123` codes still work. Partners sign up, then choose **Join existing household** and enter that code.
 
 Recipe definitions remain in the app code — only household data is stored in the database.
 
@@ -111,7 +111,8 @@ Without `RESEND_API_KEY`, the 6-digit code is printed in the server console only
 - **Fridge** — Ambient / Fresh / Freezer tabs, shopping list, expiry tracking
 - **Recipes** — Matched meals from inventory, saved bookmarks
 - **Settings** — Theme, profile, invite code, log out
-- **Ping partner** — Push notification to household members (FCM) with the shopping list
+- **Ping partner** — Push notification to household members (FCM); bodies do not include item names
+- **Install / offline** — PWA manifest + service worker caches the app shell (live inventory still needs a connection)
 
 ## Security & Compliance
 

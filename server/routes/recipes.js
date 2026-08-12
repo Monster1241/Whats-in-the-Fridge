@@ -28,6 +28,7 @@ export const recipesRouter = Router();
 
 recipesRouter.get(
   '/search',
+  requireAuth,
   asyncRoute(async (req, res) => {
     const q = String(req.query.q ?? '').trim();
     if (q.length < 2) {
@@ -41,6 +42,7 @@ recipesRouter.get(
 
 recipesRouter.get(
   '/by-ingredient',
+  requireAuth,
   asyncRoute(async (req, res) => {
     const raw = String(req.query.i ?? '').trim();
     if (raw.length < 2) {
@@ -55,6 +57,7 @@ recipesRouter.get(
 
 recipesRouter.get(
   '/lookup/:mealId',
+  requireAuth,
   asyncRoute(async (req, res) => {
     const mealId = String(req.params.mealId ?? '').trim();
     if (!mealId) {

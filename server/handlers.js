@@ -6,6 +6,8 @@ import {
 } from './auth.js';
 import { toFriendlyError } from './errors.js';
 import { sanitizeRecipeLibrary } from './recipeSchema.js';
+import { sanitizeSettings } from './settingsSanitize.js';
+import { buildShoppingPingNotification } from './pushCopy.js';
 import { normalizeUsageInsights } from '../src/inventory/usageInsights.js';
 import { verifyFirebaseIdToken } from './firebaseAdmin.js';
 import {
@@ -454,7 +456,13 @@ export async function handlePutState(req, res) {
   } = req.body ?? {};
   const partial = {};
 
-  if (settings !== undefined) partial.settings = settings;
+  if (settings !== undefined) {
+    if (typeof settings !== 'object' || settings === null || Array.isArray(settings)) {
+      res.status(400).json({ error: 'settings must be an object' });
+      return;
+    }
+    partial.settings = sanitizeSettings(settings);
+  }
   if (enabledModules !== undefined) {
     if (typeof enabledModules !== 'object' || enabledModules === null) {
       res.status(400).json({ error: 'enabledModules must be an object' });
@@ -554,30 +562,6 @@ export async function handleLeaveHousehold(req, res) {
   }
 }
 
-function formatSenderLabel(email) {
-  const local = String(email || '').split('@')[0]?.trim();
-  if (!local) return 'Your household partner';
-  return local.charAt(0).toUpperCase() + local.slice(1);
-}
-
-function buildShoppingPingNotification(senderEmail, itemNames) {
-  const sender = formatSenderLabel(senderEmail);
-  if (itemNames.length === 0) {
-    return {
-      title: '🛒 Shopping list',
-      body: `${sender} pinged you — your household list is empty. Nothing to grab right now.`,
-    };
-  }
-  const joined = itemNames.join(', ');
-  const maxLen = 200;
-  const list =
-    joined.length > maxLen ? `${joined.slice(0, maxLen - 1)}…` : joined;
-  return {
-    title: '🛒 Time to shop!',
-    body: `Heading home or near the shops? ${sender} asked you to grab: ${list}`,
-  };
-}
-
 export async function handlePingShoppingList(req, res) {
   try {
     const auth = await requireVerified(req, res);
@@ -586,11 +570,7 @@ export async function handlePingShoppingList(req, res) {
 
     const householdId = getScopedHouseholdId(auth);
     const state = await getHouseholdAppState(householdId);
-    const shoppingItems = (state.items ?? [])
-      .filter((item) => item?.status === 'out')
-      .map((item) => String(item.name || '').trim())
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b));
+    const shoppingCount = (state.items ?? []).filter((item) => item?.status === 'out').length;
 
     const tokens = dedupeFcmTokens(await getHouseholdFcmTokens(householdId, auth.user.id));
     const memberCount = (await getHouseholdMembers(householdId)).length;
@@ -612,7 +592,7 @@ export async function handlePingShoppingList(req, res) {
       return;
     }
 
-    const { title, body } = buildShoppingPingNotification(auth.user.email, shoppingItems);
+    const { title, body } = buildShoppingPingNotification(auth.user.email, shoppingCount);
     const { successCount, invalidTokens } = await sendPushToTokens(tokens, {
       title,
       body,

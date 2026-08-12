@@ -4,6 +4,7 @@ import {
   removeInvalidFcmTokens,
 } from './db.js';
 import { sendPushToTokens } from './fcm.js';
+import { buildExpiryAlertMessage } from './pushCopy.js';
 
 /** Match client EXPIRING_SOON_DAYS (food). */
 export const EXPIRY_ALERT_DAYS = 3;
@@ -35,30 +36,6 @@ export function findExpiringSoonItems(items, maxDays = EXPIRY_ALERT_DAYS) {
       return days >= 0 && days <= maxDays;
     })
     .sort((a, b) => String(a.expiryDate).localeCompare(String(b.expiryDate)));
-}
-
-function formatExpiryLabel(iso) {
-  const days = daysUntilExpiry(iso);
-  if (days === 0) return 'today';
-  if (days === 1) return 'tomorrow';
-  return `in ${days} days`;
-}
-
-export function buildExpiryAlertMessage(items) {
-  if (!items.length) return null;
-
-  const parts = items.slice(0, 4).map((item) => {
-    const name = String(item.name || 'Item').trim();
-    return `${name} (${formatExpiryLabel(item.expiryDate)})`;
-  });
-
-  const extra = items.length > 4 ? ` +${items.length - 4} more` : '';
-  const body = parts.join(', ') + extra;
-
-  return {
-    title: items.length === 1 ? '⏰ Food expiring soon' : `⏰ ${items.length} items expiring soon`,
-    body,
-  };
 }
 
 /**
@@ -143,7 +120,7 @@ export async function runExpiryAlerts(db) {
     const tokens = await getHouseholdMemberTokens(db, householdId);
     if (tokens.length === 0) continue;
 
-    const message = buildExpiryAlertMessage(pending);
+    const message = buildExpiryAlertMessage(pending.length);
     if (!message) continue;
 
     const { successCount, invalidTokens: stale } = await sendPushToTokens(tokens, {

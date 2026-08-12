@@ -234,7 +234,8 @@ export function AuthScreen({
               type="text"
               value={inviteCode}
               onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-              placeholder="XYZ-123"
+              placeholder="WXYZ-2345"
+              maxLength={12}
               className="auth-field input-field text-center font-mono text-lg tracking-[0.2em]"
               style={{ animationDelay: '60ms' }}
             />

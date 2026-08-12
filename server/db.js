@@ -1,5 +1,6 @@
 import { MongoClient, ObjectId } from 'mongodb';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules, validateEnabledModules } from './enabledModules.js';
+import { sanitizeSettings } from './settingsSanitize.js';
 import {
   ensureStoreCatalogueIndexes,
   STORE_CATALOGUES_COLLECTION,
@@ -19,7 +20,7 @@ export function generateInviteCode() {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const digits = '23456789';
   const pick = (pool) => pool[Math.floor(Math.random() * pool.length)];
-  return `${pick(letters)}${pick(letters)}${pick(letters)}-${pick(digits)}${pick(digits)}${pick(digits)}`;
+  return `${pick(letters)}${pick(letters)}${pick(letters)}${pick(letters)}-${pick(digits)}${pick(digits)}${pick(digits)}${pick(digits)}`;
 }
 
 export function normalizeInviteCode(code) {
@@ -697,7 +698,7 @@ export async function updateHouseholdAppState(householdId, partial) {
   }
 
   const householdUpdate = { updated_at: new Date() };
-  if (partial.settings !== undefined) householdUpdate.settings = partial.settings;
+  if (partial.settings !== undefined) householdUpdate.settings = sanitizeSettings(partial.settings);
   if (partial.enabledModules !== undefined) {
     householdUpdate.enabledModules = validateEnabledModules(partial.enabledModules);
   }
