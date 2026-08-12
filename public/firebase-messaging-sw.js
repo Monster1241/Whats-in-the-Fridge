@@ -1,6 +1,9 @@
 /**
  * App service worker: offline shell + Firebase Cloud Messaging.
  * Config must match src/firebase/config.js defaults / your Vite env overrides.
+ *
+ * Important: never cache index.html / hashed JS long-term for navigation.
+ * Serving a stale HTML shell that points at deleted /assets/*.js causes a blank page.
  */
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
@@ -15,8 +18,8 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-const SHELL_CACHE = 'fridge-shell-v1';
-const PRECACHE_URLS = ['/', '/index.html', '/offline.html', '/manifest.webmanifest', '/favicon.svg'];
+const SHELL_CACHE = 'fridge-shell-v2';
+const PRECACHE_URLS = ['/offline.html', '/manifest.webmanifest', '/favicon.svg'];
 
 messaging.onBackgroundMessage((payload) => {
   const notification = payload.notification ?? {};
@@ -62,21 +65,23 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
 
-  if (request.mode === 'navigate') {
+  // Always prefer network for navigations / HTML so deploys never blank out.
+  if (request.mode === 'navigate' || request.destination === 'document') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(SHELL_CACHE).then((cache) => cache.put('/index.html', copy));
-          }
-          return response;
-        })
-        .catch(async () => {
-          const cached = await caches.match('/index.html');
-          return cached || caches.match('/offline.html');
-        }),
+      fetch(request).catch(() => caches.match('/offline.html')),
     );
+    return;
+  }
+
+  // Do not intercept Vite hashed modules — let the browser load them fresh.
+  if (
+    url.pathname.startsWith('/assets/')
+    || url.pathname.startsWith('/src/')
+    || url.pathname.endsWith('.js')
+    || url.pathname.endsWith('.css')
+    || url.pathname.endsWith('.jsx')
+    || url.pathname.endsWith('.tsx')
+  ) {
     return;
   }
 
@@ -86,8 +91,10 @@ self.addEventListener('fetch', (event) => {
       return fetch(request)
         .then((response) => {
           if (!response.ok || response.type !== 'basic') return response;
-          const copy = response.clone();
-          caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy));
+          if (url.pathname === '/offline.html' || url.pathname === '/manifest.webmanifest' || url.pathname === '/favicon.svg' || url.pathname.startsWith('/icons/')) {
+            const copy = response.clone();
+            caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy));
+          }
           return response;
         })
         .catch(() => caches.match('/offline.html'));

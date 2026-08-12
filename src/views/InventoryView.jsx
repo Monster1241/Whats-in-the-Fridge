@@ -95,8 +95,6 @@ const ItemTypeahead = lazy(() =>
   import('../components/ItemTypeahead.jsx').then((m) => ({ default: m.ItemTypeahead })),
 );
 
-const STATUS_OPTIONS = [STATUS.FRESH, STATUS.OUT];
-
 function TipBanner({ title, children, onDismiss, accentClass = 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' }) {
   return (
     <div className={`mb-4 flex gap-3 rounded-xl border p-3 ${accentClass}`}>
