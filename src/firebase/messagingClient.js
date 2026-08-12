@@ -1,5 +1,5 @@
 import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
-import { firebaseApp } from '../firebase.js';
+import { getFirebaseApp } from '../firebase.js';
 import { getFirebaseVapidKey } from './config.js';
 
 const SW_PATH = '/firebase-messaging-sw.js';
@@ -31,7 +31,7 @@ async function getMessagingInstance() {
   const supported = await isPushSupported();
   if (!supported) return null;
   if (!messagingInstance) {
-    messagingInstance = getMessaging(firebaseApp);
+    messagingInstance = getMessaging(getFirebaseApp());
   }
   return messagingInstance;
 }

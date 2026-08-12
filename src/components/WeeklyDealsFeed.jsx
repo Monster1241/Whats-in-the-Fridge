@@ -658,11 +658,11 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
 
   const activeSectionMeta = SECTIONS.find((section) => section.id === activeSection) ?? SECTIONS[0];
 
-  const loadDeals = useCallback(async () => {
+  const loadDeals = useCallback(async (force = false) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchWeeklyDeals({});
+      const data = await fetchWeeklyDeals({}, { force });
       setDeals(data.deals ?? []);
     } catch (err) {
       setDeals([]);
@@ -673,7 +673,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   }, []);
 
   useEffect(() => {
-    loadDeals();
+    loadDeals(false);
   }, [loadDeals]);
 
   const toggleStoreFilter = useCallback((storeId) => {
@@ -946,7 +946,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
                 <p className="text-sm font-semibold text-rose-800 dark:text-rose-200">{error}</p>
                 <button
                   type="button"
-                  onClick={() => loadDeals()}
+                  onClick={() => loadDeals(true)}
                   className="mt-3 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-rose-500"
                 >
                   Try again

@@ -8,24 +8,26 @@ import {
   useState,
 } from 'react';
 import { saveFcmToken } from '../api.js';
-import {
-  fetchFcmDeviceToken,
-  getFcmDeviceTokenIfPermitted,
-  getNotificationPermission,
-  isPushSupported,
-  subscribeForegroundMessages,
-} from '../firebase/messagingClient.js';
 import { getFirebaseVapidKey } from '../firebase/config.js';
 import { PushNotificationBanner } from '../components/PushNotificationBanner.jsx';
 
 const PushNotificationContext = createContext(null);
 
+function getNotificationPermission() {
+  if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+  return Notification.permission;
+}
+
 function payloadToBanner(payload) {
   const notification = payload.notification ?? {};
-  const title = notification.title || payload.data?.title || 'What\'s in the Fridge';
+  const title = notification.title || payload.data?.title || "What's in the Fridge";
   const body =
     notification.body || payload.data?.body || 'You have a new household update.';
   return { id: `${Date.now()}-${Math.random()}`, title, body };
+}
+
+async function loadMessagingClient() {
+  return import('../firebase/messagingClient.js');
 }
 
 export function PushNotificationProvider({ enabled = false, children }) {
@@ -46,6 +48,10 @@ export function PushNotificationProvider({ enabled = false, children }) {
     setError(null);
     setStatus('loading');
     try {
+      const {
+        fetchFcmDeviceToken,
+        getFcmDeviceTokenIfPermitted,
+      } = await loadMessagingClient();
       const token = prompt
         ? await fetchFcmDeviceToken()
         : await getFcmDeviceTokenIfPermitted();
@@ -64,6 +70,7 @@ export function PushNotificationProvider({ enabled = false, children }) {
   }, []);
 
   const enablePush = useCallback(async () => {
+    const { isPushSupported } = await loadMessagingClient();
     const supported = await isPushSupported();
     if (!supported) {
       setStatus('unsupported');
@@ -88,6 +95,7 @@ export function PushNotificationProvider({ enabled = false, children }) {
     let cancelled = false;
 
     (async () => {
+      const { isPushSupported } = await loadMessagingClient();
       const supported = await isPushSupported();
       if (cancelled) return;
       if (!supported) {
@@ -117,6 +125,7 @@ export function PushNotificationProvider({ enabled = false, children }) {
     let cancelled = false;
 
     (async () => {
+      const { subscribeForegroundMessages } = await loadMessagingClient();
       const unsub = await subscribeForegroundMessages((payload) => {
         setBanner(payloadToBanner(payload));
       });

@@ -1,7 +1,6 @@
 import { ObjectId } from 'mongodb';
 import {
   dedupeFcmTokens,
-  getInventoryForHousehold,
   removeInvalidFcmTokens,
 } from './db.js';
 import { sendPushToTokens } from './fcm.js';
@@ -85,6 +84,30 @@ async function getHouseholdMemberTokens(db, householdId) {
 }
 
 /**
+ * Load all inventory once and group by household (avoids N+1 per household).
+ * @param {import('mongodb').Db} db
+ * @returns {Promise<Map<string, Array<Record<string, unknown>>>>}
+ */
+async function loadInventoryByHousehold(db) {
+  const docs = await db.collection('inventory').find({}).toArray();
+  /** @type {Map<string, Array<Record<string, unknown>>>} */
+  const byHousehold = new Map();
+  for (const doc of docs) {
+    const householdId = String(doc.household_id ?? '');
+    if (!householdId) continue;
+    const { _id, household_id, updated_at, ...rest } = doc;
+    const item = {
+      ...rest,
+      id: rest.id || _id.toString(),
+    };
+    const list = byHousehold.get(householdId);
+    if (list) list.push(item);
+    else byHousehold.set(householdId, [item]);
+  }
+  return byHousehold;
+}
+
+/**
  * Daily cron: notify households about food expiring within EXPIRY_ALERT_DAYS.
  * Each item+expiry pair is alerted at most once (tracked on the household doc).
  *
@@ -92,7 +115,10 @@ async function getHouseholdMemberTokens(db, householdId) {
  */
 export async function runExpiryAlerts(db) {
   const households = db.collection('households');
-  const householdDocs = await households.find({}).toArray();
+  const [householdDocs, inventoryByHousehold] = await Promise.all([
+    households.find({}).toArray(),
+    loadInventoryByHousehold(db),
+  ]);
 
   let householdsChecked = 0;
   let householdsNotified = 0;
@@ -102,7 +128,7 @@ export async function runExpiryAlerts(db) {
   for (const household of householdDocs) {
     householdsChecked += 1;
     const householdId = household._id.toString();
-    const items = await getInventoryForHousehold(householdId);
+    const items = inventoryByHousehold.get(householdId) ?? [];
     const expiring = findExpiringSoonItems(items);
     if (expiring.length === 0) continue;
 

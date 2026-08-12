@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense, memo } from 'react';
 import { AppSplashScreen } from './components/AppSplashScreen.jsx';
 import { UnloadingLoader } from './components/UnloadingLoader.jsx';
 import { AuthScreen } from './components/AuthScreen.jsx';
@@ -20,7 +20,6 @@ import {
 } from './api.js';
 import { readStoredPostcode } from './inventory/postcodeStorage.js';
 import { InventorySearch } from './components/InventorySearch.jsx';
-import { ReceiptScanner } from './components/ReceiptScanner.jsx';
 import { IconActionButton } from './components/IconActionButton.jsx';
 import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
@@ -124,6 +123,9 @@ const WeeklyDealsFeed = lazy(() =>
 );
 const RecipesView = lazy(() =>
   import('./components/RecipesView.jsx').then((m) => ({ default: m.RecipesView })),
+);
+const ReceiptScanner = lazy(() =>
+  import('./components/ReceiptScanner.jsx').then((m) => ({ default: m.ReceiptScanner })),
 );
 
 function TabPanelLoader() {
@@ -751,7 +753,7 @@ function ShoppingListBoughtButton({ itemName, onBought, busy = false }) {
   );
 }
 
-function ShoppingListItemRow({
+const ShoppingListItemRow = memo(function ShoppingListItemRow({
   item,
   onOpenEditor,
   onDelete,
@@ -831,9 +833,9 @@ function ShoppingListItemRow({
       </div>
     </li>
   );
-}
+});
 
-function InventoryItemRow({
+const InventoryItemRow = memo(function InventoryItemRow({
   item,
   onOpenEditor,
   onDelete,
@@ -908,9 +910,9 @@ function InventoryItemRow({
       </div>
     </li>
   );
-}
+});
 
-function KitchenStatusCard({ item, onFinished, onRestock }) {
+const KitchenStatusCard = memo(function KitchenStatusCard({ item, onFinished, onRestock }) {
   const urgencyLabel = formatExpiryUrgency(item);
   const catMeta = getCategoryMeta(item.category, item.itemType);
 
@@ -948,7 +950,7 @@ function KitchenStatusCard({ item, onFinished, onRestock }) {
       </div>
     </article>
   );
-}
+});
 
 const PREDICTED_LOW_ACTION_BTN =
   'touch-manipulation relative z-10 select-none transition active:scale-[0.98]';
@@ -2131,10 +2133,12 @@ function InventoryView({
       ) : (
         categoryGrouped && (
           <>
-            <ReceiptScanner
-              replaceItemsFromServer={replaceItemsFromServer}
-              onSuccess={(message) => setReceiptFeedback({ type: 'success', text: message })}
-            />
+            <Suspense fallback={<TabPanelLoader />}>
+              <ReceiptScanner
+                replaceItemsFromServer={replaceItemsFromServer}
+                onSuccess={(message) => setReceiptFeedback({ type: 'success', text: message })}
+              />
+            </Suspense>
             {receiptFeedback && (
               <p
                 role="status"

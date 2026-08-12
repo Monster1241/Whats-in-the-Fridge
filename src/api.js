@@ -99,6 +99,26 @@ export async function saveFcmToken(token) {
 }
 
 export async function fetchSession() {
+  // Prefer existing API JWT so returning users skip Firebase on boot.
+  const existingToken = getAuthToken();
+  if (existingToken) {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        const data = await parseJson(res);
+        if (data.token) setAuthToken(data.token);
+        return data;
+      }
+      if (res.status === 401) {
+        setAuthToken('');
+      }
+    } catch {
+      // Fall through to Firebase restore.
+    }
+  }
+
   const {
     waitForFirebaseAuth,
     firebaseGetIdToken,
@@ -370,31 +390,81 @@ export const fetchPantryChefChat = fetchFridgeScoutChat;
 /**
  * @param {{ store?: string, category?: string, groupBy?: 'store'|'category' }} [filters]
  */
-export async function fetchWeeklyDeals(filters = {}) {
+/**
+ * @param {{ store?: string, category?: string, groupBy?: string }} [filters]
+ * @param {{ force?: boolean }} [options]
+ */
+export async function fetchWeeklyDeals(filters = {}, options = {}) {
   const params = new URLSearchParams();
   if (filters.store) params.set('store', filters.store);
   if (filters.category) params.set('category', filters.category);
   if (filters.groupBy) params.set('groupBy', filters.groupBy);
 
   const query = params.toString();
+  const cacheKey = `weekly:${query}`;
+  if (!options.force) {
+    const cached = readDealsCache(cacheKey);
+    if (cached) return cached;
+  }
+
   const res = await fetch(`${API_BASE}/deals/weekly${query ? `?${query}` : ''}`, {
     headers: authHeaders(),
   });
-  return parseJson(res);
+  const data = await parseJson(res);
+  writeDealsCache(cacheKey, data);
+  return data;
 }
 
 /**
  * @param {{ postcode?: string }} [options]
+ * @param {{ force?: boolean }} [fetchOptions]
  */
-export async function fetchStoreCatalogues(options = {}) {
+export async function fetchStoreCatalogues(options = {}, fetchOptions = {}) {
   const params = new URLSearchParams();
   if (options.postcode) params.set('postcode', options.postcode);
 
   const query = params.toString();
+  const cacheKey = `catalogues:${query}`;
+  if (!fetchOptions.force) {
+    const cached = readDealsCache(cacheKey);
+    if (cached) return cached;
+  }
+
   const res = await fetch(`${API_BASE}/deals/catalogues${query ? `?${query}` : ''}`, {
     headers: authHeaders(),
   });
-  return parseJson(res);
+  const data = await parseJson(res);
+  writeDealsCache(cacheKey, data);
+  return data;
+}
+
+const DEALS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const DEALS_CACHE_PREFIX = 'witf:deals-cache:';
+
+function readDealsCache(key) {
+  try {
+    const raw = sessionStorage.getItem(`${DEALS_CACHE_PREFIX}${key}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.at || Date.now() - parsed.at > DEALS_CACHE_TTL_MS) {
+      sessionStorage.removeItem(`${DEALS_CACHE_PREFIX}${key}`);
+      return null;
+    }
+    return parsed.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDealsCache(key, data) {
+  try {
+    sessionStorage.setItem(
+      `${DEALS_CACHE_PREFIX}${key}`,
+      JSON.stringify({ at: Date.now(), data }),
+    );
+  } catch {
+    // sessionStorage may be full or unavailable
+  }
 }
 
 export async function checkApiHealth() {

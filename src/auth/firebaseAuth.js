@@ -7,7 +7,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
-import { auth } from '../firebase.js';
+import { getFirebaseAuthInstance } from '../firebase.js';
 
 /**
  * @param {import('firebase/auth').AuthError} err
@@ -28,11 +28,12 @@ export function mapFirebaseAuthError(err) {
 }
 
 export function getFirebaseAuth() {
-  return auth;
+  return getFirebaseAuthInstance();
 }
 
 /** Resolves once Firebase has restored persisted auth state. */
 export function waitForFirebaseAuth() {
+  const auth = getFirebaseAuthInstance();
   return new Promise((resolve) => {
     const unsub = onAuthStateChanged(auth, () => {
       unsub();
@@ -42,6 +43,7 @@ export function waitForFirebaseAuth() {
 }
 
 export async function firebaseSignUp(email, password) {
+  const auth = getFirebaseAuthInstance();
   try {
     const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
     try {
@@ -56,6 +58,7 @@ export async function firebaseSignUp(email, password) {
 }
 
 export async function firebaseSignIn(email, password) {
+  const auth = getFirebaseAuthInstance();
   try {
     const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
     return cred.user;
@@ -65,25 +68,25 @@ export async function firebaseSignIn(email, password) {
 }
 
 export async function firebaseSignOut() {
-  await signOut(auth);
+  await signOut(getFirebaseAuthInstance());
 }
 
 export async function firebaseGetIdToken(forceRefresh = false) {
-  const user = auth.currentUser;
+  const user = getFirebaseAuthInstance().currentUser;
   if (!user) return null;
   return user.getIdToken(forceRefresh);
 }
 
 export async function firebaseSendPasswordReset(email) {
   try {
-    await sendPasswordResetEmail(auth, email.trim());
+    await sendPasswordResetEmail(getFirebaseAuthInstance(), email.trim());
   } catch (err) {
     throw mapFirebaseAuthError(err);
   }
 }
 
 export async function firebaseResendVerificationEmail() {
-  const user = auth.currentUser;
+  const user = getFirebaseAuthInstance().currentUser;
   if (!user) {
     throw new Error('Not signed in.');
   }
@@ -95,6 +98,7 @@ export async function firebaseResendVerificationEmail() {
 }
 
 export async function firebaseReloadUser() {
+  const auth = getFirebaseAuthInstance();
   const user = auth.currentUser;
   if (!user) {
     throw new Error('Not signed in.');
@@ -104,7 +108,7 @@ export async function firebaseReloadUser() {
 }
 
 export async function firebaseDeleteCurrentUser() {
-  const user = auth.currentUser;
+  const user = getFirebaseAuthInstance().currentUser;
   if (!user) return;
   try {
     await deleteUser(user);

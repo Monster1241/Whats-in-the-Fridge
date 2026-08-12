@@ -126,6 +126,8 @@ async function ensureIndexes(db) {
   }
 
   await db.collection('users').createIndex({ email: 1 }, { unique: true });
+  await db.collection('users').createIndex({ firebase_uid: 1 }, { sparse: true });
+  await db.collection('users').createIndex({ household_id: 1 });
   await households.createIndex(
     { invite_code: 1 },
     {
@@ -134,6 +136,7 @@ async function ensureIndexes(db) {
     },
   );
   await db.collection('inventory').createIndex({ household_id: 1 });
+  await db.collection('inventory').createIndex({ household_id: 1, id: 1 });
   await ensureWeeklyDealIndexes(db.collection(WEEKLY_DEALS_COLLECTION));
   await ensureStoreCatalogueIndexes(db.collection(STORE_CATALOGUES_COLLECTION));
 }
@@ -646,14 +649,49 @@ export async function upsertHouseholdRecipes(householdId, recipes) {
   return merged;
 }
 
-export async function replaceInventoryForHousehold(householdId, items) {
-  const scopedId = assertScopedHouseholdId(householdId);
-  const inventory = getDb().collection('inventory');
-  await inventory.deleteMany({ household_id: scopedId });
-  if (!Array.isArray(items) || items.length === 0) return;
+/**
+ * Compare inventory item fields that we persist (ignore Mongo metadata).
+ * @param {Record<string, unknown>} a
+ * @param {Record<string, unknown>} b
+ */
+function inventoryDocsEqual(a, b) {
+  const keys = [
+    'id',
+    'name',
+    'itemType',
+    'category',
+    'subCategory',
+    'status',
+    'expiryDate',
+    'preferredStore',
+    'consumptionDuration',
+    'consumptionLearned',
+    'stockedAt',
+    'createdAt',
+    'dateAdded',
+    'quantity',
+    'unit',
+    'foodGroup',
+    'storageLocation',
+    'isLow',
+    'checked',
+    'sourceRecipe',
+  ];
+  for (const key of keys) {
+    if (JSON.stringify(a[key] ?? null) !== JSON.stringify(b[key] ?? null)) {
+      return false;
+    }
+  }
+  return true;
+}
 
-  const now = new Date().toISOString();
-  const docs = items.map((item) => ({
+/**
+ * @param {Record<string, unknown>} item
+ * @param {string} scopedId
+ * @param {string} now
+ */
+function buildInventoryDoc(item, scopedId, now) {
+  return {
     id: item.id,
     name: item.name,
     itemType:
@@ -681,8 +719,70 @@ export async function replaceInventoryForHousehold(householdId, items) {
     sourceRecipe: item.sourceRecipe ?? null,
     household_id: scopedId,
     updated_at: new Date(),
-  }));
-  await inventory.insertMany(docs);
+  };
+}
+
+/**
+ * Smart sync: insert new, update changed, delete removed — avoids wipe-and-reinsert.
+ */
+export async function replaceInventoryForHousehold(householdId, items) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const inventory = getDb().collection('inventory');
+  const incoming = Array.isArray(items) ? items : [];
+  const now = new Date().toISOString();
+
+  if (incoming.length === 0) {
+    await inventory.deleteMany({ household_id: scopedId });
+    return;
+  }
+
+  const existing = await inventory.find({ household_id: scopedId }).toArray();
+  const byId = new Map(
+    existing.map((doc) => [String(doc.id || doc._id), doc]),
+  );
+  const incomingIds = new Set();
+  /** @type {import('mongodb').AnyBulkWriteOperation[]} */
+  const ops = [];
+
+  for (const item of incoming) {
+    if (!item?.id) continue;
+    const id = String(item.id);
+    incomingIds.add(id);
+    const nextDoc = buildInventoryDoc(item, scopedId, now);
+    const prev = byId.get(id);
+
+    if (!prev) {
+      ops.push({ insertOne: { document: nextDoc } });
+      continue;
+    }
+
+    if (!inventoryDocsEqual(prev, nextDoc)) {
+      ops.push({
+        updateOne: {
+          filter: { household_id: scopedId, id },
+          update: {
+            $set: {
+              ...nextDoc,
+              updated_at: new Date(),
+            },
+          },
+        },
+      });
+    }
+  }
+
+  const toDelete = [...byId.keys()].filter((id) => !incomingIds.has(id));
+  if (toDelete.length) {
+    ops.push({
+      deleteMany: {
+        filter: { household_id: scopedId, id: { $in: toDelete } },
+      },
+    });
+  }
+
+  if (ops.length) {
+    await inventory.bulkWrite(ops, { ordered: false });
+  }
 }
 
 function mapInventoryDocument(doc) {
