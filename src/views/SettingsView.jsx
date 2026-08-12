@@ -20,6 +20,7 @@ import {
   ChefHat,
   Copy,
   Flame,
+  FlaskConical,
   Info,
   LogOut,
   Moon,
@@ -298,9 +299,9 @@ export function SettingsView({
   onDeleteAccount,
   onLeaveHousehold,
 }) {
-  const { resetOnboarding } = onboarding;
-  const [name, setName] = useState(settings.user.name);
-  const [email, setEmail] = useState(settings.user.email || accountEmail);
+  const { resetOnboarding } = onboarding ?? {};
+  const [name, setName] = useState(settings?.user?.name ?? '');
+  const [email, setEmail] = useState(settings?.user?.email || accountEmail || '');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -349,9 +350,9 @@ export function SettingsView({
   }, [loadMembers]);
 
   useEffect(() => {
-    setName(settings.user.name);
-    setEmail(settings.user.email || accountEmail || '');
-  }, [settings.user.name, settings.user.email, accountEmail]);
+    setName(settings?.user?.name ?? '');
+    setEmail(settings?.user?.email || accountEmail || '');
+  }, [settings?.user?.name, settings?.user?.email, accountEmail]);
 
   const saveProfile = () => {
     updateSettings((prev) => ({
@@ -635,7 +636,7 @@ export function SettingsView({
             {saved ? 'Saved!' : 'Save profile'}
           </button>
         </div>
-        {settings.user.name && (
+        {settings?.user?.name && (
           <p className="text-muted mt-3 text-xs">
             Signed in as <span className="font-semibold text-slate-800 dark:text-slate-200">{settings.user.name}</span>
           </p>
