@@ -1,7 +1,14 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncRoute } from '../routeUtils.js';
-import { getHouseholdMeta, getInventoryForHousehold, saveInventoryItems, updateHouseholdAppState } from '../db.js';
+import {
+  getHouseholdMeta,
+  getInventoryForHousehold,
+  insertInventoryItem,
+  saveInventoryItems,
+  updateHouseholdAppState,
+  updateInventoryItem,
+} from '../db.js';
 import { sanitizeInventoryItems } from '../inventorySanitize.js';
 import { applyRestockLearningToItem } from '../../src/inventory/restockLearning.js';
 import {
@@ -28,12 +35,21 @@ shoppingListRouter.post(
   asyncRoute(async (req, res) => {
     const existing = await getInventoryForHousehold(req.user.household_id);
     const result = addShoppingListItem(existing, req.body ?? {});
-    const saved = await saveInventoryItems(
-      req.user.household_id,
-      sanitizeInventoryItems(result.items),
-    );
+    const [sanitizedItem] = sanitizeInventoryItems([result.item]);
+    if (!sanitizedItem) {
+      res.status(400).json({ error: 'Invalid shopping list item.' });
+      return;
+    }
+
+    if (result.merged) {
+      await updateInventoryItem(req.user.household_id, sanitizedItem.id, sanitizedItem);
+    } else {
+      await insertInventoryItem(req.user.household_id, sanitizedItem);
+    }
+
+    const saved = await getInventoryForHousehold(req.user.household_id);
     res.status(200).json({
-      item: result.item,
+      item: saved.find((entry) => String(entry.id) === String(sanitizedItem.id)) ?? sanitizedItem,
       merged: result.merged,
       warnings: result.warnings,
       items: saved,
@@ -78,15 +94,15 @@ shoppingListRouter.post(
     let restockHistory = meta?.restockHistory ?? [];
     const learning = applyRestockLearningToItem(restockHistory, result.item);
     restockHistory = learning.restockHistory;
-    const itemsWithLearning = result.items.map((entry) =>
-      String(entry.id) === String(learning.item.id) ? learning.item : entry,
-    );
+    const [sanitizedItem] = sanitizeInventoryItems([learning.item]);
+    if (!sanitizedItem) {
+      res.status(400).json({ error: 'Invalid inventory item.' });
+      return;
+    }
 
-    const saved = await saveInventoryItems(
-      req.user.household_id,
-      sanitizeInventoryItems(itemsWithLearning),
-    );
+    await updateInventoryItem(req.user.household_id, itemId, sanitizedItem);
     await updateHouseholdAppState(req.user.household_id, { restockHistory });
+    const saved = await getInventoryForHousehold(req.user.household_id);
 
     res.status(200).json({
       item: saved.find((entry) => String(entry.id) === String(itemId)) ?? learning.item,

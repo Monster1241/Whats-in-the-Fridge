@@ -8,6 +8,7 @@ import {
   processItemRestock,
 } from '../inventory/restockLearning.js';
 import { normalizeUsageInsights, recordUsageInsightEvent } from '../inventory/usageInsights.js';
+import { diffAppState, toApiStateSnapshot } from '../utils/diffAppState.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'light',
@@ -47,6 +48,7 @@ export function useAppData(enabled) {
   const saveEpochRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const hasUnsyncedEditsRef = useRef(false);
+  const lastSyncedRef = useRef(null);
   const latestRef = useRef({
     items,
     settings,
@@ -85,6 +87,16 @@ export function useAppData(enabled) {
     setItemKnowledge(Array.isArray(state.itemKnowledge) ? state.itemKnowledge : []);
     setUsageInsights(normalizeUsageInsights(state.usageInsights));
     setHouseholdCode(state.householdCode || state.inviteCode || '');
+    lastSyncedRef.current = toApiStateSnapshot({
+      items: needsPersist ? (state.items ?? []) : migrated,
+      settings: { ...DEFAULT_SETTINGS, ...state.settings },
+      savedIds: Array.isArray(state.savedRecipeIds) ? state.savedRecipeIds : [],
+      recipeLibrary: Array.isArray(state.recipeLibrary) ? state.recipeLibrary : [],
+      onboarding: state.onboarding?.dismissed ? state.onboarding : { dismissed: [] },
+      restockHistory: Array.isArray(state.restockHistory) ? state.restockHistory : [],
+      itemKnowledge: Array.isArray(state.itemKnowledge) ? state.itemKnowledge : [],
+      usageInsights: normalizeUsageInsights(state.usageInsights),
+    });
     skipSaveRef.current = !needsPersist;
   }, []);
 
@@ -161,17 +173,26 @@ export function useAppData(enabled) {
       } = latestRef.current;
       saveInFlightRef.current = true;
       try {
-        await saveAppState({
+        const nextSnapshot = toApiStateSnapshot({
           items: nextItems,
           settings: nextSettings,
-          savedRecipeIds: nextSaved,
+          savedIds: nextSaved,
           recipeLibrary: nextRecipeLibrary,
           onboarding: nextOnboarding,
           restockHistory: nextRestockHistory,
           itemKnowledge: latestRef.current.itemKnowledge,
           usageInsights: latestRef.current.usageInsights,
         });
+        const partial = diffAppState(lastSyncedRef.current, nextSnapshot);
+        if (Object.keys(partial).length === 0) {
+          if (epoch !== saveEpochRef.current) return;
+          hasUnsyncedEditsRef.current = false;
+          setSaveError(null);
+          return;
+        }
+        await saveAppState(partial);
         if (epoch !== saveEpochRef.current) return;
+        lastSyncedRef.current = { ...lastSyncedRef.current, ...partial };
         hasUnsyncedEditsRef.current = false;
         setSaveError(null);
       } catch (err) {
@@ -217,17 +238,17 @@ export function useAppData(enabled) {
   const persistSnapshot = useCallback(async (snapshot, epoch) => {
     saveInFlightRef.current = true;
     try {
-      await saveAppState({
-        items: snapshot.items,
-        settings: snapshot.settings,
-        savedRecipeIds: snapshot.savedIds,
-        recipeLibrary: snapshot.recipeLibrary,
-        onboarding: snapshot.onboarding,
-        restockHistory: snapshot.restockHistory,
-        itemKnowledge: snapshot.itemKnowledge,
-        usageInsights: snapshot.usageInsights,
-      });
+      const nextSnapshot = toApiStateSnapshot(snapshot);
+      const partial = diffAppState(lastSyncedRef.current, nextSnapshot);
+      if (Object.keys(partial).length === 0) {
+        if (epoch !== saveEpochRef.current) return;
+        hasUnsyncedEditsRef.current = false;
+        setSaveError(null);
+        return;
+      }
+      await saveAppState(partial);
       if (epoch !== saveEpochRef.current) return;
+      lastSyncedRef.current = { ...lastSyncedRef.current, ...partial };
       hasUnsyncedEditsRef.current = false;
       setSaveError(null);
     } catch (err) {
@@ -400,7 +421,10 @@ export function useAppData(enabled) {
       if (patch.itemKnowledge) setItemKnowledge(patch.itemKnowledge);
       if (patch.usageInsights) setUsageInsights(patch.usageInsights);
       latestRef.current = { ...latestRef.current, items: migrated, ...patch };
+    } else {
+      latestRef.current = { ...latestRef.current, items: migrated };
     }
+    lastSyncedRef.current = toApiStateSnapshot(latestRef.current);
     return migrated;
   }, []);
 

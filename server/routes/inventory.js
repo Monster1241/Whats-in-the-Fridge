@@ -14,12 +14,14 @@ import {
 import {
   deleteInventoryItem,
   getInventoryForHousehold,
-  saveInventoryItems,
+  insertInventoryItem,
+  updateInventoryItem,
 } from '../db.js';
 import { sanitizeInventoryItemInput, sanitizeInventoryItems } from '../inventorySanitize.js';
 import { STATUS } from '../../src/inventory/constants.js';
 import { calculateExpiryDate } from '../../src/inventory/smartInventory.js';
 import { buildConsumptionFields } from '../../src/inventory/consumption.js';
+import { normalizeName } from '../../src/inventory/itemUtils.js';
 
 export const inventoryRouter = Router();
 
@@ -109,9 +111,21 @@ inventoryRouter.post(
       return;
     }
 
-    const merged = sanitizeInventoryItems([...existing, draft]);
-    const saved = await saveInventoryItems(req.user.household_id, merged);
-    const item = saved.find((entry) => entry.id === draft.id) ?? draft;
+    const needle = normalizeName(draft.name);
+    const match = existing.find(
+      (entry) =>
+        normalizeName(entry.name) === needle && entry.itemType === draft.itemType,
+    );
+
+    let item;
+    if (match) {
+      const [merged] = sanitizeInventoryItems([{ ...match }, { ...draft, id: match.id }]);
+      item = await updateInventoryItem(req.user.household_id, match.id, merged);
+    } else {
+      item = await insertInventoryItem(req.user.household_id, draft);
+    }
+
+    const saved = await getInventoryForHousehold(req.user.household_id);
     res.status(201).json({ item, items: saved.filter((entry) => entry.status !== STATUS.OUT) });
   }, 'POST /api/inventory', 'Could not add inventory item'),
 );
@@ -145,9 +159,8 @@ inventoryRouter.put(
       return;
     }
 
-    const next = existing.map((entry) => (String(entry.id) === itemId ? draft : entry));
-    const saved = await saveInventoryItems(req.user.household_id, sanitizeInventoryItems(next));
-    const item = saved.find((entry) => String(entry.id) === itemId);
+    const item = await updateInventoryItem(req.user.household_id, itemId, draft);
+    const saved = await getInventoryForHousehold(req.user.household_id);
     res.status(200).json({ item, items: saved.filter((entry) => entry.status !== STATUS.OUT) });
   }, 'PUT /api/inventory/:id', 'Could not update inventory item'),
 );

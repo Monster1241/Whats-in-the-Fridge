@@ -99,25 +99,27 @@ export async function saveFcmToken(token) {
 }
 
 export async function fetchSession() {
-  // Prefer existing API JWT so returning users skip Firebase on boot.
   const existingToken = getAuthToken();
+  let expiredJwt = false;
+
   if (existingToken) {
-    try {
-      const res = await fetch(`${API_BASE}/auth/me`, {
-        headers: authHeaders(),
-      });
-      if (res.ok) {
-        const data = await parseJson(res);
-        if (data.token) setAuthToken(data.token);
-        return data;
-      }
-      if (res.status === 401) {
-        setAuthToken('');
-      }
-    } catch {
-      // Fall through to Firebase restore.
+    const res = await fetch(`${API_BASE}/auth/me`, {
+      headers: authHeaders(),
+    });
+    if (res.ok) {
+      const data = await parseJson(res);
+      if (data.token) setAuthToken(data.token);
+      return data;
     }
+    if (res.status !== 401) {
+      throw new Error(`Request failed (${res.status})`);
+    }
+    setAuthToken('');
+    expiredJwt = true;
   }
+
+  // No session cookie/JWT: stay logged out without loading Firebase.
+  if (!expiredJwt) return null;
 
   const {
     waitForFirebaseAuth,
@@ -126,27 +128,12 @@ export async function fetchSession() {
 
   await waitForFirebaseAuth();
   const idToken = await firebaseGetIdToken();
-  if (idToken) {
-    try {
-      return await syncFirebaseSession(idToken);
-    } catch (err) {
-      const token = getAuthToken();
-      if (!token) throw err;
-    }
-  }
-
-  const token = getAuthToken();
-  if (!token) return null;
-  const res = await fetch(`${API_BASE}/auth/me`, {
-    headers: authHeaders(),
-  });
-  if (res.status === 401) {
-    setAuthToken('');
+  if (!idToken) return null;
+  try {
+    return await syncFirebaseSession(idToken);
+  } catch {
     return null;
   }
-  const data = await parseJson(res);
-  if (data.token) setAuthToken(data.token);
-  return data;
 }
 
 export async function refreshEmailVerificationSession() {

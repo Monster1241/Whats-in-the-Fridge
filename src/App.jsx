@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense, memo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { AppSplashScreen } from './components/AppSplashScreen.jsx';
 import { UnloadingLoader } from './components/UnloadingLoader.jsx';
 import { AuthScreen } from './components/AuthScreen.jsx';
@@ -20,13 +20,13 @@ import {
 } from './api.js';
 import { readStoredPostcode } from './inventory/postcodeStorage.js';
 import { InventorySearch } from './components/InventorySearch.jsx';
-import { IconActionButton } from './components/IconActionButton.jsx';
-import { ItemTypeahead } from './components/ItemTypeahead.jsx';
 import { StorageCategoryToggle } from './components/StorageCategoryToggle.jsx';
 import { SubCategoryToggle } from './components/SubCategoryToggle.jsx';
 import { SubCategoryFilterMenu } from './components/SubCategoryFilterMenu.jsx';
-import { StoreBadgeSelector } from './components/StoreBadgeSelector.jsx';
 import { LegalFooterLinks } from './components/LegalFooterLinks.jsx';
+import { InventoryItemRow } from './components/InventoryItemRow.jsx';
+import { ShoppingListItemRow } from './components/ShoppingListItemRow.jsx';
+import { KitchenStatusCard } from './components/KitchenStatusCard.jsx';
 import {
   defaultCategoryForItemType,
   getCategoriesForItemType,
@@ -37,7 +37,6 @@ import {
   ITEM_TYPE,
   STATUS,
 } from './inventory/constants.js';
-import { getShoppingSuggestionForItem } from './inventory/getSuggestedStore.js';
 import {
   countEnabledModules,
   getDefaultModuleKey,
@@ -64,10 +63,16 @@ import {
   formatInventoryQuantityLabel,
   normalizeAmbientQuantityFields,
 } from './inventory/quantityDisplay.js';
+import {
+  EXPIRING_SOON_DAYS,
+  getDisplayStatus,
+  isExpiringSoon,
+  sortByUrgencyThenName,
+} from './inventory/expiryDisplay.js';
+import { SHOPPING_ACCENT, STATUS_META } from './inventory/uiAccents.js';
 import { classifyItem } from './inventory/classifyItem.js';
 import {
   countItemsBySubCategory,
-  getSubcategoryMeta,
   groupItemsBySubCategory,
   resolveSubCategory,
   SUBCATEGORY_OTHER,
@@ -82,7 +87,6 @@ import {
 import { filterKitchenStatusItems } from './inventory/kitchenStatus.js';
 import {
   buildConsumptionFields,
-  calculateItemStatus,
   filterPredictedLowItems,
   getConsumptionUrgencyLabel,
 } from './inventory/consumption.js';
@@ -91,19 +95,16 @@ import {
   Bell,
   BookOpen,
   Bookmark,
-  Calendar,
   Check,
   ChevronDown,
   ChevronUp,
   ChefHat,
-  CircleCheck,
   Copy,
   Flame,
   FlaskConical,
   Info,
   Loader2,
   LogOut,
-  MapPin,
   Moon,
   Plus,
   Refrigerator,
@@ -126,6 +127,9 @@ const RecipesView = lazy(() =>
 );
 const ReceiptScanner = lazy(() =>
   import('./components/ReceiptScanner.jsx').then((m) => ({ default: m.ReceiptScanner })),
+);
+const ItemTypeahead = lazy(() =>
+  import('./components/ItemTypeahead.jsx').then((m) => ({ default: m.ItemTypeahead })),
 );
 
 function TabPanelLoader() {
@@ -160,46 +164,7 @@ const COLOR_LEGEND = [
   { swatch: 'bg-violet-600', label: 'Violet', desc: 'Saved recipes & recipe-from-shopping links' },
 ];
 
-const SHOPPING_ACCENT = {
-  border: 'border-sky-300 dark:border-sky-600',
-  borderSoft: 'border-sky-200 dark:border-sky-800',
-  bgActive: 'bg-sky-50 ring-2 ring-sky-500 dark:bg-sky-950/50 dark:ring-sky-500',
-  bgMuted: 'bg-sky-100 dark:bg-sky-950/40',
-  text: 'text-sky-700 dark:text-sky-300',
-  textLabel: 'text-sky-800 dark:text-sky-400',
-  btn: 'bg-sky-600 shadow-sky-900/40 hover:bg-sky-500',
-  badge: 'bg-sky-600',
-  focus: 'focus:border-sky-500 focus:ring-sky-500/30',
-  section: 'text-sky-600 dark:text-sky-400',
-  hover: 'hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-sky-950 dark:hover:text-sky-400',
-};
-
-const EXPIRING_SOON_DAYS = 3;
-
 const STATUS_OPTIONS = [STATUS.FRESH, STATUS.OUT];
-
-const STATUS_META = {
-  [STATUS.FRESH]: {
-    label: 'Plentiful',
-    badge: 'bg-emerald-600 text-white',
-    section: 'fresh',
-  },
-  [STATUS.EXPIRING]: {
-    label: 'Expiring Soon',
-    badge: 'bg-amber-500 text-slate-900',
-    section: 'expiring',
-  },
-  [STATUS.ALMOST_FINISHED]: {
-    label: 'Almost Finished',
-    badge: 'bg-orange-500 text-white',
-    section: 'almost',
-  },
-  [STATUS.OUT]: {
-    label: 'Out of Stock',
-    badge: 'bg-rose-600 text-white',
-    section: 'out',
-  },
-};
 
 function TipBanner({ title, children, onDismiss, accentClass = 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40' }) {
   return (
@@ -251,23 +216,6 @@ function EmptyState({ icon: Icon, title, description }) {
   );
 }
 
-function daysUntilExpiry(iso) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(`${iso}T12:00:00`);
-  expiry.setHours(0, 0, 0, 0);
-  return Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-}
-
-function isExpiringSoon(item) {
-  if (!item.expiryDate || isOnShoppingList(item)) return false;
-  return daysUntilExpiry(item.expiryDate) <= EXPIRING_SOON_DAYS;
-}
-
-function getDisplayStatus(item) {
-  return calculateItemStatus(item);
-}
-
 function groupByCategory(items, category, itemType, selectedSubCategories = null) {
   const inCategory = items.filter(
     (item) =>
@@ -298,38 +246,6 @@ function groupByCategory(items, category, itemType, selectedSubCategories = null
     plentifulGroups: groupItemsBySubCategory(plentiful, itemType, category),
     subCategoryCounts: countItemsBySubCategory(inCategory, itemType, category),
   };
-}
-
-function formatExpiryDate(iso) {
-  if (!iso) return null;
-  const d = new Date(`${iso}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function formatExpiryUrgency(item) {
-  if (!item.expiryDate) return null;
-  const days = daysUntilExpiry(item.expiryDate);
-  const dateLabel = formatExpiryDate(item.expiryDate);
-  if (days < 0) return `Expired ${dateLabel}`;
-  if (days === 0) return 'Expires today';
-  if (days === 1) return 'Expires tomorrow';
-  return `Expires in ${days} days (${dateLabel})`;
-}
-
-function sortByUrgencyThenName(a, b) {
-  if (a.expiryDate && b.expiryDate) {
-    const cmp = a.expiryDate.localeCompare(b.expiryDate);
-    if (cmp !== 0) return cmp;
-  } else if (a.expiryDate) return -1;
-  else if (b.expiryDate) return 1;
-  return a.name.localeCompare(b.name);
-}
-
-function itemTypeLabelEmoji(itemType) {
-  if (itemType === ITEM_TYPE.BABY) return '👶';
-  if (itemType === ITEM_TYPE.HOUSEHOLD) return '🕯️';
-  return '🍏';
 }
 
 function getAddItemHeading(category, itemType) {
@@ -473,20 +389,6 @@ function groupShoppingList(items, enabledModules) {
       if (cat !== 0) return cat;
       return a.name.localeCompare(b.name);
     });
-}
-
-function StatusBadge({ status, onOpenPicker }) {
-  const meta = STATUS_META[status];
-  return (
-    <button
-      type="button"
-      onClick={onOpenPicker}
-      className={`min-h-11 shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase tracking-wide transition active:scale-95 ${meta.badge}`}
-      aria-label={`Status: ${meta.label}. Tap to choose a different status.`}
-    >
-      {meta.label}
-    </button>
-  );
 }
 
 function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
@@ -726,231 +628,6 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
     </div>
   );
 }
-
-function ShoppingListBoughtButton({ itemName, onBought, busy = false }) {
-  return (
-    <button
-      type="button"
-      onClick={onBought}
-      disabled={busy}
-      className="group flex w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 py-3.5 pl-4 pr-5 text-sm font-bold text-white shadow-lg shadow-emerald-900/25 transition hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70 dark:shadow-emerald-950/40"
-      aria-label={`Add ${itemName} to pantry`}
-    >
-      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 ring-2 ring-white/30 transition group-active:scale-95">
-        {busy ? (
-          <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-        ) : (
-          <CircleCheck className="h-5 w-5" strokeWidth={2.5} aria-hidden />
-        )}
-      </span>
-      <span className="flex flex-col items-start text-left leading-tight">
-        <span>{busy ? 'Adding to pantry…' : 'Add to pantry'}</span>
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-100/90">
-          {busy ? 'One moment' : 'Tap when you have bought it'}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-const ShoppingListItemRow = memo(function ShoppingListItemRow({
-  item,
-  onOpenEditor,
-  onDelete,
-  onGotIt,
-  onPreferredStoreChange,
-  stockingId,
-}) {
-  const catMeta = getCategoryMeta(item.category, item.itemType);
-  const { store, detail } = getShoppingSuggestionForItem(item);
-  const quantityLabel = formatInventoryQuantityLabel(item);
-
-  return (
-    <li className="surface-row px-3 py-3">
-      <div className="flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-heading text-sm font-semibold">
-              {item.name}
-              {quantityLabel ? (
-                <span className="text-muted ml-1 text-xs font-medium">· {quantityLabel}</span>
-              ) : null}
-            </p>
-            {catMeta && (
-              <p className="mt-0.5 text-xs text-slate-500">
-                {itemTypeLabelEmoji(item.itemType)} {catMeta.emoji} {catMeta.label}
-              </p>
-            )}
-            {item.sourceRecipe?.title && (
-              <p className="mt-1 text-[11px] font-medium text-violet-700 dark:text-violet-300">
-                For recipe: {item.sourceRecipe.title}
-              </p>
-            )}
-          </div>
-          <IconActionButton
-            variant="delete"
-            onClick={() => onDelete(item.id)}
-            aria-label={`Remove ${item.name} from shopping list`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </IconActionButton>
-        </div>
-
-        <div
-          className={`rounded-xl border px-3 py-2.5 ${SHOPPING_ACCENT.borderSoft} ${SHOPPING_ACCENT.bgMuted}`}
-        >
-          <div className="flex items-start gap-2">
-            <MapPin
-              className={`mt-0.5 h-4 w-4 shrink-0 ${SHOPPING_ACCENT.text}`}
-              aria-hidden
-            />
-            <div className="min-w-0">
-              <p className={`flex flex-wrap items-center gap-x-1 text-xs font-bold ${SHOPPING_ACCENT.textLabel}`}>
-                <span>Where to buy</span>
-                <StoreBadgeSelector
-                  store={store}
-                  onSelect={(nextStore) => onPreferredStoreChange(item.id, nextStore)}
-                />
-              </p>
-              <p className={`mt-1 text-xs leading-relaxed ${SHOPPING_ACCENT.text}`}>{detail}</p>
-            </div>
-          </div>
-        </div>
-
-        <ShoppingListBoughtButton
-          itemName={item.name}
-          busy={stockingId === item.id}
-          onBought={() => onGotIt(item.id)}
-        />
-
-        <button
-          type="button"
-          onClick={() => onOpenEditor(item)}
-          className="text-muted w-full text-center text-xs font-semibold underline-offset-2 hover:text-sky-700 hover:underline dark:hover:text-sky-300"
-        >
-          Edit item details
-        </button>
-      </div>
-    </li>
-  );
-});
-
-const InventoryItemRow = memo(function InventoryItemRow({
-  item,
-  onOpenEditor,
-  onDelete,
-  onMoveToShopping,
-  showCategory = false,
-}) {
-  const urgencyLabel = formatExpiryUrgency(item);
-  const catMeta = getCategoryMeta(item.category, item.itemType);
-  const subMeta = getSubcategoryMeta(item.subCategory, item.itemType, item.category);
-  const displayStatus = getDisplayStatus(item);
-  const quantityLabel = formatInventoryQuantityLabel(item);
-
-  return (
-    <li className="surface-row group flex items-center gap-2 px-3 py-2.5">
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-heading truncate text-sm font-medium">{item.name}</p>
-          {isExpiringSoon(item) && (
-            <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-900 shadow-sm">
-              Expiring Soon
-            </span>
-          )}
-          {item.isLow && (
-            <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-              Low
-            </span>
-          )}
-        </div>
-        {quantityLabel && (
-          <p className="text-muted mt-0.5 text-[10px] font-semibold">Qty: {quantityLabel}</p>
-        )}
-        {item.subCategory && item.subCategory !== SUBCATEGORY_OTHER && (
-          <p className="text-muted mt-0.5 text-[10px] font-semibold">
-            {subMeta.emoji} {subMeta.label}
-          </p>
-        )}
-        {showCategory && catMeta && (
-          <p className="mt-0.5 text-xs text-slate-500">
-            {catMeta.emoji} {catMeta.label}
-          </p>
-        )}
-        {urgencyLabel && isInStockInventory(item) && (
-          <p
-            className={`mt-0.5 flex items-center gap-1 text-xs ${
-              isExpiringSoon(item) ? 'text-amber-700' : 'text-slate-600'
-            }`}
-          >
-            <Calendar className="h-3 w-3 shrink-0" />
-            {urgencyLabel}
-          </p>
-        )}
-      </div>
-      <StatusBadge status={displayStatus} onOpenPicker={() => onOpenEditor(item)} />
-      <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition sm:opacity-80 sm:group-hover:opacity-100">
-        {onMoveToShopping && (
-          <IconActionButton
-            variant="cart"
-            onClick={() => onMoveToShopping(item.id)}
-            className="hover:text-sky-700 dark:hover:text-sky-300"
-            aria-label={`Add ${item.name} to shopping list`}
-          >
-            <ShoppingCart className="h-4 w-4" />
-          </IconActionButton>
-        )}
-        <IconActionButton
-          variant="delete"
-          onClick={() => onDelete(item.id)}
-          aria-label={`Remove ${item.name}`}
-        >
-          <Trash2 className="h-4 w-4" />
-        </IconActionButton>
-      </div>
-    </li>
-  );
-});
-
-const KitchenStatusCard = memo(function KitchenStatusCard({ item, onFinished, onRestock }) {
-  const urgencyLabel = formatExpiryUrgency(item);
-  const catMeta = getCategoryMeta(item.category, item.itemType);
-
-  return (
-    <article className="surface-card flex w-[min(100%,17rem)] shrink-0 snap-start flex-col gap-3 rounded-xl border border-amber-200/80 p-3 shadow-sm dark:border-amber-800/60">
-      <div className="min-w-0">
-        <p className="text-heading line-clamp-2 text-sm font-bold leading-snug">{item.name}</p>
-        {urgencyLabel && (
-          <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-800 dark:text-amber-300">
-            <Calendar className="h-3 w-3 shrink-0" aria-hidden />
-            {urgencyLabel}
-          </p>
-        )}
-        {catMeta && (
-          <p className="text-muted mt-1 text-[10px]">
-            {catMeta.emoji} {catMeta.label}
-          </p>
-        )}
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => onFinished(item.id)}
-          className="rounded-lg border border-rose-200 bg-rose-50 py-2 text-xs font-bold text-rose-700 transition active:scale-[0.98] hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-950"
-        >
-          Finished
-        </button>
-        <button
-          type="button"
-          onClick={() => onRestock(item.id)}
-          className={`rounded-lg py-2 text-xs font-bold text-white transition active:scale-[0.98] ${SHOPPING_ACCENT.btn}`}
-        >
-          Restock
-        </button>
-      </div>
-    </article>
-  );
-});
 
 const PREDICTED_LOW_ACTION_BTN =
   'touch-manipulation relative z-10 select-none transition active:scale-[0.98]';
@@ -2020,17 +1697,19 @@ function InventoryView({
               Add to shopping list
             </p>
             <div className="relative flex gap-2">
-              <ItemTypeahead
-                value={shopDraft}
-                onChange={handleShopDraftChange}
-                onPick={(entry) => applySuggestion(entry, 'shop')}
-                enabledModules={enabledModules}
-                placeholder='What do you need? (e.g. "Milk")'
-                inputClassName={`input-field min-w-0 flex-1 ${SHOPPING_ACCENT.focus}${
-                  shopListDuplicate ? ` ${DUPLICATE_INPUT_RING}` : ''
-                }`}
-                id="shop-item-input"
-              />
+              <Suspense fallback={<input className="input-field min-w-0 flex-1" disabled placeholder="Loading…" />}>
+                <ItemTypeahead
+                  value={shopDraft}
+                  onChange={handleShopDraftChange}
+                  onPick={(entry) => applySuggestion(entry, 'shop')}
+                  enabledModules={enabledModules}
+                  placeholder='What do you need? (e.g. "Milk")'
+                  inputClassName={`input-field min-w-0 flex-1 ${SHOPPING_ACCENT.focus}${
+                    shopListDuplicate ? ` ${DUPLICATE_INPUT_RING}` : ''
+                  }`}
+                  id="shop-item-input"
+                />
+              </Suspense>
               <button
                 type="submit"
                 disabled={Boolean(shopListDuplicate)}
@@ -2155,19 +1834,21 @@ function InventoryView({
                 <p className="text-muted mt-0.5 text-xs leading-relaxed">{addItemHeading.hint}</p>
               </div>
               <div className="relative flex gap-2">
-                <ItemTypeahead
-                  value={draft}
-                  onChange={handleDraftChange}
-                  onPick={(entry) => applySuggestion(entry, 'add')}
-                  onBarcodeResolved={handleBarcodeResolved}
-                  enabledModules={enabledModules}
-                  enableBarcodeScan
-                  placeholder="Item name or scan barcode"
-                  id="quick-add-input"
-                  inputClassName={`input-field min-w-0 flex-1${
-                    addDuplicateMatch ? ` ${DUPLICATE_INPUT_RING}` : ''
-                  }`}
-                />
+                <Suspense fallback={<input className="input-field min-w-0 flex-1" disabled placeholder="Loading…" />}>
+                  <ItemTypeahead
+                    value={draft}
+                    onChange={handleDraftChange}
+                    onPick={(entry) => applySuggestion(entry, 'add')}
+                    onBarcodeResolved={handleBarcodeResolved}
+                    enabledModules={enabledModules}
+                    enableBarcodeScan
+                    placeholder="Item name or scan barcode"
+                    id="quick-add-input"
+                    inputClassName={`input-field min-w-0 flex-1${
+                      addDuplicateMatch ? ` ${DUPLICATE_INPUT_RING}` : ''
+                    }`}
+                  />
+                </Suspense>
                 <button
                   type="submit"
                   disabled={Boolean(addDuplicateMatch) || addItemBusy}
