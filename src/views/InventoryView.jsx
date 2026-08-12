@@ -13,6 +13,7 @@ import { InventoryItemRow } from '../components/InventoryItemRow.jsx';
 import { ShoppingListItemRow } from '../components/ShoppingListItemRow.jsx';
 import { KitchenStatusCard } from '../components/KitchenStatusCard.jsx';
 import { TabPanelLoader } from '../components/TabPanelLoader.jsx';
+import { ColorLegendCard } from '../components/ColorLegendCard.jsx';
 import {
   defaultCategoryForItemType,
   getCategoriesForItemType,
@@ -1558,19 +1559,8 @@ export function InventoryView({
         </TipBanner>
       )}
 
-      {!isDismissed('color-hint') && !isShoppingPage && (
-        <TipBanner
-          title="Quick color guide"
-          accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
-          onDismiss={() => dismiss('color-hint')}
-        >
-          <span className="font-semibold text-emerald-700 dark:text-emerald-400">Green</span> in
-          stock · <span className="font-semibold text-amber-700 dark:text-amber-400">Amber</span>{' '}
-          expiring soon · <span className="font-semibold text-orange-600 dark:text-orange-400">Orange</span>{' '}
-          almost finished / low · <span className="font-semibold text-rose-700 dark:text-rose-400">Rose</span>{' '}
-          out of stock · <span className={`font-semibold ${SHOPPING_ACCENT.textLabel}`}>Sky</span>{' '}
-          shopping list
-        </TipBanner>
+      {!isDismissed('color-guide') && !isShoppingPage && (
+        <ColorLegendCard onDismiss={() => dismiss('color-guide')} />
       )}
 
       {!isShoppingPage && (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchHouseholdMembers, removeHouseholdMember } from '../api.js';
+import { fetchHouseholdMembers, removeHouseholdMember, sendPasswordResetEmail } from '../api.js';
 import { LegalFooterLinks } from '../components/LegalFooterLinks.jsx';
 import { usePushNotifications } from '../context/PushNotificationContext.jsx';
 import {
@@ -22,7 +22,10 @@ import {
   Flame,
   FlaskConical,
   Info,
+  KeyRound,
+  Loader2,
   LogOut,
+  Mail,
   Moon,
   Refrigerator,
   Settings,
@@ -36,34 +39,6 @@ import {
   X,
 } from 'lucide-react';
 
-const COLOR_LEGEND = [
-  { swatch: 'bg-emerald-600', label: 'Emerald', desc: 'In stock · plentiful · primary actions' },
-  { swatch: 'bg-amber-500', label: 'Amber', desc: 'Expiring soon (within 3 days)' },
-  { swatch: 'bg-orange-500', label: 'Orange', desc: 'Almost finished or marked as running low' },
-  { swatch: 'bg-rose-600', label: 'Rose', desc: 'Out of stock — sends item to the shopping list' },
-  { swatch: 'bg-sky-600', label: 'Sky', desc: 'Shopping tab · list · add-to-pantry flow' },
-  { swatch: 'bg-violet-600', label: 'Violet', desc: 'Saved recipes & recipe-from-shopping links' },
-];
-
-function ColorLegendCard() {
-  return (
-    <section className="surface-card mb-5 p-4">
-      <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Color guide</h2>
-      <p className="text-muted mb-3 text-sm">What each color means across the app.</p>
-      <ul className="space-y-2.5">
-        {COLOR_LEGEND.map((item) => (
-          <li key={item.label} className="flex items-start gap-3">
-            <span className={`mt-0.5 h-4 w-4 shrink-0 rounded-full ${item.swatch}`} aria-hidden />
-            <div>
-              <p className="text-heading text-sm font-semibold">{item.label}</p>
-              <p className="text-muted text-xs">{item.desc}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 function AppGuideSection({ enabledModules, onShowTipsAgain }) {
   const [open, setOpen] = useState(false);
   const showRecipes = isModuleEnabled(enabledModules, MODULE_KEYS.FOOD);
@@ -134,7 +109,8 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       steps: [
         'Turn modules on or off: Food & Kitchen, Home Essentials, and Baby Care.',
         'Switch light or dark mode, update your profile, and manage household members.',
-        'Use Show tips again under Data tools to bring back welcome banners on Home and Shopping.',
+        'Use Show tips & color guide again under Data tools to bring welcome banners and the color guide back on Home.',
+        'Reset your password from Your account — Firebase emails you the same reset link as Forgot password.',
         'Clear all items only if you want to wipe inventory for everyone in the household.',
       ],
     },
@@ -226,7 +202,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
               onClick={onShowTipsAgain}
               className="w-full rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 active:scale-[0.99] dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
             >
-              Show welcome tips again on Home
+              Show welcome tips &amp; color guide again on Home
             </button>
           )}
         </div>
@@ -322,6 +298,8 @@ export function SettingsView({
   const [modulesBusy, setModulesBusy] = useState(false);
   const [modulesError, setModulesError] = useState('');
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetFeedback, setResetFeedback] = useState(null);
 
   const enabledModulesSummary = useMemo(
     () =>
@@ -426,6 +404,36 @@ export function SettingsView({
     setConfirmClear(false);
   };
 
+  const signInEmail = String(accountEmail || '').trim();
+  const profileEmail = String(email || '').trim();
+  const resetTargetEmail = signInEmail || profileEmail;
+
+  const handlePasswordReset = async () => {
+    setResetFeedback(null);
+    if (!resetTargetEmail) {
+      setResetFeedback({
+        type: 'error',
+        text: 'No email on this account. Add one above, then try again.',
+      });
+      return;
+    }
+    setResetBusy(true);
+    try {
+      await sendPasswordResetEmail(resetTargetEmail);
+      setResetFeedback({
+        type: 'success',
+        text: `If an account exists for ${resetTargetEmail}, Firebase sent a password reset link. Open that email, set a new password, then sign in again with it.`,
+      });
+    } catch (err) {
+      setResetFeedback({
+        type: 'error',
+        text: err.message || 'Could not send password reset email.',
+      });
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     setDeleteBusy(true);
     setDeleteError('');
@@ -476,8 +484,6 @@ export function SettingsView({
         </h1>
         <p className="text-muted mt-1.5 text-sm">Appearance, account, and household</p>
       </header>
-
-      <ColorLegendCard />
 
       <AppGuideSection
         enabledModules={enabledModules}
@@ -599,7 +605,47 @@ export function SettingsView({
           <User className="h-4 w-4 text-emerald-600" />
           Your account
         </h2>
-        <p className="text-muted mb-3 text-sm">Saved to your household account.</p>
+        <p className="text-muted mb-3 text-sm">
+          Profile details sync with your household. Sign-in is managed by Firebase Authentication.
+        </p>
+
+        <dl className="surface-inset mb-4 space-y-2.5 rounded-xl p-3 text-sm">
+          <div className="flex items-start justify-between gap-3">
+            <dt className="text-muted shrink-0 text-xs font-semibold uppercase tracking-wide">
+              Sign-in email
+            </dt>
+            <dd className="text-heading min-w-0 break-all text-right font-semibold">
+              {signInEmail || 'Not available'}
+            </dd>
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <dt className="text-muted shrink-0 text-xs font-semibold uppercase tracking-wide">
+              Sign-in method
+            </dt>
+            <dd className="text-heading text-right font-semibold">Email &amp; password (Firebase)</dd>
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <dt className="text-muted shrink-0 text-xs font-semibold uppercase tracking-wide">
+              Household role
+            </dt>
+            <dd className="text-heading text-right font-semibold">
+              {membersLoading
+                ? 'Loading…'
+                : currentUserIsOwner
+                  ? 'Owner'
+                  : 'Member'}
+            </dd>
+          </div>
+          <div className="flex items-start justify-between gap-3">
+            <dt className="text-muted shrink-0 text-xs font-semibold uppercase tracking-wide">
+              Invite code
+            </dt>
+            <dd className="text-heading font-mono text-right font-semibold tracking-wider">
+              {householdCode || '—'}
+            </dd>
+          </div>
+        </dl>
+
         <div className="space-y-3">
           <div>
             <label htmlFor="settings-name" className="text-muted mb-1 block text-xs font-semibold uppercase">
@@ -613,10 +659,13 @@ export function SettingsView({
               placeholder="e.g. Alex"
               className="input-field"
             />
+            <p className="text-muted mt-1 text-[11px] leading-relaxed">
+              Shown to your household for shopping pings and profile context.
+            </p>
           </div>
           <div>
             <label htmlFor="settings-email" className="text-muted mb-1 block text-xs font-semibold uppercase">
-              Email
+              Profile email
             </label>
             <input
               id="settings-email"
@@ -626,6 +675,10 @@ export function SettingsView({
               placeholder="you@example.com"
               className="input-field"
             />
+            <p className="text-muted mt-1 text-[11px] leading-relaxed">
+              Optional contact email saved on your household profile. Sign-in still uses your Firebase
+              email above.
+            </p>
           </div>
           <button
             type="button"
@@ -636,11 +689,42 @@ export function SettingsView({
             {saved ? 'Saved!' : 'Save profile'}
           </button>
         </div>
-        {settings?.user?.name && (
-          <p className="text-muted mt-3 text-xs">
-            Signed in as <span className="font-semibold text-slate-800 dark:text-slate-200">{settings.user.name}</span>
+
+        <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-600">
+          <h3 className="text-heading mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+            <KeyRound className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+            Password
+          </h3>
+          <p className="text-muted mb-3 text-xs leading-relaxed">
+            Same flow as Forgot password on the sign-in screen. Firebase emails you a secure link —
+            open it, choose a new password, then use that password next time you log in.
           </p>
-        )}
+          <button
+            type="button"
+            onClick={handlePasswordReset}
+            disabled={resetBusy || !resetTargetEmail}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 py-3 text-sm font-semibold text-emerald-900 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+          >
+            {resetBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Mail className="h-4 w-4" aria-hidden />
+            )}
+            {resetBusy ? 'Sending reset email…' : 'Email me a password reset link'}
+          </button>
+          {resetFeedback && (
+            <p
+              role="status"
+              className={`mt-3 rounded-xl border px-3 py-2 text-xs leading-relaxed ${
+                resetFeedback.type === 'error'
+                  ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+              }`}
+            >
+              {resetFeedback.text}
+            </p>
+          )}
+        </div>
       </section>
 
       <section className="surface-card mb-5 p-4">
@@ -770,7 +854,7 @@ export function SettingsView({
             onClick={resetOnboarding}
             className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:text-slate-200"
           >
-            Show tips again
+            Show tips &amp; color guide again
           </button>
           <button
             type="button"
