@@ -1553,9 +1553,10 @@ export function InventoryView({
           title="Welcome to your household fridge"
           onDismiss={() => dismiss('welcome')}
         >
-          Track food and supplies together. Add items on Home, shop from the Shopping tab, and
-          check Recipes for meal ideas. Scan a grocery receipt to bulk-add items, then share your
-          household code in Settings so your partner can join.
+          Search the top bar to find anything in stock or on the list. Type a name, scan a barcode,
+          or use Scan receipt to add a whole shop. Pantry items show total grams or ml, not can
+          counts. The app learns how long staples last and flags predicted-low items. Share your
+          invite code in Settings so your partner stays in sync.
         </TipBanner>
       )}
 
@@ -1585,10 +1586,11 @@ export function InventoryView({
               accentClass="border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
               onDismiss={() => dismiss('shopping-tip')}
             >
-              Add items with the + field (duplicates merge automatically). After you buy something,
-              tap <strong className="font-semibold">Add to pantry</strong> — it moves to Fridge with a
-              suggested use-by date. Items from recipes show which dish they were for. Ping your partner
-              to send a shopping reminder.
+              Add items with + (matching names merge, including from deals and recipes). After you
+              buy something, tap <strong className="font-semibold">Add to pantry</strong> — it moves
+              to Fridge with a suggested use-by date. Use Frequently restocked for usual staples,
+              tap a store badge to remember where you buy it, then Ping partner for a reminder
+              (no item names in the notification).
             </TipBanner>
           )}
 

@@ -48,11 +48,13 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       icon: Refrigerator,
       title: 'Home — track what you have',
       steps: [
+        'Use Search at the top to find an item, move it to shopping, mark it restocked, or edit it.',
         'Type a name for suggestions, scan a barcode, or use Scan receipt / upload invoice to add a whole grocery shop at once.',
         'Switch Ambient, Fresh, and Freezer to organise pantry, fridge, and frozen items.',
+        'Pantry (Ambient) quantities show as total grams or ml — e.g. two 400g tins display as 800g total.',
         'Tap a row\'s status badge to edit quantity, expiry, storage, or mark an item out of stock.',
         `Items expiring within ${EXPIRING_SOON_DAYS} days appear under Expiring Soon with an amber badge.`,
-        'Mark items as running low in the editor, or let the app flag almost-finished staples automatically.',
+        'Mark items as running low in the editor, or let Predicted low / Almost finished flag staples from how long they last in your home.',
         'Use More options when adding to pick Home Essentials or Baby Care categories.',
       ],
     },
@@ -64,8 +66,9 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'Add items with + — matching names merge quantities instead of creating duplicates.',
         'Tap a store badge to save where your household buys each item.',
         'After you purchase something, tap Add to pantry on that row. It leaves the list and appears in Fridge with a suggested use-by date.',
-        'Ingredients added from Recipes show which dish they were for.',
-        'Ping partner to shop sends a push notification to other household members.',
+        'Ingredients added from Recipes, and deals you tap Add to shopping list, land here with the same merge.',
+        'Use Frequently restocked to quickly add staples you buy often.',
+        'Ping partner to shop sends a reminder to other household members (item names are not in the notification).',
       ],
     },
     {
@@ -97,10 +100,11 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       icon: Users,
       title: 'Household — share with your partner',
       steps: [
-        'Copy your invite code in Settings so someone can join the same fridge.',
-        'Everyone in the household sees the same inventory, shopping list, and saved recipes.',
-        'Enable push notifications in Settings for expiry alerts and partner shopping pings.',
+        'Copy or share your invite code in Settings so someone can join the same fridge.',
+        'Everyone in the household sees the same inventory, shopping list, and saved recipes — edits sync live.',
+        'Enable push notifications in Settings for expiry alerts and partner shopping pings (no item names in the alert).',
         'Scanning a receipt? Items already on the shopping list are moved to Fridge automatically when names match.',
+        'On your phone, use Add to Home Screen to install the app for a fullscreen experience.',
       ],
     },
     {
@@ -108,9 +112,10 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       title: 'Settings — customize the app',
       steps: [
         'Turn modules on or off: Food & Kitchen, Home Essentials, and Baby Care.',
-        'Switch light or dark mode, update your profile, and manage household members.',
+        'Switch light or dark mode, and manage household members (owners can remove people).',
+        'Your account shows sign-in email, household role, and invite code. Display name is used for shopping pings.',
+        'Reset your password from Your account — Firebase emails the same reset link as Forgot password. Open it, set a new password, then sign in with it.',
         'Use Show tips & color guide again under Data tools to bring welcome banners and the color guide back on Home.',
-        'Reset your password from Your account — Firebase emails you the same reset link as Forgot password.',
         'Clear all items only if you want to wipe inventory for everyone in the household.',
       ],
     },
@@ -131,7 +136,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
           </h2>
           {!open && (
             <p className="text-muted mt-1 text-xs leading-relaxed">
-              Home, shopping, deals, recipes, receipt scan, and household sharing
+              Search, pantry totals, predicted low, receipts, recipes, and sharing
             </p>
           )}
         </div>
@@ -145,9 +150,9 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       {open && (
         <div className="mt-4 space-y-4 border-t border-slate-200 pt-4 dark:border-slate-600">
           <p className="text-muted text-sm leading-relaxed">
-            What&apos;s in the Fridge keeps a shared household inventory for Australian homes. Track
-            what you have on Home, build a buy list on Shopping, spot specials on Deals, and cook
-            from Recipes. Invite your partner with the code below so you stay in sync.
+            What&apos;s in the Fridge keeps a shared household inventory for Australian homes. Search
+            what you have, scan receipts, learn how long staples last, shop together, and cook from
+            Recipes. Invite your partner with the code in Settings so you stay in sync.
           </p>
 
           {sections.map((section) => {
