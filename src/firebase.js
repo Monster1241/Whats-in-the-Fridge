@@ -1,6 +1,11 @@
 import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported } from 'firebase/analytics';
-import { getAuth } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+} from 'firebase/auth';
 import { firebaseConfig } from './firebase/config.js';
 
 /** @type {import('firebase/app').FirebaseApp | null} */
@@ -20,10 +25,21 @@ export function getFirebaseApp() {
   return appInstance;
 }
 
-/** Initialize Auth on first use. */
+/**
+ * Initialize Auth on first use with explicit browser persistence.
+ * IndexedDB + localStorage is required for reliable restore in iOS WKWebView / Capacitor.
+ */
 export function getFirebaseAuthInstance() {
   if (!authInstance) {
-    authInstance = getAuth(getFirebaseApp());
+    const app = getFirebaseApp();
+    try {
+      authInstance = initializeAuth(app, {
+        persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      });
+    } catch {
+      // HMR / duplicate init — reuse the existing Auth instance.
+      authInstance = getAuth(app);
+    }
   }
   return authInstance;
 }

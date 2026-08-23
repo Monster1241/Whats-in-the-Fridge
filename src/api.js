@@ -67,14 +67,26 @@ async function parseJson(res) {
  * @param {string} idToken
  */
 export async function syncFirebaseSession(idToken) {
-  const res = await fetch(apiUrl(`/auth/session`), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idToken }),
-  });
-  const data = await parseJson(res);
-  if (data.token) setAuthToken(data.token);
-  return data;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(apiUrl(`/auth/session`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+      signal: controller.signal,
+    });
+    const data = await parseJson(res);
+    if (data.token) setAuthToken(data.token);
+    return data;
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error('Sign-in timed out. Please check your connection and try again.');
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export async function signup(email, password) {
@@ -120,19 +132,31 @@ export async function fetchSession() {
   let expiredJwt = false;
 
   if (existingToken) {
-    const res = await fetch(apiUrl(`/auth/me`), {
-      headers: authHeaders(),
-    });
-    if (res.ok) {
-      const data = await parseJson(res);
-      if (data.token) setAuthToken(data.token);
-      return data;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(apiUrl(`/auth/me`), {
+        headers: authHeaders(),
+        signal: controller.signal,
+      });
+      if (res.ok) {
+        const data = await parseJson(res);
+        if (data.token) setAuthToken(data.token);
+        return data;
+      }
+      if (res.status !== 401) {
+        throw new Error(`Request failed (${res.status})`);
+      }
+      setAuthToken('');
+      expiredJwt = true;
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        throw new Error('Could not restore your session in time. Please try again.');
+      }
+      throw err;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
-    if (res.status !== 401) {
-      throw new Error(`Request failed (${res.status})`);
-    }
-    setAuthToken('');
-    expiredJwt = true;
   }
 
   // No session cookie/JWT: stay logged out without loading Firebase.

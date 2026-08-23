@@ -1,13 +1,38 @@
 import {
   createUserWithEmailAndPassword,
   deleteUser,
-  onAuthStateChanged,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
 import { getFirebaseAuthInstance } from '../firebase.js';
+
+/** Default cap so iOS WKWebView never spins forever on auth restore / ID token. */
+export const AUTH_TIMEOUT_MS = 10_000;
+
+/**
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} [ms]
+ * @param {string} [message]
+ * @returns {Promise<T>}
+ */
+export function withAuthTimeout(
+  promise,
+  ms = AUTH_TIMEOUT_MS,
+  message = 'Authentication timed out. Please try again.',
+) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => {
+      if (timer) clearTimeout(timer);
+    }),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]);
+}
 
 /**
  * @param {import('firebase/auth').AuthError} err
@@ -31,15 +56,24 @@ export function getFirebaseAuth() {
   return getFirebaseAuthInstance();
 }
 
-/** Resolves once Firebase has restored persisted auth state. */
-export function waitForFirebaseAuth() {
+/**
+ * Resolves once Firebase has restored persisted auth state.
+ * Times out on flaky WKWebView persistence so boot never hangs.
+ */
+export async function waitForFirebaseAuth(timeoutMs = AUTH_TIMEOUT_MS) {
   const auth = getFirebaseAuthInstance();
-  return new Promise((resolve) => {
-    const unsub = onAuthStateChanged(auth, () => {
-      unsub();
-      resolve(auth.currentUser);
-    });
-  });
+  const timeoutMessage =
+    'Sign-in is taking too long. Please check your connection and try again.';
+  try {
+    await withAuthTimeout(auth.authStateReady(), timeoutMs, timeoutMessage);
+  } catch (err) {
+    // Timed out — continue with whatever currentUser we have (often null).
+    if (err?.message === timeoutMessage) {
+      return auth.currentUser ?? null;
+    }
+    throw err;
+  }
+  return auth.currentUser ?? null;
 }
 
 export async function firebaseSignUp(email, password) {
@@ -74,7 +108,11 @@ export async function firebaseSignOut() {
 export async function firebaseGetIdToken(forceRefresh = false) {
   const user = getFirebaseAuthInstance().currentUser;
   if (!user) return null;
-  return user.getIdToken(forceRefresh);
+  return withAuthTimeout(
+    user.getIdToken(forceRefresh),
+    AUTH_TIMEOUT_MS,
+    'Could not verify your account in time. Please try again.',
+  );
 }
 
 export async function firebaseSendPasswordReset(email) {

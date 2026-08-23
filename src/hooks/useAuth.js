@@ -12,6 +12,28 @@ import {
   signup,
 } from '../api.js';
 
+const BOOT_TIMEOUT_MS = 10_000;
+const AUTH_FLOW_TIMEOUT_MS = 10_000;
+
+/**
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @param {string} message
+ * @returns {Promise<T>}
+ */
+function withTimeout(promise, ms, message) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise).finally(() => {
+      if (timer) clearTimeout(timer);
+    }),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]);
+}
+
 export function useAuth() {
   const [booting, setBooting] = useState(true);
   const [user, setUser] = useState(null);
@@ -32,7 +54,11 @@ export function useAuth() {
   }, []);
 
   const refreshSession = useCallback(async () => {
-    const data = await fetchSession();
+    const data = await withTimeout(
+      fetchSession(),
+      BOOT_TIMEOUT_MS,
+      'Could not restore your session in time. Please try again.',
+    );
     applySession(data);
     return data;
   }, [applySession]);
@@ -42,7 +68,11 @@ export function useAuth() {
     (async () => {
       try {
         setError(null);
-        const data = await fetchSession();
+        const data = await withTimeout(
+          fetchSession(),
+          BOOT_TIMEOUT_MS,
+          'Could not restore your session in time. Please try again.',
+        );
         if (!cancelled) applySession(data);
       } catch (err) {
         if (!cancelled) {
@@ -63,18 +93,36 @@ export function useAuth() {
   const handleSignup = useCallback(
     async (email, password) => {
       setError(null);
-      const data = await signup(email, password);
-      applySession(data);
-      return data;
+      try {
+        const data = await withTimeout(
+          signup(email, password),
+          AUTH_FLOW_TIMEOUT_MS,
+          'Sign up timed out. Please check your connection and try again.',
+        );
+        applySession(data);
+        return data;
+      } catch (err) {
+        setError(err.message || 'Could not sign up.');
+        throw err;
+      }
     },
     [applySession],
   );
 
   const handleLogin = useCallback(async (email, password) => {
     setError(null);
-    const data = await login(email, password);
-    applySession(data);
-    return data;
+    try {
+      const data = await withTimeout(
+        login(email, password),
+        AUTH_FLOW_TIMEOUT_MS,
+        'Sign in timed out. Please check your connection and try again.',
+      );
+      applySession(data);
+      return data;
+    } catch (err) {
+      setError(err.message || 'Could not sign in.');
+      throw err;
+    }
   }, [applySession]);
 
   const handleCheckVerification = useCallback(async () => {
