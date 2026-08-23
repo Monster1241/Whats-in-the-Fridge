@@ -664,9 +664,11 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchWeeklyDeals({}, { force });
+      const data = await fetchWeeklyDeals({ postcode }, { force });
       setDeals(data.deals ?? []);
       setDealCycle(data.cycle ?? null);
+      if (data.regionLabel) setRegionLabel(data.regionLabel);
+      if (data.postcode) setPostcode(data.postcode);
     } catch (err) {
       setDeals([]);
       setDealCycle(null);
@@ -674,11 +676,12 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [postcode]);
 
   useEffect(() => {
+    setSelectedStores(new Set());
     loadDeals(false);
-  }, [loadDeals]);
+  }, [postcode, loadDeals]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -850,22 +853,26 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
       return `No deals match "${searchQuery.trim()}". Try another search or filter.`;
     }
     if (deals.length === 0) {
+      if (regionLabel && postcode) {
+        return `No item deals for ${regionLabel} (${postcode}) this week — try another postcode or check back after Wednesday.`;
+      }
       return dealCycle?.nextRefreshAt
-        ? 'No item deals this fortnight — new stores rotate every second Wednesday.'
+        ? 'No item deals this week — stores rotate every Wednesday.'
         : 'No weekly deals right now — check back after Wednesday.';
     }
     if (selectedStores.size > 0 || selectedDealTypes.size > 0) {
       return 'No deals match your filters. Try clearing filters or selecting different options.';
     }
     return 'No matching deals for this selection.';
-  }, [deals.length, dealCycle, normalizedSearch, searchQuery, selectedStores.size, selectedDealTypes.size]);
+  }, [deals.length, dealCycle, normalizedSearch, postcode, regionLabel, searchQuery, selectedStores.size, selectedDealTypes.size]);
 
   const dealsCount = loading ? 0 : filteredDeals.length;
   const cataloguesCount = cataloguesLoading ? 0 : orderedCatalogues.length;
 
   const activeStoreLabels = useMemo(() => {
-    if (!dealCycle?.activeStores?.length) return '';
-    return dealCycle.activeStores
+    const stores = dealCycle?.activeStoresForRegion ?? dealCycle?.activeStores ?? [];
+    if (!stores.length) return '';
+    return stores
       .map((id) => STORE_FILTERS.find((store) => store.id === id)?.label ?? id)
       .join(', ');
   }, [dealCycle]);
@@ -915,8 +922,11 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
             </h2>
             <p className="text-muted mt-1 text-xs leading-relaxed">
               {activeSectionMeta.description}
-              {activeSection === 'catalogues' && regionLabel && (
-                <span className="text-heading font-semibold"> · {regionLabel} ({postcode})</span>
+              {regionLabel && (
+                <span className="text-heading font-semibold">
+                  {' '}
+                  · {regionLabel} ({postcode})
+                </span>
               )}
             </p>
           </div>
@@ -946,11 +956,10 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
               />
             ) : (
               <>
-            {dealCycle?.activeStores?.length > 0 && (
+            {dealCycle?.activeStoresForRegion?.length > 0 && (
               <p className="text-muted mb-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed dark:border-amber-900/50 dark:bg-amber-950/25">
-                <span className="text-heading font-semibold">This fortnight:</span>{' '}
-                {activeStoreLabels}. Item deals refresh every second Wednesday with a new store
-                lineup.
+                <span className="text-heading font-semibold">This week near {postcode}:</span>{' '}
+                {activeStoreLabels}. Item deals refresh every Wednesday for your area.
               </p>
             )}
             <label className="relative mb-4 block">

@@ -4,11 +4,14 @@ import {
 } from './groceryCycle.js';
 import {
   getActiveDealStores,
-  getBiweeklyCycleBounds,
-  getBiweeklyCycleIndex,
-  getCurrentBiweeklyCycleStart,
+  getActiveDealStoresForRegion,
+  getWeeklyCycleBounds,
+  getWeeklyCycleIndex,
+  getCurrentWeeklyCycleStart,
   serializeCycleStart,
 } from './dealCycle.js';
+import { resolveCatalogueLocale } from './catalogueRegions.js';
+import { getStoreCatalogueRegions } from './storeCatalogues.js';
 import { WEEKLY_DEAL_TEMPLATES } from './seedWeeklyDeals.js';
 
 export { WEEKLY_DEAL_TEMPLATES };
@@ -102,6 +105,7 @@ export const DEFAULT_SAVINGS_TEXT_BY_DEAL_TYPE = {
  * @property {Date} expiresAt
  * @property {string} cycleStart
  * @property {number} cycleIndex
+ * @property {import('./catalogueRegions.js').CatalogueRegion[]} regions
  * @property {Date} created_at
  * @property {Date} updated_at
  */
@@ -245,11 +249,14 @@ export function buildWeeklyDealDoc(input) {
   const cycleStart =
     typeof input.cycleStart === 'string' && input.cycleStart
       ? serializeCycleStart(new Date(input.cycleStart))
-      : serializeCycleStart(getCurrentBiweeklyCycleStart());
+      : serializeCycleStart(getCurrentWeeklyCycleStart());
   const cycleIndex =
     Number.isFinite(Number(input.cycleIndex))
       ? Number(input.cycleIndex)
-      : getBiweeklyCycleIndex();
+      : getWeeklyCycleIndex();
+  const regions = Array.isArray(input.regions) && input.regions.length > 0
+    ? [...new Set(input.regions)]
+    : getStoreCatalogueRegions(store);
 
   return {
     name,
@@ -262,6 +269,7 @@ export function buildWeeklyDealDoc(input) {
     expiresAt: sanitizeExpiresAt(input.expiresAt),
     cycleStart,
     cycleIndex,
+    regions,
     created_at: input.created_at instanceof Date ? input.created_at : now,
     updated_at: now,
   };
@@ -300,6 +308,7 @@ export async function ensureWeeklyDealIndexes(collection) {
   await collection.createIndex({ store: 1, category: 1 });
   await collection.createIndex({ expiresAt: 1 });
   await collection.createIndex({ cycleStart: 1, expiresAt: 1 });
+  await collection.createIndex({ cycleStart: 1, regions: 1, expiresAt: 1 });
   await collection.createIndex({ name: 1, store: 1 });
   await collection.createIndex({ dealType: 1 });
 }
@@ -316,9 +325,9 @@ export function buildDealsForCycle(expiresAt, options = {}) {
   const cycleIndex =
     Number.isFinite(Number(options.cycleIndex))
       ? Number(options.cycleIndex)
-      : getBiweeklyCycleIndex();
+      : getWeeklyCycleIndex();
   const cycleStart =
-    options.cycleStart ?? serializeCycleStart(getCurrentBiweeklyCycleStart());
+    options.cycleStart ?? serializeCycleStart(getCurrentWeeklyCycleStart());
   const templates = options.templates ?? WEEKLY_DEAL_TEMPLATES;
   const activeStores = new Set(getActiveDealStores(cycleIndex));
 
@@ -339,7 +348,7 @@ export async function seedWeeklyDealsIfEmpty() {
   const count = await collection.countDocuments({}, { limit: 1 });
   if (count > 0) return false;
 
-  const cycle = getBiweeklyCycleBounds();
+  const cycle = getWeeklyCycleBounds();
   const docs = buildDealsForCycle(cycle.expiresAt, {
     cycleIndex: cycle.cycleIndex,
     cycleStart: serializeCycleStart(cycle.validFrom),
@@ -361,11 +370,15 @@ export async function seedWeeklyDealsIfEmpty() {
  * @param {Date} [now]
  */
 async function ensureActiveDealsForCurrentCycle(collection, now = new Date()) {
-  const cycle = getBiweeklyCycleBounds(now);
+  const cycle = getWeeklyCycleBounds(now);
   const cycleStart = serializeCycleStart(cycle.validFrom);
 
   const hasCurrentCycle = await collection.countDocuments(
-    { cycleStart, expiresAt: { $gte: now } },
+    {
+      cycleStart,
+      expiresAt: { $gte: now },
+      regions: { $exists: true, $type: 'array', $not: { $size: 0 } },
+    },
     { limit: 1 },
   );
   if (hasCurrentCycle > 0) return false;
@@ -397,7 +410,7 @@ async function ensureActiveDealsForCurrentCycle(collection, now = new Date()) {
 export async function reseedWeeklyDeals() {
   const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
   const removeResult = await collection.deleteMany({});
-  const cycle = getBiweeklyCycleBounds();
+  const cycle = getWeeklyCycleBounds();
   const docs = buildDealsForCycle(cycle.expiresAt, {
     cycleIndex: cycle.cycleIndex,
     cycleStart: serializeCycleStart(cycle.validFrom),
@@ -431,7 +444,8 @@ function parseFilterList(value) {
 }
 
 /**
- * @param {{ store?: string|null, category?: string|null, dealType?: string|null }} filters
+ * @param {{ store?: string|null, category?: string|null, dealType?: string|null, postcode?: string|null }} filters
+ * @returns {Promise<{ deals: ReturnType<typeof mapWeeklyDealDoc>[], locale: ReturnType<typeof resolveCatalogueLocale> }>}
  */
 export async function fetchWeeklyDeals(filters = {}) {
   const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
@@ -439,12 +453,14 @@ export async function fetchWeeklyDeals(filters = {}) {
   await seedWeeklyDealsIfEmpty();
   await ensureActiveDealsForCurrentCycle(collection, now);
 
-  const cycle = getBiweeklyCycleBounds(now);
+  const locale = resolveCatalogueLocale(filters.postcode);
+  const cycle = getWeeklyCycleBounds(now);
   const cycleStart = serializeCycleStart(cycle.validFrom);
 
   const query = {
     expiresAt: { $gte: now },
     cycleStart,
+    regions: locale.region,
   };
 
   const storeFilters = parseFilterList(filters.store)
@@ -473,8 +489,12 @@ export async function fetchWeeklyDeals(filters = {}) {
     .toArray();
 
   const mapped = docs.map(mapWeeklyDealDoc);
-  if (uniqueDealTypes.length === 0) return mapped;
-  return mapped.filter((deal) => uniqueDealTypes.includes(deal.dealType));
+  const filtered =
+    uniqueDealTypes.length === 0
+      ? mapped
+      : mapped.filter((deal) => uniqueDealTypes.includes(deal.dealType));
+
+  return { deals: filtered, locale };
 }
 
 /**

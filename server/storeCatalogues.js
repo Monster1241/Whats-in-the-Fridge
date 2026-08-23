@@ -186,6 +186,18 @@ const STORE_REGION_COVERAGE = {
   costco: ['ACT', 'NSW_Metro', 'NSW_Sth', 'VIC', 'QLD', 'SA', 'WA'],
 };
 
+/**
+ * @param {string} store
+ * @returns {import('./catalogueRegions.js').CatalogueRegion[]}
+ */
+export function getStoreCatalogueRegions(store) {
+  const key = String(store ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '');
+  return STORE_REGION_COVERAGE[key] ?? SEED_CATALOGUE_REGIONS;
+}
+
 /** Representative postcodes used to build region-aware catalogue portal links. */
 const REGION_SAMPLE_POSTCODE = {
   ACT: '2912',

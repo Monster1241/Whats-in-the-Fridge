@@ -1,54 +1,63 @@
 import { describe, expect, it } from 'vitest';
+import { getNextWednesdayExpiry } from './groceryCycle.js';
 import {
-  getActiveDealStores,
-  getBiweeklyCycleBounds,
-  getBiweeklyCycleIndex,
-  getCurrentBiweeklyCycleStart,
-  shouldRefreshDealsThisWeek,
+  getActiveDealStoresForRegion,
+  getWeeklyCycleBounds,
+  getWeeklyCycleIndex,
+  getCurrentWeeklyCycleStart,
 } from './dealCycle.js';
 import { buildDealsForCycle } from './weeklyDeals.js';
 
 describe('dealCycle', () => {
-  it('alternates active stores every bi-weekly cycle', () => {
-    const evenStores = getActiveDealStores(0);
-    const oddStores = getActiveDealStores(1);
+  it('alternates active stores every weekly cycle', () => {
+    const evenStores = getActiveDealStoresForRegion(0, 'NSW_Metro');
+    const oddStores = getActiveDealStoresForRegion(1, 'NSW_Metro');
     expect(evenStores).toEqual(['coles', 'woolworths', 'aldi']);
     expect(oddStores).toEqual(['harrisfarm', 'costco', 'woolworths']);
-    expect(evenStores).not.toEqual(oddStores);
   });
 
-  it('marks refresh weeks on bi-weekly Wednesday boundaries', () => {
-    const refreshWednesday = getCurrentBiweeklyCycleStart(new Date('2024-01-17T12:00:00.000Z'));
-    expect(shouldRefreshDealsThisWeek(refreshWednesday)).toBe(true);
-
-    const midCycleWednesday = new Date(refreshWednesday);
-    midCycleWednesday.setUTCDate(midCycleWednesday.getUTCDate() + 7);
-    expect(shouldRefreshDealsThisWeek(midCycleWednesday)).toBe(false);
+  it('uses one-week bounds between Wednesdays', () => {
+    const from = new Date('2024-01-03T12:00:00.000Z');
+    const cycle = getWeeklyCycleBounds(from);
+    expect(cycle.validFrom.getTime()).toBe(getCurrentWeeklyCycleStart(from).getTime());
+    expect(cycle.expiresAt.getTime()).toBe(getNextWednesdayExpiry(cycle.validFrom).getTime());
   });
 
   it('builds deals only for the active store rotation', () => {
-    const cycle = getBiweeklyCycleBounds(new Date('2024-01-03T12:00:00.000Z'));
-    const evenDocs = buildDealsForCycle(cycle.expiresAt, {
+    const cycle = getWeeklyCycleBounds(new Date('2024-01-03T12:00:00.000Z'));
+    const weekOneDocs = buildDealsForCycle(cycle.expiresAt, {
       cycleIndex: cycle.cycleIndex,
       cycleStart: cycle.validFrom.toISOString(),
     });
-    expect(evenDocs.every((deal) => ['coles', 'woolworths', 'aldi'].includes(deal.store))).toBe(
+    expect(weekOneDocs.every((deal) => ['coles', 'woolworths', 'aldi'].includes(deal.store))).toBe(
+      true,
+    );
+    expect(weekOneDocs.every((deal) => Array.isArray(deal.regions) && deal.regions.length > 0)).toBe(
       true,
     );
 
-    const oddCycle = getBiweeklyCycleBounds(new Date('2024-01-17T12:00:00.000Z'));
-    const oddDocs = buildDealsForCycle(oddCycle.expiresAt, {
-      cycleIndex: oddCycle.cycleIndex,
-      cycleStart: oddCycle.validFrom.toISOString(),
+    const weekTwoCycle = getWeeklyCycleBounds(new Date('2024-01-10T12:00:00.000Z'));
+    const weekTwoDocs = buildDealsForCycle(weekTwoCycle.expiresAt, {
+      cycleIndex: weekTwoCycle.cycleIndex,
+      cycleStart: weekTwoCycle.validFrom.toISOString(),
     });
     expect(
-      oddDocs.every((deal) => ['harrisfarm', 'costco', 'woolworths'].includes(deal.store)),
+      weekTwoDocs.every((deal) => ['harrisfarm', 'costco', 'woolworths'].includes(deal.store)),
     ).toBe(true);
   });
 
-  it('increments cycle index every two weeks', () => {
-    expect(getBiweeklyCycleIndex(new Date('2024-01-03T12:00:00.000Z'))).toBe(0);
-    expect(getBiweeklyCycleIndex(new Date('2024-01-10T12:00:00.000Z'))).toBe(0);
-    expect(getBiweeklyCycleIndex(new Date('2024-01-17T12:00:00.000Z'))).toBe(1);
+  it('increments cycle index every week', () => {
+    expect(getWeeklyCycleIndex(new Date('2024-01-03T12:00:00.000Z'))).toBe(0);
+    expect(getWeeklyCycleIndex(new Date('2024-01-10T12:00:00.000Z'))).toBe(1);
+    expect(getWeeklyCycleIndex(new Date('2024-01-17T12:00:00.000Z'))).toBe(2);
+  });
+
+  it('limits active stores by catalogue region', () => {
+    expect(getActiveDealStoresForRegion(1, 'VIC')).toEqual(['costco', 'woolworths']);
+    expect(getActiveDealStoresForRegion(1, 'NSW_Metro')).toEqual([
+      'harrisfarm',
+      'costco',
+      'woolworths',
+    ]);
   });
 });

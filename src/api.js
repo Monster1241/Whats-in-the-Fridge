@@ -434,6 +434,7 @@ export const fetchPantryChefChat = fetchFridgeScoutChat;
  */
 export async function fetchWeeklyDeals(filters = {}, options = {}) {
   const params = new URLSearchParams();
+  if (filters.postcode) params.set('postcode', filters.postcode);
   if (filters.store) params.set('store', filters.store);
   if (filters.category) params.set('category', filters.category);
   if (filters.groupBy) params.set('groupBy', filters.groupBy);

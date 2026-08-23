@@ -160,7 +160,7 @@ export const WEEKLY_DEAL_TEMPLATES = [
     category: 'Fresh',
   },
 
-  // —— Harris Farm (alternating bi-weekly cycle) ——
+  // —— Harris Farm (alternating weekly cycle) ——
   {
     name: 'Imperfect Picks Seasonal Fruit 1kg',
     store: 'harrisfarm',
@@ -198,7 +198,7 @@ export const WEEKLY_DEAL_TEMPLATES = [
     category: 'Bakery',
   },
 
-  // —— Costco (alternating bi-weekly cycle) ——
+  // —— Costco (alternating weekly cycle) ——
   {
     name: 'Kirkland Signature Mixed Nuts 1.13kg',
     store: 'costco',

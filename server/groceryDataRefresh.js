@@ -13,9 +13,8 @@ import {
   WEEKLY_DEALS_COLLECTION,
 } from './weeklyDeals.js';
 import {
-  getBiweeklyCycleBounds,
+  getWeeklyCycleBounds,
   serializeCycleStart,
-  shouldRefreshDealsThisWeek,
 } from './dealCycle.js';
 
 export const GROCERY_REFRESH_MODES = /** @type {const} */ ([
@@ -149,22 +148,12 @@ async function upsertCataloguesForCycle(cycle, mode) {
  */
 async function upsertDealsForCycle(_cycle, mode, now = new Date()) {
   const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
-  const biweekly = getBiweeklyCycleBounds(now);
-  const cycleStart = serializeCycleStart(biweekly.validFrom);
-  const docs = buildDealsForCycle(biweekly.expiresAt, {
-    cycleIndex: biweekly.cycleIndex,
+  const weekly = getWeeklyCycleBounds(now);
+  const cycleStart = serializeCycleStart(weekly.validFrom);
+  const docs = buildDealsForCycle(weekly.expiresAt, {
+    cycleIndex: weekly.cycleIndex,
     cycleStart,
   });
-
-  if (mode === 'officialReset' && !shouldRefreshDealsThisWeek(now)) {
-    return {
-      inserted: 0,
-      replaced: 0,
-      skipped: docs.length,
-      total: docs.length,
-      skippedReason: 'biweekly_off_week',
-    };
-  }
 
   if (mode === 'officialReset') {
     const removeResult = await collection.deleteMany({
