@@ -32,17 +32,22 @@ export function getEnvDiagnostics() {
   };
 }
 
+const CAPACITOR_ORIGINS = [
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost',
+  'ionic://localhost',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
+
 export function getAllowedOrigins() {
   const configured = (process.env.CORS_ORIGIN || process.env.APP_ORIGIN || '')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
-  return new Set([
-    ...configured,
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-  ]);
+  return new Set([...configured, ...CAPACITOR_ORIGINS]);
 }
 
 export function isOriginAllowed(origin) {
@@ -56,6 +61,14 @@ export function isOriginAllowed(origin) {
 
   // Allow Vercel preview and production subdomains by default.
   if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) {
+    return true;
+  }
+
+  // Capacitor / WebView localhost variants (ports, capacitor://, ionic://).
+  if (
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin) ||
+    /^(capacitor|ionic):\/\/localhost$/i.test(origin)
+  ) {
     return true;
   }
 

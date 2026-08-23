@@ -1,4 +1,17 @@
+/** Absolute API origin for Capacitor; relative `/api` only works in Vite/browser proxy. */
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+
+/**
+ * Resolve an API path against VITE_API_URL (or `/api` in local Vite).
+ * @param {string} endpoint - path like `/auth/session` or full `https://…` URL
+ */
+export function apiUrl(endpoint) {
+  if (!endpoint) return API_BASE;
+  if (/^https?:\/\//i.test(endpoint)) return endpoint;
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `${API_BASE}${path}`;
+}
+
 const TOKEN_KEY = 'fridge.authToken';
 
 export function getAuthToken() {
@@ -54,7 +67,7 @@ async function parseJson(res) {
  * @param {string} idToken
  */
 export async function syncFirebaseSession(idToken) {
-  const res = await fetch(`${API_BASE}/auth/session`, {
+  const res = await fetch(apiUrl(`/auth/session`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idToken }),
@@ -94,7 +107,7 @@ export async function sendPasswordResetEmail(email) {
  * @param {string} token
  */
 export async function saveFcmToken(token) {
-  const res = await fetch(`${API_BASE}/auth/save-token`, {
+  const res = await fetch(apiUrl(`/auth/save-token`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ token }),
@@ -107,7 +120,7 @@ export async function fetchSession() {
   let expiredJwt = false;
 
   if (existingToken) {
-    const res = await fetch(`${API_BASE}/auth/me`, {
+    const res = await fetch(apiUrl(`/auth/me`), {
       headers: authHeaders(),
     });
     if (res.ok) {
@@ -162,7 +175,7 @@ export async function resendVerificationEmail() {
 }
 
 export async function createHousehold() {
-  const res = await fetch(`${API_BASE}/household/create`, {
+  const res = await fetch(apiUrl(`/household/create`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
   });
@@ -172,7 +185,7 @@ export async function createHousehold() {
 }
 
 export async function joinHousehold(inviteCode) {
-  const res = await fetch(`${API_BASE}/household/join`, {
+  const res = await fetch(apiUrl(`/household/join`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ inviteCode }),
@@ -183,7 +196,7 @@ export async function joinHousehold(inviteCode) {
 }
 
 export async function pingShoppingList() {
-  const res = await fetch(`${API_BASE}/household/ping-shopping`, {
+  const res = await fetch(apiUrl(`/household/ping-shopping`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
   });
@@ -191,14 +204,14 @@ export async function pingShoppingList() {
 }
 
 export async function fetchHouseholdMembers() {
-  const res = await fetch(`${API_BASE}/household/members`, {
+  const res = await fetch(apiUrl(`/household/members`), {
     headers: authHeaders(),
   });
   return parseJson(res);
 }
 
 export async function leaveHousehold() {
-  const res = await fetch(`${API_BASE}/household/leave`, {
+  const res = await fetch(apiUrl(`/household/leave`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
   });
@@ -208,7 +221,7 @@ export async function leaveHousehold() {
 }
 
 export async function removeHouseholdMember(userId) {
-  const res = await fetch(`${API_BASE}/household/members/remove`, {
+  const res = await fetch(apiUrl(`/household/members/remove`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ userId }),
@@ -227,7 +240,7 @@ export async function logout() {
 }
 
 export async function deleteAccount() {
-  const res = await fetch(`${API_BASE}/auth/account`, {
+  const res = await fetch(apiUrl(`/auth/account`), {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -242,14 +255,14 @@ export async function deleteAccount() {
 }
 
 export async function fetchAppState() {
-  const res = await fetch(`${API_BASE}/state`, {
+  const res = await fetch(apiUrl(`/state`), {
     headers: authHeaders(),
   });
   return parseJson(res);
 }
 
 export async function saveAppState(partial) {
-  const res = await fetch(`${API_BASE}/state`, {
+  const res = await fetch(apiUrl(`/state`), {
     method: 'PUT',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(partial),
@@ -259,7 +272,7 @@ export async function saveAppState(partial) {
 
 /** POST /api/inventory/sync — revision/409 inventory delta (not PUT /api/state). */
 export async function syncInventory(payload) {
-  const res = await fetch(`${API_BASE}/inventory/sync`, {
+  const res = await fetch(apiUrl(`/inventory/sync`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -269,7 +282,7 @@ export async function syncInventory(payload) {
 
 export async function searchExternalRecipes(query) {
   const res = await fetch(
-    `${API_BASE}/recipes/search?q=${encodeURIComponent(query)}`,
+    apiUrl(`/recipes/search?q=${encodeURIComponent(query)}`),
     { headers: authHeaders() },
   );
   const data = await parseJson(res);
@@ -278,7 +291,7 @@ export async function searchExternalRecipes(query) {
 
 export async function searchRecipesByIngredient(ingredient) {
   const res = await fetch(
-    `${API_BASE}/recipes/by-ingredient?i=${encodeURIComponent(ingredient)}`,
+    apiUrl(`/recipes/by-ingredient?i=${encodeURIComponent(ingredient)}`),
     { headers: authHeaders() },
   );
   const data = await parseJson(res);
@@ -286,7 +299,7 @@ export async function searchRecipesByIngredient(ingredient) {
 }
 
 export async function lookupExternalRecipe(mealId) {
-  const res = await fetch(`${API_BASE}/recipes/lookup/${encodeURIComponent(mealId)}`, {
+  const res = await fetch(apiUrl(`/recipes/lookup/${encodeURIComponent(mealId)}`), {
     headers: authHeaders(),
   });
   const data = await parseJson(res);
@@ -299,7 +312,7 @@ export async function fetchAiRecipeMatches({ cravings, quickTag } = {}) {
   if (cravings?.trim()) payload.cravings = cravings.trim();
   if (quickTag?.trim()) payload.quickTag = quickTag.trim();
 
-  const res = await fetch(`${API_BASE}/recipes/ai-match`, {
+  const res = await fetch(apiUrl(`/recipes/ai-match`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -335,7 +348,7 @@ export async function fetchRemixRecipe(recipeId, mode, recipe) {
   const payload = { recipeId, mode };
   if (recipe) payload.recipe = recipe;
 
-  const res = await fetch(`${API_BASE}/recipes/remix`, {
+  const res = await fetch(apiUrl(`/recipes/remix`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -361,7 +374,7 @@ export async function fetchRemixRecipe(recipeId, mode, recipe) {
 
 /** POST /api/recipes/chat — Fridge Scout conversational assistant. */
 export async function fetchFridgeScoutChat(messages) {
-  const res = await fetch(`${API_BASE}/recipes/chat`, {
+  const res = await fetch(apiUrl(`/recipes/chat`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ messages }),
@@ -408,7 +421,7 @@ export async function fetchWeeklyDeals(filters = {}, options = {}) {
     if (cached) return cached;
   }
 
-  const res = await fetch(`${API_BASE}/deals/weekly${query ? `?${query}` : ''}`, {
+  const res = await fetch(apiUrl(`/deals/weekly${query ? `?${query}` : ''}`), {
     headers: authHeaders(),
   });
   const data = await parseJson(res);
@@ -431,7 +444,7 @@ export async function fetchStoreCatalogues(options = {}, fetchOptions = {}) {
     if (cached) return cached;
   }
 
-  const res = await fetch(`${API_BASE}/deals/catalogues${query ? `?${query}` : ''}`, {
+  const res = await fetch(apiUrl(`/deals/catalogues${query ? `?${query}` : ''}`), {
     headers: authHeaders(),
   });
   const data = await parseJson(res);
@@ -470,7 +483,7 @@ function writeDealsCache(key, data) {
 
 export async function checkApiHealth() {
   try {
-    const res = await fetch(`${API_BASE}/health`);
+    const res = await fetch(apiUrl(`/health`));
     return res.ok;
   } catch {
     return false;
@@ -478,12 +491,12 @@ export async function checkApiHealth() {
 }
 
 export async function fetchInventory() {
-  const res = await fetch(`${API_BASE}/inventory`, { headers: authHeaders() });
+  const res = await fetch(apiUrl(`/inventory`), { headers: authHeaders() });
   return parseJson(res);
 }
 
 export async function createInventoryItem(payload) {
-  const res = await fetch(`${API_BASE}/inventory`, {
+  const res = await fetch(apiUrl(`/inventory`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -492,7 +505,7 @@ export async function createInventoryItem(payload) {
 }
 
 export async function updateInventoryItemApi(id, payload) {
-  const res = await fetch(`${API_BASE}/inventory/${encodeURIComponent(id)}`, {
+  const res = await fetch(apiUrl(`/inventory/${encodeURIComponent(id)}`), {
     method: 'PUT',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -501,7 +514,7 @@ export async function updateInventoryItemApi(id, payload) {
 }
 
 export async function deleteInventoryItemApi(id) {
-  const res = await fetch(`${API_BASE}/inventory/${encodeURIComponent(id)}`, {
+  const res = await fetch(apiUrl(`/inventory/${encodeURIComponent(id)}`), {
     method: 'DELETE',
     headers: authHeaders(),
   });
@@ -509,12 +522,12 @@ export async function deleteInventoryItemApi(id) {
 }
 
 export async function fetchShoppingList() {
-  const res = await fetch(`${API_BASE}/shopping-list`, { headers: authHeaders() });
+  const res = await fetch(apiUrl(`/shopping-list`), { headers: authHeaders() });
   return parseJson(res);
 }
 
 export async function addShoppingListItem(payload) {
-  const res = await fetch(`${API_BASE}/shopping-list/add`, {
+  const res = await fetch(apiUrl(`/shopping-list/add`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -523,7 +536,7 @@ export async function addShoppingListItem(payload) {
 }
 
 export async function addRecipeIngredientsToShoppingList(payload) {
-  const res = await fetch(`${API_BASE}/shopping-list/add-from-recipe`, {
+  const res = await fetch(apiUrl(`/shopping-list/add-from-recipe`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),
@@ -532,7 +545,7 @@ export async function addRecipeIngredientsToShoppingList(payload) {
 }
 
 export async function markShoppingItemPurchased(id, options = {}) {
-  const res = await fetch(`${API_BASE}/shopping-list/mark-purchased`, {
+  const res = await fetch(apiUrl(`/shopping-list/mark-purchased`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ id, ...options }),
@@ -546,7 +559,7 @@ export async function scanReceipt(file) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 55000);
   try {
-    const res = await fetch(`${API_BASE}/inventory/scan-receipt`, {
+    const res = await fetch(apiUrl(`/inventory/scan-receipt`), {
       method: 'POST',
       headers: authHeaders(),
       body: formData,
@@ -564,7 +577,7 @@ export async function scanReceipt(file) {
 }
 
 export async function confirmReceiptScan(items) {
-  const res = await fetch(`${API_BASE}/inventory/confirm-receipt-scan`, {
+  const res = await fetch(apiUrl(`/inventory/confirm-receipt-scan`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ items }),
@@ -573,7 +586,7 @@ export async function confirmReceiptScan(items) {
 }
 
 export async function classifyInventoryItem(name, options = {}) {
-  const res = await fetch(`${API_BASE}/inventory/classify-item`, {
+  const res = await fetch(apiUrl(`/inventory/classify-item`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({
