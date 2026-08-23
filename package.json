@@ -12,6 +12,10 @@
     "dev:server": "NODE_ENV=development node server/index.js",
     "build": "vite build",
     "preview": "vite preview",
+    "cap:build": "vite build && npx cap sync",
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios",
     "test": "vitest run",
     "test:watch": "vitest",
     "start": "node server/index.js",
@@ -22,6 +26,10 @@
     "seed:recipes": "node server/scripts/seedRecipes.js"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
     "@google/genai": "^2.15.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",

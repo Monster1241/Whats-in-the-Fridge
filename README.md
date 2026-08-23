@@ -106,6 +106,40 @@ Without `RESEND_API_KEY`, the 6-digit code is printed in the server console only
 3. In **MongoDB Atlas** → **Network Access** → add `0.0.0.0/0` so serverless functions can connect.
 4. **Redeploy** after adding env vars.
 
+## Capacitor (Android / iOS)
+
+The web app is wrapped with [Capacitor](https://capacitorjs.com/) (`com.fridge.app`). Native projects live in `android/` and `ios/`.
+
+| Script | What it does |
+|--------|----------------|
+| `npm run cap:build` | `vite build` then `npx cap sync` into native projects |
+| `npm run cap:open:android` | Open Android Studio |
+| `npm run cap:open:ios` | Open Xcode (macOS) |
+
+**Native API base URL:** In the WebView, relative `/api` has no host. Before `cap:build`, set:
+
+```
+VITE_API_URL=https://YOUR-APP.vercel.app/api
+```
+
+Also add your production origin to Firebase **Authorized domains** and Vercel **`CORS_ORIGIN`** if needed.
+
+**Note:** Capacitor 7 no longer uses `bundledWebRuntime` — Vite already bundles `@capacitor/core`. Config uses `webDir: "dist"` and `https` schemes for Android/iOS.
+
+Workflow:
+
+```bash
+# 1. Set VITE_API_URL to your deployed backend
+# 2. Build + sync
+npm run cap:build
+# 3. Open IDE and run on a device/emulator
+npm run cap:open:android
+# or
+npm run cap:open:ios
+```
+
+Requires Android Studio (SDK + JDK) and/or Xcode + CocoaPods for iOS.
+
 ## Features
 
 - **Fridge** — Ambient / Fresh / Freezer tabs, shopping list, expiry tracking

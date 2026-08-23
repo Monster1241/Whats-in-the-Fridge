@@ -1,0 +1,31 @@
+{
+  "appId": "com.fridge.app",
+  "appName": "What's in the Fridge?",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https",
+    "allowNavigation": [
+      "https://*.vercel.app",
+      "https://*.googleapis.com",
+      "https://*.firebaseio.com",
+      "https://identitytoolkit.googleapis.com",
+      "https://securetoken.googleapis.com",
+      "https://*.openfoodfacts.org",
+      "https://*.openproductsfacts.org",
+      "https://www.themealdb.com"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}

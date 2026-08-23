@@ -292,7 +292,7 @@ export default function App() {
   return (
     <PushNotificationProvider enabled={auth.canUseApp}>
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
-      <main className="app-main flex-1 overflow-y-auto px-4 pb-6 pt-6 sm:px-5">
+      <main className="app-main flex-1 overflow-y-auto px-4 sm:px-5">
         <div key={activeTab} className={flowEnterClass(tabFlowDir, 'animate-page')}>
         {saveError && (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
@@ -354,10 +354,7 @@ export default function App() {
         </div>
       </main>
 
-      <nav
-        className="nav-bar fixed bottom-0 left-0 right-0 z-40"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-      >
+      <nav className="nav-bar fixed bottom-0 left-0 right-0 z-40">
         <div className="mx-auto flex max-w-lg px-1">
           {navTabs.map(({ id, label, icon: Icon, accent, badge }) => {
             const active = activeTab === id;
