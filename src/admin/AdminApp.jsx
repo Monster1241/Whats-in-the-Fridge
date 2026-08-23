@@ -117,19 +117,34 @@ export function AdminApp() {
   }
 
   if (!adminCheck.isAdmin) {
+    const handleGoBackToAdminLogin = async () => {
+      await auth.logout();
+      window.location.href = '/admin';
+    };
+
     return (
       <div className="mx-auto flex min-h-full max-w-md flex-col justify-center px-6 py-12">
         <h1 className="text-heading text-lg font-bold">Admin access denied</h1>
         <p className="text-muted mt-2 text-sm leading-relaxed">
           Signed in as <strong>{adminCheck.email}</strong>. Add this email to{' '}
-          <code className="text-xs">ADMIN_EMAILS</code> on the server, then reload.
+          <code className="text-xs">ADMIN_EMAILS</code> on the server, then try again — or go back
+          to log in with a different account.
         </p>
-        <a
-          href="/"
-          className="mt-6 inline-flex justify-center rounded-xl bg-slate-800 py-3 text-sm font-bold text-white"
-        >
-          Back to app
-        </a>
+        <div className="mt-6 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={handleGoBackToAdminLogin}
+            className="inline-flex justify-center rounded-xl bg-sky-600 py-3 text-sm font-bold text-white hover:bg-sky-500 active:scale-[0.98]"
+          >
+            Go back
+          </button>
+          <a
+            href="/"
+            className="inline-flex justify-center rounded-xl bg-slate-800 py-3 text-sm font-bold text-white dark:bg-slate-200 dark:text-slate-900"
+          >
+            Back to app
+          </a>
+        </div>
       </div>
     );
   }
