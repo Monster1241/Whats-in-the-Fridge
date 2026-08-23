@@ -26,6 +26,21 @@ export async function sendPushToTokens(tokens, message) {
       body: message.body,
     },
     data,
+    android: {
+      priority: 'high',
+      notification: {
+        channelId: 'fridge_alerts',
+        sound: 'default',
+      },
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: 'default',
+          badge: 1,
+        },
+      },
+    },
     webpush: {
       fcmOptions: {
         link: message.data?.url || '/',

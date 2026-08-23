@@ -379,6 +379,7 @@ export async function confirmReceiptItems(householdId, scannedItems, initialRest
   }
 
   const saved = await saveInventoryItems(householdId, sanitizeInventoryItems(nextItems));
+  const added = saved.filter((item) => addedIds.has(item.id));
   await updateHouseholdAppState(householdId, {
     restockHistory,
     usageInsights: recordUsageInsightEvent(
@@ -387,7 +388,6 @@ export async function confirmReceiptItems(householdId, scannedItems, initialRest
       added.length,
     ),
   });
-  const added = saved.filter((item) => addedIds.has(item.id));
 
   const nextMeta = await getHouseholdMeta(householdId);
   return {

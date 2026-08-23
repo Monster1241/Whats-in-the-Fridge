@@ -276,10 +276,13 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
 }
 
 function PushNotificationsSettings() {
-  const { status, error, enablePush, permission, vapidConfigured } = usePushNotifications();
+  const { status, error, enablePush, permission, vapidConfigured, isNative } =
+    usePushNotifications();
   const [busy, setBusy] = useState(false);
+  const enabled = status === 'enabled';
+  const canEnable = !busy && status !== 'loading' && status !== 'unsupported' && vapidConfigured;
 
-  const handleEnable = async () => {
+  const runEnable = async () => {
     setBusy(true);
     try {
       await enablePush();
@@ -288,13 +291,21 @@ function PushNotificationsSettings() {
     }
   };
 
+  const handleToggle = async () => {
+    if (enabled || !canEnable) return;
+    await runEnable();
+  };
+
   let statusLabel = 'Not enabled';
-  if (status === 'enabled') statusLabel = 'Enabled on this device';
+  if (enabled) statusLabel = 'Enabled on this device';
   else if (status === 'loading' || busy) statusLabel = 'Setting up…';
-  else if (status === 'denied' || permission === 'denied') {
-    statusLabel = 'Blocked in browser settings';
-  } else if (status === 'unsupported') statusLabel = 'Not supported in this browser';
-  else if (!vapidConfigured) statusLabel = 'Server key not configured';
+  else if (status === 'denied' || (!isNative && permission === 'denied')) {
+    statusLabel = isNative
+      ? 'Blocked in device settings'
+      : 'Blocked in browser settings';
+  } else if (status === 'unsupported') {
+    statusLabel = isNative ? 'Not supported on this device' : 'Not supported in this browser';
+  } else if (!vapidConfigured) statusLabel = 'Web Push key not configured';
 
   return (
     <section className="surface-card mb-5 p-4">
@@ -303,25 +314,52 @@ function PushNotificationsSettings() {
         Push notifications
       </h2>
       <p className="text-muted mb-3 text-sm">
-        Get notified when food in your fridge is expiring soon. Works when the app is open
-        (banner) or in the background (system notification).
+        Get notified when food in your fridge is expiring soon. Alerts never include item
+        names. Works when the app is open (banner) or in the background (system notification).
       </p>
-      <p className="text-muted mb-3 text-xs">
-        Status: <span className="font-semibold text-slate-700 dark:text-slate-300">{statusLabel}</span>
-      </p>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            Enable Push Notifications
+          </p>
+          <p className="text-muted text-xs">
+            Status:{' '}
+            <span className="font-semibold text-slate-700 dark:text-slate-300">{statusLabel}</span>
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label="Enable Push Notifications"
+          onClick={handleToggle}
+          disabled={!canEnable && !enabled}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:opacity-50 ${
+            enabled ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+              enabled ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
+        </button>
+      </div>
       {error && (
         <p className="mb-3 text-xs text-rose-600 dark:text-rose-400" role="alert">
           {error}
         </p>
       )}
-      <button
-        type="button"
-        onClick={handleEnable}
-        disabled={busy || status === 'loading' || status === 'unsupported' || !vapidConfigured}
-        className="w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
-      >
-        {status === 'enabled' ? 'Refresh push registration' : 'Enable notifications'}
-      </button>
+      {enabled ? (
+        <button
+          type="button"
+          onClick={runEnable}
+          disabled={busy || status === 'loading'}
+          className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 transition active:scale-[0.98] disabled:opacity-50 dark:border-slate-600 dark:text-slate-200"
+        >
+          Refresh push registration
+        </button>
+      ) : null}
     </section>
   );
 }

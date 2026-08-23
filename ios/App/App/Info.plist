@@ -70,5 +70,9 @@
 	<string>Camera access is used to scan barcodes and grocery receipts.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Photo library access is used to upload grocery receipt images.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

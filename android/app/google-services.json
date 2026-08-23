@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "268899548006",
+    "project_id": "my-household-hub",
+    "storage_bucket": "my-household-hub.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:268899548006:android:f0a514fefcdd56542ae6a7",
+        "android_client_info": {
+          "package_name": "com.fridge.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3pvmyK7K8DP5IQrpIcrYgtK4n058nd0s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

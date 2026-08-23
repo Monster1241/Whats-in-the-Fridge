@@ -11,15 +11,16 @@ function formatSenderLabel(email) {
 export function buildExpiryAlertMessage(count) {
   const n = Number(count) || 0;
   if (n <= 0) return null;
+  // Privacy: counts only — never include inventory item names in push bodies.
   if (n === 1) {
     return {
       title: 'Food expiring soon',
-      body: 'Something in your fridge is expiring soon. Open the app to check.',
+      body: 'You have 1 item expiring soon in your fridge!',
     };
   }
   return {
     title: `${n} items expiring soon`,
-    body: `${n} items in your fridge are expiring soon. Open the app to check.`,
+    body: `You have ${n} items expiring soon in your fridge!`,
   };
 }
 

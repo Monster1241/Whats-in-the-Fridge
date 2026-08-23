@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { buildExpiryAlertMessage, buildShoppingPingNotification } from './pushCopy.js';
 
 describe('buildExpiryAlertMessage', () => {
-  it('omits item names', () => {
+  it('omits item names and uses count-only copy', () => {
     const one = buildExpiryAlertMessage(1);
     expect(one.body).not.toMatch(/milk|bread|tomato/i);
-    expect(one.body).toMatch(/open the app/i);
+    expect(one.body).toBe('You have 1 item expiring soon in your fridge!');
 
     const many = buildExpiryAlertMessage(3);
     expect(many.title).toBe('3 items expiring soon');
+    expect(many.body).toBe('You have 3 items expiring soon in your fridge!');
     expect(many.body).not.toMatch(/milk|bread/i);
   });
 
