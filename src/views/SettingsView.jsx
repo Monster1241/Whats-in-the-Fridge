@@ -13,6 +13,12 @@ import {
 } from '../inventory/modules.js';
 import { EXPIRING_SOON_DAYS } from '../inventory/expiryDisplay.js';
 import {
+  isValidAustralianPostcode,
+  POSTCODE_CHANGE_EVENT,
+  readStoredPostcode,
+  writeStoredPostcode,
+} from '../inventory/postcodeStorage.js';
+import {
   ArrowLeft,
   ArrowRight,
   Bell,
@@ -29,7 +35,6 @@ import {
   KeyRound,
   Loader2,
   LogOut,
-  Mail,
   Moon,
   Refrigerator,
   Settings,
@@ -337,6 +342,8 @@ export function SettingsView({
   const { resetOnboarding } = onboarding ?? {};
   const [name, setName] = useState(settings?.user?.name ?? '');
   const [email, setEmail] = useState(settings?.user?.email || accountEmail || '');
+  const [postcode, setPostcode] = useState(() => readStoredPostcode());
+  const [postcodeError, setPostcodeError] = useState('');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -392,7 +399,34 @@ export function SettingsView({
     setEmail(settings?.user?.email || accountEmail || '');
   }, [settings?.user?.name, settings?.user?.email, accountEmail]);
 
+  useEffect(() => {
+    const syncPostcode = (event) => {
+      const next = event?.detail?.postcode || readStoredPostcode();
+      setPostcode(next);
+      setPostcodeError('');
+    };
+    window.addEventListener(POSTCODE_CHANGE_EVENT, syncPostcode);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') syncPostcode();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener(POSTCODE_CHANGE_EVENT, syncPostcode);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
   const saveProfile = () => {
+    const digits = String(postcode ?? '').replace(/\D/g, '').slice(0, 4);
+    if (digits.length > 0 && !isValidAustralianPostcode(digits)) {
+      setPostcodeError('Enter a valid 4-digit Australian postcode.');
+      return;
+    }
+    if (digits.length === 4) {
+      writeStoredPostcode(digits);
+      setPostcode(digits);
+    }
+    setPostcodeError('');
     updateSettings((prev) => ({
       ...prev,
       user: { name: name.trim(), email: email.trim() },
@@ -714,44 +748,10 @@ export function SettingsView({
       </section>
 
       <section className="surface-card mb-5 p-4">
-        <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
+        <h2 className="text-heading mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
           <User className="h-4 w-4 text-emerald-600" />
           Your account
         </h2>
-        <p className="text-muted mb-3 text-sm">
-          Profile details sync with your household. Sign-in is managed by Firebase Authentication.
-        </p>
-
-        <dl className="surface-inset mb-4 space-y-2.5 rounded-xl p-3 text-sm">
-          <div className="flex items-start justify-between gap-3">
-            <dt className="text-muted shrink-0 text-xs font-semibold uppercase tracking-wide">
-              Sign-in email
-            </dt>
-            <dd className="text-heading min-w-0 break-all text-right font-semibold">
-              {signInEmail || 'Not available'}
-            </dd>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <dt className="text-muted shrink-0 text-xs font-semibold uppercase tracking-wide">
-              Household role
-            </dt>
-            <dd className="text-heading text-right font-semibold">
-              {membersLoading
-                ? 'Loading…'
-                : currentUserIsOwner
-                  ? 'Owner'
-                  : 'Member'}
-            </dd>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <dt className="text-muted shrink-0 text-xs font-semibold uppercase tracking-wide">
-              Invite code
-            </dt>
-            <dd className="text-heading font-mono text-right font-semibold tracking-wider">
-              {householdCode || '—'}
-            </dd>
-          </div>
-        </dl>
 
         <div className="space-y-3">
           <div>
@@ -783,9 +783,43 @@ export function SettingsView({
               className="input-field"
             />
             <p className="text-muted mt-1 text-[11px] leading-relaxed">
-              Optional contact email saved on your household profile. Sign-in still uses your Firebase
-              email above.
+              Optional contact email saved on your household profile.
             </p>
+          </div>
+          <div>
+            <label htmlFor="settings-postcode" className="text-muted mb-1 block text-xs font-semibold uppercase">
+              Postcode
+            </label>
+            <input
+              id="settings-postcode"
+              type="text"
+              inputMode="numeric"
+              autoComplete="postal-code"
+              maxLength={4}
+              value={postcode}
+              onChange={(e) => {
+                setPostcode(e.target.value.replace(/\D/g, '').slice(0, 4));
+                setPostcodeError('');
+              }}
+              onBlur={() => {
+                const digits = String(postcode ?? '').replace(/\D/g, '').slice(0, 4);
+                if (digits.length === 4 && isValidAustralianPostcode(digits)) {
+                  writeStoredPostcode(digits);
+                  setPostcode(digits);
+                  setPostcodeError('');
+                }
+              }}
+              placeholder="e.g. 2000"
+              className="input-field"
+            />
+            <p className="text-muted mt-1 text-[11px] leading-relaxed">
+              Used for local supermarket catalogues on Deals. Synced with the Deals tab.
+            </p>
+            {postcodeError && (
+              <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400" role="alert">
+                {postcodeError}
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -798,14 +832,6 @@ export function SettingsView({
         </div>
 
         <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-600">
-          <h3 className="text-heading mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
-            <KeyRound className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
-            Password
-          </h3>
-          <p className="text-muted mb-3 text-xs leading-relaxed">
-            Same flow as Forgot password on the sign-in screen. Firebase emails you a secure link —
-            open it, choose a new password, then use that password next time you log in.
-          </p>
           <button
             type="button"
             onClick={handlePasswordReset}
@@ -815,9 +841,9 @@ export function SettingsView({
             {resetBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             ) : (
-              <Mail className="h-4 w-4" aria-hidden />
+              <KeyRound className="h-4 w-4" aria-hidden />
             )}
-            {resetBusy ? 'Sending reset email…' : 'Email me a password reset link'}
+            {resetBusy ? 'Sending reset email…' : 'Change password'}
           </button>
           {resetFeedback && (
             <p

@@ -1,5 +1,7 @@
 export const POSTCODE_STORAGE_KEY = 'witf.cataloguePostcode';
 export const DEFAULT_POSTCODE = '2000';
+/** Same-tab sync between Settings and Deals. */
+export const POSTCODE_CHANGE_EVENT = 'fridge:postcode-changed';
 
 /**
  * @returns {string}
@@ -25,6 +27,11 @@ export function writeStoredPostcode(postcode) {
     localStorage.setItem(POSTCODE_STORAGE_KEY, digits);
   } catch {
     // ignore quota / private mode
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent(POSTCODE_CHANGE_EVENT, { detail: { postcode: digits } }),
+    );
   }
   return digits;
 }

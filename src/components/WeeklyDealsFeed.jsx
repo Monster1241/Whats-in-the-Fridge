@@ -22,6 +22,7 @@ import {
 import { normalizeName } from '../inventory/itemUtils.js';
 import {
   isValidAustralianPostcode,
+  POSTCODE_CHANGE_EVENT,
   readStoredPostcode,
   writeStoredPostcode,
 } from '../inventory/postcodeStorage.js';
@@ -716,6 +717,15 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   useEffect(() => {
     loadCatalogues(postcode);
   }, [postcode, loadCatalogues]);
+
+  useEffect(() => {
+    const onPostcodeChanged = (event) => {
+      const next = event?.detail?.postcode || readStoredPostcode();
+      setPostcode((prev) => (prev === next ? prev : next));
+    };
+    window.addEventListener(POSTCODE_CHANGE_EVENT, onPostcodeChanged);
+    return () => window.removeEventListener(POSTCODE_CHANGE_EVENT, onPostcodeChanged);
+  }, []);
 
   const openPostcodeModal = () => {
     setPostcodeDraft(postcode);
