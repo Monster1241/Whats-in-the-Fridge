@@ -104,7 +104,13 @@ export function InventorySearch({
                       <div className="min-w-0">
                         <p className="text-heading text-sm font-bold leading-snug">{item.name}</p>
                         <p className="text-muted mt-0.5 text-xs">
-                          {catMeta ? `${catMeta.emoji} ${catMeta.label}` : item.itemType}
+                          {catMeta ? (
+                            <>
+                              <span className="emoji">{catMeta.emoji}</span> {catMeta.label}
+                            </>
+                          ) : (
+                            item.itemType
+                          )}
                           {item.subCategory ? ` · ${item.subCategory}` : ''}
                           {item.itemType ? ` · ${item.itemType}` : ''}
                         </p>

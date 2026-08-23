@@ -38,6 +38,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { Emoji } from '../components/Emoji.jsx';
 
 function AppGuideSection({ enabledModules, onShowTipsAgain }) {
   const [open, setOpen] = useState(false);
@@ -577,9 +578,9 @@ export function SettingsView({
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-heading text-sm font-semibold">
-                        <span className="mr-1.5" aria-hidden>
+                        <Emoji className="mr-1.5" aria-hidden>
                           {mod.emoji}
-                        </span>
+                        </Emoji>
                         {mod.label}
                       </p>
                       <p className="text-muted mt-0.5 text-xs leading-relaxed">{mod.description}</p>

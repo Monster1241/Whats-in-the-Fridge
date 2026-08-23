@@ -10,6 +10,7 @@ import {
 } from '../inventory/expiryDisplay.js';
 import { IconActionButton } from './IconActionButton.jsx';
 import { StatusBadge } from './StatusBadge.jsx';
+import { Emoji } from './Emoji.jsx';
 
 export const InventoryItemRow = memo(function InventoryItemRow({
   item,
@@ -45,12 +46,12 @@ export const InventoryItemRow = memo(function InventoryItemRow({
         )}
         {item.subCategory && item.subCategory !== SUBCATEGORY_OTHER && (
           <p className="text-muted mt-0.5 text-[10px] font-semibold">
-            {subMeta.emoji} {subMeta.label}
+            <Emoji>{subMeta.emoji}</Emoji> {subMeta.label}
           </p>
         )}
         {showCategory && catMeta && (
           <p className="mt-0.5 text-xs text-slate-500">
-            {catMeta.emoji} {catMeta.label}
+            <Emoji>{catMeta.emoji}</Emoji> {catMeta.label}
           </p>
         )}
         {urgencyLabel && isInStockInventory(item) && (

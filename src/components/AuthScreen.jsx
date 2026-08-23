@@ -3,6 +3,8 @@ import {
   ArrowLeft,
   ChefHat,
   Copy,
+  Eye,
+  EyeOff,
   Home,
   Loader2,
   LogIn,
@@ -29,6 +31,7 @@ export function AuthScreen({
   const [recoverStep, setRecoverStep] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [inviteCode, setInviteCode] = useState('');
   const [householdMode, setHouseholdMode] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -352,17 +355,32 @@ export function AuthScreen({
               <label htmlFor="auth-password" className="text-muted mb-1.5 block text-xs font-semibold uppercase">
                 Password
               </label>
-              <input
-                id="auth-password"
-                type="password"
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input-field"
-                placeholder="At least 8 characters"
-              />
+              <div className="relative">
+                <input
+                  id="auth-password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input-field pr-12"
+                  placeholder="At least 8 characters"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" strokeWidth={2} aria-hidden />
+                  ) : (
+                    <Eye className="h-4 w-4" strokeWidth={2} aria-hidden />
+                  )}
+                </button>
+              </div>
             </div>
 
             <button type="submit" disabled={busy} className="auth-field btn-auth" style={{ animationDelay: '140ms' }}>

@@ -3,6 +3,7 @@ import {
   getCategoryMeta,
   ITEM_TYPE,
 } from '../inventory/constants.js';
+import { Emoji } from './Emoji.jsx';
 
 export function StorageCategoryToggle({ itemType = ITEM_TYPE.FOOD, value, onChange }) {
   const options = getCategoriesForItemType(itemType);
@@ -28,9 +29,9 @@ export function StorageCategoryToggle({ itemType = ITEM_TYPE.FOOD, value, onChan
             }`}
             aria-pressed={selected}
           >
-            <span className="mr-0.5" aria-hidden>
+            <Emoji className="mr-0.5" aria-hidden>
               {meta.emoji}
-            </span>
+            </Emoji>
             {cat}
           </button>
         );

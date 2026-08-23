@@ -393,7 +393,9 @@ function RecipeCard({
                     </>
                   ) : (
                     <>
-                      <span>{tweak.emoji} {tweak.label}</span>
+                      <span>
+                        <span className="emoji">{tweak.emoji}</span> {tweak.label}
+                      </span>
                     </>
                   )}
                 </button>

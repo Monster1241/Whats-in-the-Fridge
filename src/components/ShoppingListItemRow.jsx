@@ -6,6 +6,7 @@ import { formatInventoryQuantityLabel } from '../inventory/quantityDisplay.js';
 import { itemTypeLabelEmoji, SHOPPING_ACCENT } from '../inventory/uiAccents.js';
 import { IconActionButton } from './IconActionButton.jsx';
 import { StoreBadgeSelector } from './StoreBadgeSelector.jsx';
+import { Emoji } from './Emoji.jsx';
 
 function ShoppingListBoughtButton({ itemName, onBought, busy = false }) {
   return (
@@ -58,7 +59,8 @@ export const ShoppingListItemRow = memo(function ShoppingListItemRow({
             </p>
             {catMeta && (
               <p className="mt-0.5 text-xs text-slate-500">
-                {itemTypeLabelEmoji(item.itemType)} {catMeta.emoji} {catMeta.label}
+                <Emoji>{itemTypeLabelEmoji(item.itemType)}</Emoji>{' '}
+                <Emoji>{catMeta.emoji}</Emoji> {catMeta.label}
               </p>
             )}
             {item.sourceRecipe?.title && (

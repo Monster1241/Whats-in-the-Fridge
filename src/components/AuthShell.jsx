@@ -1,9 +1,9 @@
-import { Refrigerator } from 'lucide-react';
+import { CalendarClock, Refrigerator, ScanBarcode, Users } from 'lucide-react';
 
 const FEATURES = [
-  { emoji: '🥬', label: 'Track expiry' },
-  { emoji: '👨‍👩‍👧', label: 'Shared household' },
-  { emoji: '📷', label: 'Scan barcodes' },
+  { Icon: CalendarClock, label: 'Track expiry' },
+  { Icon: Users, label: 'Shared household' },
+  { Icon: ScanBarcode, label: 'Scan barcodes' },
 ];
 
 /**
@@ -33,7 +33,7 @@ export function AuthShell({ title, subtitle, children, step = 'auth', compact = 
                   className="auth-screen__feature animate-auth-rise"
                   style={{ animationDelay: `${120 + index * 70}ms` }}
                 >
-                  <span aria-hidden>{feature.emoji}</span>
+                  <feature.Icon className="auth-screen__feature-icon" strokeWidth={2} aria-hidden />
                   {feature.label}
                 </li>
               ))}

@@ -332,7 +332,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                           onChange={(event) =>
                             updateItem(item.clientId, { name: event.target.value })
                           }
-                          className="input-field min-w-0 flex-1 text-sm font-semibold"
+                          className="input-field min-w-0 flex-1 font-semibold"
                           aria-label="Item name"
                         />
                         <button
@@ -357,7 +357,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                             onChange={(event) =>
                               updateItem(item.clientId, { quantity: event.target.value })
                             }
-                            className="input-field text-sm"
+                            className="input-field"
                           />
                         </div>
                         <div>
@@ -373,7 +373,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                             placeholder={
                               item.storageLocation === 'Pantry' ? 'g or ml (total)' : 'g, kg, pack'
                             }
-                            className="input-field text-sm"
+                            className="input-field"
                           />
                         </div>
                         <div>
@@ -385,7 +385,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                             onChange={(event) =>
                               updateItem(item.clientId, { category: event.target.value })
                             }
-                            className="input-field text-sm"
+                            className="input-field"
                           >
                             {RECEIPT_CATEGORIES.map((category) => (
                               <option key={category} value={category}>
@@ -403,7 +403,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                             onChange={(event) =>
                               updateItem(item.clientId, { storageLocation: event.target.value })
                             }
-                            className="input-field text-sm"
+                            className="input-field"
                           >
                             {STORAGE_OPTIONS.map((storage) => (
                               <option key={storage} value={storage}>

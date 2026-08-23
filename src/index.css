@@ -38,9 +38,60 @@ body {
     BlinkMacSystemFont,
     'Segoe UI',
     Roboto,
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+    'Noto Color Emoji',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+ * iOS WKWebView: custom webfonts + inherited font-weight often render emoji
+ * as missing-glyph boxes. Force the system emoji font at regular weight.
+ */
+.emoji,
+.scope-tab-btn__emoji,
+.storage-tab-btn__emoji,
+.unload-loader__cart-stock,
+.unload-loader__item,
+.unload-loader__shelf-slot {
+  font-family:
+    'Apple Color Emoji',
+    'Segoe UI Emoji',
+    'Noto Color Emoji',
+    'Android Emoji',
+    emoji,
+    sans-serif !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  font-variant-emoji: emoji;
+  line-height: 1;
+}
+
+.auth-screen__feature-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: #059669;
+}
+
+.dark .auth-screen__feature-icon {
+  color: #34d399;
+}
+
+/*
+ * iOS Safari / Capacitor WKWebView auto-zooms when a focused control’s
+ * font-size is under 16px. Keep text fields at least 16px.
+ */
+@layer base {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']):not([type='hidden']),
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 .dark body {
@@ -88,7 +139,7 @@ body {
   }
 
   .input-field {
-    @apply w-full rounded-xl border border-emerald-500/15 bg-lm-raised px-4 py-3 text-sm text-zinc-900 shadow-lm-raised transition-[border-color,box-shadow,transform] duration-200 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 dark:border-white/10 dark:bg-dm-raised dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:shadow-dm-raised dark:focus:border-emerald-500/70 dark:focus:ring-emerald-500/25;
+    @apply w-full rounded-xl border border-emerald-500/15 bg-lm-raised px-4 py-3 text-base text-zinc-900 shadow-lm-raised transition-[border-color,box-shadow,transform] duration-200 placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 dark:border-white/10 dark:bg-dm-raised dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:shadow-dm-raised dark:focus:border-emerald-500/70 dark:focus:ring-emerald-500/25;
   }
 
   .btn-auth {
@@ -416,7 +467,7 @@ body {
   }
 
   .fridge-scout-messenger__input {
-    @apply min-h-[2.25rem] max-h-28 min-w-0 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-0 disabled:opacity-60 dark:text-zinc-100 dark:placeholder:text-zinc-500;
+    @apply min-h-[2.25rem] max-h-28 min-w-0 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-base text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-0 disabled:opacity-60 dark:text-zinc-100 dark:placeholder:text-zinc-500;
   }
 
   .fridge-scout-messenger__send {

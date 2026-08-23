@@ -73,6 +73,7 @@ import {
   getConsumptionUrgencyLabel,
 } from '../inventory/consumption.js';
 import { flowEnterClass, getStepDirection } from '../utils/tabFlow.js';
+import { Emoji } from '../components/Emoji.jsx';
 import {
   AlertTriangle,
   Bell,
@@ -271,7 +272,7 @@ function InventorySectionHeader({ category, itemType, children }) {
           className={`flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-base font-extrabold leading-tight tracking-tight sm:text-lg ${accent.title}`}
         >
           <span className="text-xl leading-none" aria-hidden>
-            {meta.emoji}
+            <Emoji>{meta.emoji}</Emoji>
           </span>
           <span>{meta.label}</span>
           <span className={`text-sm font-bold sm:text-base ${accent.subtitle}`}>
@@ -413,7 +414,7 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
                   : 'text-slate-600 hover:bg-slate-200/80 dark:text-slate-400 dark:hover:bg-slate-700'
               }`}
             >
-              {mod.emoji} {mod.label.split(' ')[0]}
+              <Emoji>{mod.emoji}</Emoji> {mod.label.split(' ')[0]}
             </button>
           ))}
         </div>
@@ -554,7 +555,7 @@ function PredictedLowCard({ item, restockHistory, onRestock, onStillGotIt, onDel
         </p>
         {catMeta && (
           <p className="text-muted mt-1 text-[10px]">
-            {catMeta.emoji} {catMeta.label}
+            <Emoji>{catMeta.emoji}</Emoji> {catMeta.label}
           </p>
         )}
       </div>
@@ -746,7 +747,7 @@ function FrequentlyRestockedSection({ suggestions, onAdd }) {
                   <div className="min-w-0 flex-1">
                     <p className="text-heading truncate text-sm font-medium">{entry.name}</p>
                     <p className="text-muted mt-0.5 text-[10px]">
-                      {meta?.emoji} {meta?.label}
+                      <Emoji>{meta?.emoji}</Emoji> {meta?.label}
                       {entry.count > 1 ? ` · restocked ${entry.count}×` : ''}
                     </p>
                   </div>
@@ -824,7 +825,7 @@ function StorageLocationTabs({
               }`}
             >
               <span className="scope-tab-btn__emoji block text-base" aria-hidden>
-                {mod.emoji}
+                <Emoji>{mod.emoji}</Emoji>
               </span>
               <span className="text-heading mt-0.5 block text-[11px] leading-tight">{mod.label}</span>
             </button>
@@ -853,7 +854,7 @@ function StorageLocationTabs({
               }`}
             >
               <span className="storage-tab-btn__emoji text-lg" aria-hidden>
-                {meta.emoji}
+                <Emoji>{meta.emoji}</Emoji>
               </span>
               <p className="text-heading mt-1 text-xs font-bold">{meta.label}</p>
               <p className="text-muted text-[10px]">{meta.subtitle}</p>
@@ -1836,7 +1837,7 @@ export function InventoryView({
                               : 'text-slate-600 dark:text-slate-400'
                           }`}
                         >
-                          {mod.emoji} {mod.label.split('&')[0].trim()}
+                          <Emoji>{mod.emoji}</Emoji> {mod.label.split('&')[0].trim()}
                         </button>
                       ))}
                     </div>
@@ -1907,7 +1908,9 @@ export function InventoryView({
                 {categoryGrouped.expiringGroups.map((group) => (
                   <div key={`expiring-${group.subCategory}`}>
                     <h3 className="text-muted mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
-                      <span aria-hidden>{group.meta.emoji}</span>
+                      <span aria-hidden>
+                        <Emoji>{group.meta.emoji}</Emoji>
+                      </span>
                       {group.meta.label}
                     </h3>
                     <ul className="space-y-2">
@@ -1936,10 +1939,12 @@ export function InventoryView({
             >
               {categoryGrouped.plentifulGroups.map((group) => (
                 <div key={`plentiful-${group.subCategory}`}>
-                  <h3 className="text-muted mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
-                    <span aria-hidden>{group.meta.emoji}</span>
-                    {group.meta.label}
-                  </h3>
+                    <h3 className="text-muted mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
+                      <span aria-hidden>
+                        <Emoji>{group.meta.emoji}</Emoji>
+                      </span>
+                      {group.meta.label}
+                    </h3>
                   <ul className="space-y-2">
                     {group.items.map((item) => (
                       <InventoryItemRow

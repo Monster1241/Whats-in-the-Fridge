@@ -925,7 +925,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search deals by product, category, or store…"
-                className="w-full rounded-2xl border border-amber-200/80 bg-lm-raised py-3 pl-10 pr-4 text-sm font-medium text-zinc-800 shadow-lm-raised outline-none transition placeholder:text-zinc-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/40 dark:border-amber-900/60 dark:bg-dm-card dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-amber-700 dark:focus:ring-amber-700/40"
+                className="w-full rounded-2xl border border-amber-200/80 bg-lm-raised py-3 pl-10 pr-4 text-base font-medium text-zinc-800 shadow-lm-raised outline-none transition placeholder:text-zinc-400 focus:border-amber-300 focus:ring-2 focus:ring-amber-300/40 dark:border-amber-900/60 dark:bg-dm-card dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-amber-700 dark:focus:ring-amber-700/40"
               />
             </label>
 

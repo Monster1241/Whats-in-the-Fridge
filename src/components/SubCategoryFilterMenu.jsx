@@ -129,7 +129,7 @@ export function SubCategoryFilterMenu({
                       className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-dm-card"
                     />
                     <span className="min-w-0 flex-1 text-sm font-medium text-slate-800 dark:text-slate-100">
-                      <span className="mr-1" aria-hidden>
+                      <span className="emoji mr-1" aria-hidden>
                         {meta.emoji}
                       </span>
                       {meta.label}

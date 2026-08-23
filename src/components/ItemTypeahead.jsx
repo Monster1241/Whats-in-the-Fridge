@@ -206,11 +206,13 @@ export function ItemTypeahead({
                       <span className="min-w-0">
                         <span className="block font-medium">{entry.name}</span>
                         <span className="text-muted mt-0.5 block text-[10px] font-semibold">
-                          {subMeta.emoji} {subMeta.label}
+                          <span className="emoji">{subMeta.emoji}</span> {subMeta.label}
                         </span>
                       </span>
                       <span className="text-muted shrink-0 text-[10px] font-semibold uppercase tracking-wide">
-                        {entry.itemType === 'Household' ? '🏠' : entry.itemType === 'Baby' ? '👶' : '🍽️'}{' '}
+                        <span className="emoji">
+                          {entry.itemType === 'Household' ? '🏠' : entry.itemType === 'Baby' ? '👶' : '🍽️'}
+                        </span>{' '}
                         {meta?.label ?? entry.category}
                       </span>
                     </button>
