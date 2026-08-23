@@ -81,7 +81,7 @@ export async function syncFirebaseSession(idToken) {
     return data;
   } catch (err) {
     if (err?.name === 'AbortError') {
-      throw new Error('Sign-in timed out. Please check your connection and try again.');
+      throw new Error('Network timeout. Please check your connection or try again.');
     }
     throw err;
   } finally {
@@ -151,7 +151,7 @@ export async function fetchSession() {
       expiredJwt = true;
     } catch (err) {
       if (err?.name === 'AbortError') {
-        throw new Error('Could not restore your session in time. Please try again.');
+        throw new Error('Network timeout. Please check your connection or try again.');
       }
       throw err;
     } finally {

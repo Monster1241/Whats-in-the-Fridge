@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { initializeApp } from 'firebase/app';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import {
@@ -26,15 +27,20 @@ export function getFirebaseApp() {
 }
 
 /**
- * Initialize Auth on first use with explicit browser persistence.
- * IndexedDB + localStorage is required for reliable restore in iOS WKWebView / Capacitor.
+ * Initialize Auth on first use with explicit persistence.
+ * Native Capacitor (esp. iOS WKWebView): IndexedDB can hang forever — use localStorage only.
+ * Web: IndexedDB with localStorage fallback.
  */
 export function getFirebaseAuthInstance() {
   if (!authInstance) {
     const app = getFirebaseApp();
+    const isNative =
+      typeof Capacitor?.isNativePlatform === 'function' && Capacitor.isNativePlatform();
     try {
       authInstance = initializeAuth(app, {
-        persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+        persistence: isNative
+          ? browserLocalPersistence
+          : [indexedDBLocalPersistence, browserLocalPersistence],
       });
     } catch {
       // HMR / duplicate init — reuse the existing Auth instance.

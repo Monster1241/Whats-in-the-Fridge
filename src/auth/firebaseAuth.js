@@ -21,7 +21,7 @@ export const AUTH_TIMEOUT_MS = 10_000;
 export function withAuthTimeout(
   promise,
   ms = AUTH_TIMEOUT_MS,
-  message = 'Authentication timed out. Please try again.',
+  message = 'Network timeout. Please check your connection or try again.',
 ) {
   let timer;
   return Promise.race([
@@ -63,7 +63,7 @@ export function getFirebaseAuth() {
 export async function waitForFirebaseAuth(timeoutMs = AUTH_TIMEOUT_MS) {
   const auth = getFirebaseAuthInstance();
   const timeoutMessage =
-    'Sign-in is taking too long. Please check your connection and try again.';
+    'Network timeout. Please check your connection or try again.';
   try {
     await withAuthTimeout(auth.authStateReady(), timeoutMs, timeoutMessage);
   } catch (err) {
@@ -79,7 +79,9 @@ export async function waitForFirebaseAuth(timeoutMs = AUTH_TIMEOUT_MS) {
 export async function firebaseSignUp(email, password) {
   const auth = getFirebaseAuthInstance();
   try {
-    const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+    const cred = await withAuthTimeout(
+      createUserWithEmailAndPassword(auth, email.trim(), password),
+    );
     try {
       await sendEmailVerification(cred.user);
     } catch {
@@ -87,6 +89,7 @@ export async function firebaseSignUp(email, password) {
     }
     return cred.user;
   } catch (err) {
+    if (err?.message?.startsWith('Network timeout')) throw err;
     throw mapFirebaseAuthError(err);
   }
 }
@@ -94,9 +97,12 @@ export async function firebaseSignUp(email, password) {
 export async function firebaseSignIn(email, password) {
   const auth = getFirebaseAuthInstance();
   try {
-    const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+    const cred = await withAuthTimeout(
+      signInWithEmailAndPassword(auth, email.trim(), password),
+    );
     return cred.user;
   } catch (err) {
+    if (err?.message?.startsWith('Network timeout')) throw err;
     throw mapFirebaseAuthError(err);
   }
 }
@@ -111,7 +117,7 @@ export async function firebaseGetIdToken(forceRefresh = false) {
   return withAuthTimeout(
     user.getIdToken(forceRefresh),
     AUTH_TIMEOUT_MS,
-    'Could not verify your account in time. Please try again.',
+    'Network timeout. Please check your connection or try again.',
   );
 }
 
