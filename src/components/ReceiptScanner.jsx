@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FileText, Loader2, ScanLine, Trash2, Upload, X } from 'lucide-react';
+import { FileText, Loader2, ScanLine, Trash2, Upload, Camera, X } from 'lucide-react';
 import { confirmReceiptScan, scanReceipt } from '../api.js';
 import { formatInventoryQuantityLabel, normalizeAmbientQuantityFields } from '../inventory/quantityDisplay.js';
 import { ITEM_TYPE } from '../inventory/constants.js';
 import { prepareReceiptFileForUpload } from '../utils/prepareReceiptImage.js';
+import {
+  captureReceiptFromCamera,
+  isNativeReceiptCapture,
+  pickReceiptFromGallery,
+} from '../utils/receiptCapture.js';
 
 const ACCEPTED_TYPES =
   'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.heic,.heif';
@@ -73,8 +78,10 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
   const [items, setItems] = useState([]);
   const [confirming, setConfirming] = useState(false);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const dropRef = useRef(null);
   const processingRef = useRef(false);
+  const isNative = isNativeReceiptCapture();
 
   const resetState = useCallback(() => {
     setPhase('idle');
@@ -83,6 +90,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
     setItems([]);
     setConfirming(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
   }, []);
 
   const close = useCallback(() => {
@@ -145,12 +153,24 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
     } finally {
       processingRef.current = false;
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
     }
   }, []);
 
-  const onFileChange = (event) => {
-    const file = event.target.files?.[0];
+  const onReceiptFileSelected = (file) => {
+    if (!file) {
+      clearReceiptScanPending();
+      return;
+    }
     void processFile(file);
+  };
+
+  const onFileChange = (event) => {
+    onReceiptFileSelected(event.target.files?.[0]);
+  };
+
+  const onCameraChange = (event) => {
+    onReceiptFileSelected(event.target.files?.[0]);
   };
 
   const onDrop = (event) => {
@@ -163,6 +183,48 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
   const openFilePicker = () => {
     markReceiptScanPending();
     fileInputRef.current?.click();
+  };
+
+  const openCamera = async () => {
+    if (processingRef.current) return;
+    markReceiptScanPending();
+    if (isNative) {
+      try {
+        const file = await captureReceiptFromCamera();
+        if (file) {
+          await processFile(file);
+        } else {
+          clearReceiptScanPending();
+        }
+      } catch (err) {
+        clearReceiptScanPending();
+        setPhase('error');
+        setError(err.message || 'Could not open camera.');
+      }
+      return;
+    }
+    cameraInputRef.current?.click();
+  };
+
+  const openGallery = async () => {
+    if (processingRef.current) return;
+    if (isNative) {
+      markReceiptScanPending();
+      try {
+        const file = await pickReceiptFromGallery();
+        if (file) {
+          await processFile(file);
+        } else {
+          clearReceiptScanPending();
+        }
+      } catch (err) {
+        clearReceiptScanPending();
+        setPhase('error');
+        setError(err.message || 'Could not open gallery.');
+      }
+      return;
+    }
+    openFilePicker();
   };
 
   const updateItem = (clientId, patch) => {
@@ -254,30 +316,57 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
           {phase === 'idle' && (
             <div
               ref={dropRef}
-              onDragOver={(event) => {
-                event.preventDefault();
-                dropRef.current?.classList.add('ring-2', 'ring-emerald-400');
-              }}
-              onDragLeave={() => {
-                dropRef.current?.classList.remove('ring-2', 'ring-emerald-400');
-              }}
-              onDrop={onDrop}
+              onDragOver={
+                isNative
+                  ? undefined
+                  : (event) => {
+                      event.preventDefault();
+                      dropRef.current?.classList.add('ring-2', 'ring-emerald-400');
+                    }
+              }
+              onDragLeave={
+                isNative
+                  ? undefined
+                  : () => {
+                      dropRef.current?.classList.remove('ring-2', 'ring-emerald-400');
+                    }
+              }
+              onDrop={isNative ? undefined : onDrop}
               className="surface-inset flex flex-col items-center justify-center rounded-2xl border border-dashed border-emerald-300/80 px-6 py-10 text-center dark:border-emerald-800"
             >
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                <Upload className="h-7 w-7" aria-hidden />
+                {isNative ? (
+                  <Camera className="h-7 w-7" aria-hidden />
+                ) : (
+                  <Upload className="h-7 w-7" aria-hidden />
+                )}
               </div>
-              <p className="text-heading text-sm font-semibold">Drop receipt here</p>
-              <p className="text-muted mt-1 text-xs">
-                JPG, PNG, WEBP, HEIC, or PDF · photos are compressed before upload
+              <p className="text-heading text-sm font-semibold">
+                {isNative ? 'Scan your receipt' : 'Drop receipt here'}
               </p>
-              <button
-                type="button"
-                onClick={openFilePicker}
-                className="mt-5 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 active:scale-[0.98]"
-              >
-                Choose file
-              </button>
+              <p className="text-muted mt-1 text-xs">
+                {isNative
+                  ? 'Take a photo with your camera or pick an image from your gallery.'
+                  : 'JPG, PNG, WEBP, HEIC, or PDF · photos are compressed before upload'}
+              </p>
+              <div className="mt-5 flex w-full flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={openCamera}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 active:scale-[0.98]"
+                >
+                  <Camera className="h-4 w-4" aria-hidden />
+                  Take photo
+                </button>
+                <button
+                  type="button"
+                  onClick={openGallery}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-5 py-2.5 text-sm font-semibold text-emerald-800 active:scale-[0.98] dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200"
+                >
+                  <Upload className="h-4 w-4" aria-hidden />
+                  {isNative ? 'Choose from gallery' : 'Choose file'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -440,7 +529,7 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
                   type="button"
                   onClick={() => {
                     resetState();
-                    openFilePicker();
+                    void openCamera();
                   }}
                   className="mt-2 w-full rounded-xl bg-emerald-600 py-3 text-sm font-semibold text-white"
                 >
@@ -501,6 +590,15 @@ export function ReceiptScanner({ replaceItemsFromServer, onSuccess }) {
         accept={ACCEPTED_TYPES}
         className="sr-only"
         onChange={onFileChange}
+        tabIndex={-1}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        onChange={onCameraChange}
         tabIndex={-1}
       />
       <button

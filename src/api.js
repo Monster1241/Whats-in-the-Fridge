@@ -442,7 +442,9 @@ export async function fetchWeeklyDeals(filters = {}, options = {}) {
   const cacheKey = `weekly:${query}`;
   if (!options.force) {
     const cached = readDealsCache(cacheKey);
-    if (cached) return cached;
+    if (cached?.deals && cached?.cycle?.cycleStart) {
+      return cached;
+    }
   }
 
   const res = await fetch(apiUrl(`/deals/weekly${query ? `?${query}` : ''}`), {

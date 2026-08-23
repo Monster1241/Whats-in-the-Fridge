@@ -2,6 +2,13 @@ import {
   getCurrentWednesdayStart,
   getNextWednesdayExpiry,
 } from './groceryCycle.js';
+import {
+  getActiveDealStores,
+  getBiweeklyCycleBounds,
+  getBiweeklyCycleIndex,
+  getCurrentBiweeklyCycleStart,
+  serializeCycleStart,
+} from './dealCycle.js';
 import { WEEKLY_DEAL_TEMPLATES } from './seedWeeklyDeals.js';
 
 export { WEEKLY_DEAL_TEMPLATES };
@@ -93,6 +100,8 @@ export const DEFAULT_SAVINGS_TEXT_BY_DEAL_TYPE = {
  * @property {string} savingsText
  * @property {string} category
  * @property {Date} expiresAt
+ * @property {string} cycleStart
+ * @property {number} cycleIndex
  * @property {Date} created_at
  * @property {Date} updated_at
  */
@@ -233,6 +242,14 @@ export function buildWeeklyDealDoc(input) {
 
   const category = normalizeDealCategory(input.category) ?? 'Pantry';
   const now = new Date();
+  const cycleStart =
+    typeof input.cycleStart === 'string' && input.cycleStart
+      ? serializeCycleStart(new Date(input.cycleStart))
+      : serializeCycleStart(getCurrentBiweeklyCycleStart());
+  const cycleIndex =
+    Number.isFinite(Number(input.cycleIndex))
+      ? Number(input.cycleIndex)
+      : getBiweeklyCycleIndex();
 
   return {
     name,
@@ -243,6 +260,8 @@ export function buildWeeklyDealDoc(input) {
     savingsText,
     category,
     expiresAt: sanitizeExpiresAt(input.expiresAt),
+    cycleStart,
+    cycleIndex,
     created_at: input.created_at instanceof Date ? input.created_at : now,
     updated_at: now,
   };
@@ -280,16 +299,39 @@ export function mapWeeklyDealDoc(doc) {
 export async function ensureWeeklyDealIndexes(collection) {
   await collection.createIndex({ store: 1, category: 1 });
   await collection.createIndex({ expiresAt: 1 });
+  await collection.createIndex({ cycleStart: 1, expiresAt: 1 });
   await collection.createIndex({ name: 1, store: 1 });
   await collection.createIndex({ dealType: 1 });
 }
 
 /**
  * @param {Date} expiresAt
- * @param {typeof WEEKLY_DEAL_TEMPLATES} [templates]
+ * @param {{
+ *   cycleIndex?: number,
+ *   cycleStart?: string,
+ *   templates?: typeof WEEKLY_DEAL_TEMPLATES,
+ * }} [options]
  */
-export function buildDealsForCycle(expiresAt, templates = WEEKLY_DEAL_TEMPLATES) {
-  return templates.map((entry) => buildWeeklyDealDoc({ ...entry, expiresAt }));
+export function buildDealsForCycle(expiresAt, options = {}) {
+  const cycleIndex =
+    Number.isFinite(Number(options.cycleIndex))
+      ? Number(options.cycleIndex)
+      : getBiweeklyCycleIndex();
+  const cycleStart =
+    options.cycleStart ?? serializeCycleStart(getCurrentBiweeklyCycleStart());
+  const templates = options.templates ?? WEEKLY_DEAL_TEMPLATES;
+  const activeStores = new Set(getActiveDealStores(cycleIndex));
+
+  return templates
+    .filter((entry) => activeStores.has(normalizeDealStore(entry.store)))
+    .map((entry) =>
+      buildWeeklyDealDoc({
+        ...entry,
+        expiresAt,
+        cycleStart,
+        cycleIndex,
+      }),
+    );
 }
 
 export async function seedWeeklyDealsIfEmpty() {
@@ -297,8 +339,11 @@ export async function seedWeeklyDealsIfEmpty() {
   const count = await collection.countDocuments({}, { limit: 1 });
   if (count > 0) return false;
 
-  const expiresAt = getNextWednesdayExpiry();
-  const docs = buildDealsForCycle(expiresAt);
+  const cycle = getBiweeklyCycleBounds();
+  const docs = buildDealsForCycle(cycle.expiresAt, {
+    cycleIndex: cycle.cycleIndex,
+    cycleStart: serializeCycleStart(cycle.validFrom),
+  });
 
   try {
     await collection.insertMany(docs, { ordered: false });
@@ -316,17 +361,23 @@ export async function seedWeeklyDealsIfEmpty() {
  * @param {Date} [now]
  */
 async function ensureActiveDealsForCurrentCycle(collection, now = new Date()) {
-  const hasActive = await collection.countDocuments(
-    { expiresAt: { $gte: now } },
+  const cycle = getBiweeklyCycleBounds(now);
+  const cycleStart = serializeCycleStart(cycle.validFrom);
+
+  const hasCurrentCycle = await collection.countDocuments(
+    { cycleStart, expiresAt: { $gte: now } },
     { limit: 1 },
   );
-  if (hasActive > 0) return false;
+  if (hasCurrentCycle > 0) return false;
 
-  const expiresAt = getNextWednesdayExpiry(now);
-  const docs = buildDealsForCycle(expiresAt);
+  await collection.deleteMany({
+    $or: [{ expiresAt: { $lt: now } }, { cycleStart: { $ne: cycleStart } }],
+  });
 
-  // Clear stale rows first to avoid serving only expired cycles forever.
-  await collection.deleteMany({ expiresAt: { $lt: now } });
+  const docs = buildDealsForCycle(cycle.expiresAt, {
+    cycleIndex: cycle.cycleIndex,
+    cycleStart,
+  });
 
   if (docs.length > 0) {
     try {
@@ -346,8 +397,11 @@ async function ensureActiveDealsForCurrentCycle(collection, now = new Date()) {
 export async function reseedWeeklyDeals() {
   const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
   const removeResult = await collection.deleteMany({});
-  const expiresAt = getNextWednesdayExpiry();
-  const docs = buildDealsForCycle(expiresAt);
+  const cycle = getBiweeklyCycleBounds();
+  const docs = buildDealsForCycle(cycle.expiresAt, {
+    cycleIndex: cycle.cycleIndex,
+    cycleStart: serializeCycleStart(cycle.validFrom),
+  });
 
   if (docs.length > 0) {
     try {
@@ -360,7 +414,8 @@ export async function reseedWeeklyDeals() {
   return {
     deleted: removeResult.deletedCount ?? 0,
     inserted: docs.length,
-    expiresAt: expiresAt.toISOString(),
+    expiresAt: cycle.expiresAt.toISOString(),
+    cycleStart: serializeCycleStart(cycle.validFrom),
   };
 }
 
@@ -380,11 +435,16 @@ function parseFilterList(value) {
  */
 export async function fetchWeeklyDeals(filters = {}) {
   const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
+  const now = new Date();
   await seedWeeklyDealsIfEmpty();
-  await ensureActiveDealsForCurrentCycle(collection);
+  await ensureActiveDealsForCurrentCycle(collection, now);
+
+  const cycle = getBiweeklyCycleBounds(now);
+  const cycleStart = serializeCycleStart(cycle.validFrom);
 
   const query = {
-    expiresAt: { $gte: new Date() },
+    expiresAt: { $gte: now },
+    cycleStart,
   };
 
   const storeFilters = parseFilterList(filters.store)

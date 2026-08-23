@@ -12,6 +12,11 @@ import {
   WEEKLY_DEALS_ARCHIVE_COLLECTION,
   WEEKLY_DEALS_COLLECTION,
 } from './weeklyDeals.js';
+import {
+  getBiweeklyCycleBounds,
+  serializeCycleStart,
+  shouldRefreshDealsThisWeek,
+} from './dealCycle.js';
 
 export const GROCERY_REFRESH_MODES = /** @type {const} */ ([
   'sneakPeek',
@@ -138,33 +143,48 @@ async function upsertCataloguesForCycle(cycle, mode) {
 }
 
 /**
- * @param {{ validFrom: Date, validTo: Date, expiresAt: Date }} cycle
+ * @param {{ validFrom: Date, validTo: Date, expiresAt: Date }} _cycle
  * @param {'sneakPeek'|'officialReset'} mode
+ * @param {Date} [now]
  */
-async function upsertDealsForCycle(cycle, mode) {
+async function upsertDealsForCycle(_cycle, mode, now = new Date()) {
   const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
-  const docs = buildDealsForCycle(cycle.expiresAt);
-  let inserted = 0;
-  let replaced = 0;
-  let skipped = 0;
+  const biweekly = getBiweeklyCycleBounds(now);
+  const cycleStart = serializeCycleStart(biweekly.validFrom);
+  const docs = buildDealsForCycle(biweekly.expiresAt, {
+    cycleIndex: biweekly.cycleIndex,
+    cycleStart,
+  });
+
+  if (mode === 'officialReset' && !shouldRefreshDealsThisWeek(now)) {
+    return {
+      inserted: 0,
+      replaced: 0,
+      skipped: docs.length,
+      total: docs.length,
+      skippedReason: 'biweekly_off_week',
+    };
+  }
 
   if (mode === 'officialReset') {
     const removeResult = await collection.deleteMany({
-      expiresAt: { $gte: cycle.validFrom, $lte: cycle.expiresAt },
+      $or: [{ expiresAt: { $lt: now } }, { cycleStart: { $ne: cycleStart } }],
     });
-    replaced = removeResult.deletedCount ?? 0;
+    const replaced = removeResult.deletedCount ?? 0;
     if (docs.length > 0) {
       await collection.insertMany(docs, { ordered: false });
-      inserted = docs.length;
     }
-    return { inserted, replaced, skipped, total: docs.length };
+    return { inserted: docs.length, replaced, skipped: 0, total: docs.length };
   }
+
+  let inserted = 0;
+  let skipped = 0;
 
   for (const doc of docs) {
     const existing = await collection.findOne({
       store: doc.store,
       name: doc.name,
-      expiresAt: cycle.expiresAt,
+      cycleStart,
     });
     if (existing) {
       skipped += 1;
@@ -174,7 +194,7 @@ async function upsertDealsForCycle(cycle, mode) {
     inserted += 1;
   }
 
-  return { inserted, replaced, skipped, total: docs.length };
+  return { inserted, replaced: 0, skipped, total: docs.length };
 }
 
 /**
@@ -195,7 +215,7 @@ export async function refreshGroceryData(mode, options = {}) {
   const cycle = getCycleBoundsForMode(normalizedMode, now);
   const archive = await archiveAndClearExpired(now);
   const catalogues = await upsertCataloguesForCycle(cycle, normalizedMode);
-  const deals = await upsertDealsForCycle(cycle, normalizedMode);
+  const deals = await upsertDealsForCycle(cycle, normalizedMode, now);
 
   return {
     ok: true,

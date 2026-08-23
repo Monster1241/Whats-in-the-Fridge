@@ -35,6 +35,7 @@ import {
 } from './db.js';
 import { sendPushToTokens } from './fcm.js';
 import { fetchActiveCataloguesPerStore } from './storeCatalogues.js';
+import { getDealCycleMeta } from './dealCycle.js';
 import {
   DEAL_CATEGORIES,
   DEAL_STORES,
@@ -675,6 +676,7 @@ export async function handleGetWeeklyDeals(req, res) {
     }
 
     const deals = await fetchWeeklyDeals({ store, category, dealType });
+    const cycle = getDealCycleMeta();
     const payload = {
       filters: {
         store: store || null,
@@ -684,6 +686,7 @@ export async function handleGetWeeklyDeals(req, res) {
       },
       count: deals.length,
       deals,
+      cycle,
     };
 
     if (groupBy) {

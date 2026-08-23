@@ -636,6 +636,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const [postcodeDraft, setPostcodeDraft] = useState(postcode);
   const [postcodeError, setPostcodeError] = useState('');
   const [deals, setDeals] = useState([]);
+  const [dealCycle, setDealCycle] = useState(null);
   const [catalogues, setCatalogues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cataloguesLoading, setCataloguesLoading] = useState(true);
@@ -665,8 +666,10 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
     try {
       const data = await fetchWeeklyDeals({}, { force });
       setDeals(data.deals ?? []);
+      setDealCycle(data.cycle ?? null);
     } catch (err) {
       setDeals([]);
+      setDealCycle(null);
       setError(err.message || 'Could not load weekly deals.');
     } finally {
       setLoading(false);
@@ -675,6 +678,16 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
 
   useEffect(() => {
     loadDeals(false);
+  }, [loadDeals]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadDeals(true);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [loadDeals]);
 
   const toggleStoreFilter = useCallback((storeId) => {
@@ -837,16 +850,25 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
       return `No deals match "${searchQuery.trim()}". Try another search or filter.`;
     }
     if (deals.length === 0) {
-      return 'No weekly deals right now — check back after Wednesday.';
+      return dealCycle?.nextRefreshAt
+        ? 'No item deals this fortnight — new stores rotate every second Wednesday.'
+        : 'No weekly deals right now — check back after Wednesday.';
     }
     if (selectedStores.size > 0 || selectedDealTypes.size > 0) {
       return 'No deals match your filters. Try clearing filters or selecting different options.';
     }
     return 'No matching deals for this selection.';
-  }, [deals.length, normalizedSearch, searchQuery, selectedStores.size, selectedDealTypes.size]);
+  }, [deals.length, dealCycle, normalizedSearch, searchQuery, selectedStores.size, selectedDealTypes.size]);
 
   const dealsCount = loading ? 0 : filteredDeals.length;
   const cataloguesCount = cataloguesLoading ? 0 : orderedCatalogues.length;
+
+  const activeStoreLabels = useMemo(() => {
+    if (!dealCycle?.activeStores?.length) return '';
+    return dealCycle.activeStores
+      .map((id) => STORE_FILTERS.find((store) => store.id === id)?.label ?? id)
+      .join(', ');
+  }, [dealCycle]);
 
   return (
     <div className="pb-4" aria-label="Hot deals portal">
@@ -924,6 +946,13 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
               />
             ) : (
               <>
+            {dealCycle?.activeStores?.length > 0 && (
+              <p className="text-muted mb-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed dark:border-amber-900/50 dark:bg-amber-950/25">
+                <span className="text-heading font-semibold">This fortnight:</span>{' '}
+                {activeStoreLabels}. Item deals refresh every second Wednesday with a new store
+                lineup.
+              </p>
+            )}
             <label className="relative mb-4 block">
               <span className="sr-only">Search deals</span>
               <Search
