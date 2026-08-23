@@ -7,6 +7,8 @@ import { authRouter } from './routes/auth.js';
 import { householdRouter } from './routes/household.js';
 import { stateRouter } from './routes/state.js';
 import { dealsRouter } from './routes/deals.js';
+import { adminRouter } from './routes/admin.js';
+import { supportRouter } from './routes/support.js';
 import { recipesRouter } from './routes/recipes.js';
 import { inventoryRouter } from './routes/inventory.js';
 import { shoppingListRouter } from './routes/shoppingList.js';
@@ -29,6 +31,8 @@ export function createApp() {
   app.get('/api/health', asyncRoute(handleHealth, 'GET /api/health', 'Health check failed'));
 
   app.use('/api/deals', dealsRouter);
+  app.use('/api/admin', adminRouter);
+  app.use('/api/support', supportRouter);
   app.use('/api/recipes', recipesRouter);
   app.use('/api/inventory', inventoryRouter);
   app.use('/api/shopping-list', shoppingListRouter);

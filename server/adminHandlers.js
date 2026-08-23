@@ -1,0 +1,202 @@
+import { ObjectId } from 'mongodb';
+import { requireAdmin } from './adminAuth.js';
+import { ensureDb } from './ensureDb.js';
+import { toFriendlyError } from './errors.js';
+import {
+  listUnverifiedStoreDeals,
+  markDealManuallyVerified,
+  markStoreDealsManuallyVerified,
+} from './dealManualVerification.js';
+import {
+  getSupportInboxCounts,
+  listUserFeedback,
+  listUserReports,
+  updateInboxItem,
+  USER_FEEDBACK_COLLECTION,
+  USER_REPORTS_COLLECTION,
+} from './supportInbox.js';
+import { findUserById } from './db.js';
+import { getBearerUser } from './auth.js';
+import { isAdminEmail } from './adminAuth.js';
+import { normalizeDealStore, WEEKLY_DEALS_COLLECTION } from './weeklyDeals.js';
+
+export async function handleAdminMe(req, res) {
+  try {
+    const session = getBearerUser(req);
+    if (!session) {
+      res.status(401).json({ error: 'Not authenticated.', isAdmin: false });
+      return;
+    }
+
+    await ensureDb();
+    const user = await findUserById(session.userId);
+    if (!user) {
+      res.status(401).json({ error: 'Session expired.', isAdmin: false });
+      return;
+    }
+
+    res.status(200).json({
+      isAdmin: isAdminEmail(user.email),
+      email: user.email,
+      userId: user.id,
+    });
+  } catch (err) {
+    console.error('GET /api/admin/me', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message, isAdmin: false });
+  }
+}
+
+export async function handleAdminDashboard(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const counts = await getSupportInboxCounts();
+    res.status(200).json({ ok: true, counts });
+  } catch (err) {
+    console.error('GET /api/admin/dashboard', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleListUnverifiedDeals(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const store = String(req.query?.store ?? '').trim() || null;
+    const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
+    const deals = await listUnverifiedStoreDeals(collection, { store: store ?? undefined });
+
+    res.status(200).json({ ok: true, count: deals.length, deals });
+  } catch (err) {
+    console.error('GET /api/admin/deals/unverified', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleVerifyWeeklyDeals(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
+    const store = normalizeDealStore(req.body?.store);
+    const dealId = String(req.body?.dealId ?? '').trim();
+    const verifiedBy =
+      admin.user?.email || String(req.body?.verifiedBy ?? 'admin').trim();
+    const verificationSource = String(req.body?.verificationSource ?? '').trim() || undefined;
+    const dealPrice =
+      req.body?.dealPrice != null ? Number(req.body.dealPrice) : undefined;
+    const originalPrice =
+      req.body?.originalPrice !== undefined
+        ? req.body.originalPrice == null
+          ? null
+          : Number(req.body.originalPrice)
+        : undefined;
+
+    if (dealId) {
+      if (!ObjectId.isValid(dealId)) {
+        res.status(400).json({ error: 'Invalid dealId.' });
+        return;
+      }
+      const verified = await markDealManuallyVerified(collection, new ObjectId(dealId), {
+        verifiedBy,
+        verificationSource,
+        dealPrice,
+        originalPrice,
+      });
+      res.status(200).json({ ok: true, verified: [verified] });
+      return;
+    }
+
+    if (!store) {
+      res.status(400).json({
+        error: 'Provide dealId for one deal, or store to verify all active deals for that retailer.',
+      });
+      return;
+    }
+
+    const result = await markStoreDealsManuallyVerified(collection, {
+      store,
+      verifiedBy,
+      verificationSource,
+    });
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error('POST /api/admin/deals/verify', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleAdminListReports(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const status = String(req.query?.status ?? '').trim() || undefined;
+    const reports = await listUserReports({ status });
+    res.status(200).json({ ok: true, count: reports.length, reports });
+  } catch (err) {
+    console.error('GET /api/admin/reports', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleAdminUpdateReport(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const id = String(req.params?.id ?? '').trim();
+    const updated = await updateInboxItem(USER_REPORTS_COLLECTION, id, {
+      status: req.body?.status,
+      adminNotes: req.body?.adminNotes,
+      adminUserId: admin.user?.id ?? null,
+    });
+    res.status(200).json({ ok: true, report: updated });
+  } catch (err) {
+    console.error('PATCH /api/admin/reports/:id', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleAdminListFeedback(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const status = String(req.query?.status ?? '').trim() || undefined;
+    const feedback = await listUserFeedback({ status });
+    res.status(200).json({ ok: true, count: feedback.length, feedback });
+  } catch (err) {
+    console.error('GET /api/admin/feedback', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleAdminUpdateFeedback(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const id = String(req.params?.id ?? '').trim();
+    const updated = await updateInboxItem(USER_FEEDBACK_COLLECTION, id, {
+      status: req.body?.status,
+      adminNotes: req.body?.adminNotes,
+      adminUserId: admin.user?.id ?? null,
+    });
+    res.status(200).json({ ok: true, feedback: updated });
+  } catch (err) {
+    console.error('PATCH /api/admin/feedback/:id', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}

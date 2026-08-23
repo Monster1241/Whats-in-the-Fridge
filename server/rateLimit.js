@@ -68,3 +68,10 @@ export const geminiRateLimit = createRateLimiter({
   keyPrefix: 'gemini',
   message: 'AI request limit reached. Please wait a minute and try again.',
 });
+
+export const supportRateLimit = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 15,
+  keyPrefix: 'support',
+  message: 'Too many support submissions. Please try again later.',
+});

@@ -624,3 +624,80 @@ export async function classifyInventoryItem(name, options = {}) {
   });
   return parseJson(res);
 }
+
+// —— Support (user-facing) ——
+
+export async function submitUserReport(payload) {
+  const res = await fetch(apiUrl('/support/report'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function submitUserFeedback(payload) {
+  const res = await fetch(apiUrl('/support/feedback'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+// —— Admin ——
+
+export async function fetchAdminMe() {
+  const res = await fetch(apiUrl('/admin/me'), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function fetchAdminDashboard() {
+  const res = await fetch(apiUrl('/admin/dashboard'), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function fetchAdminUnverifiedDeals(store) {
+  const params = store ? `?store=${encodeURIComponent(store)}` : '';
+  const res = await fetch(apiUrl(`/admin/deals/unverified${params}`), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function verifyAdminDeal(payload) {
+  const res = await fetch(apiUrl('/admin/deals/verify'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function fetchAdminReports(status) {
+  const params = status ? `?status=${encodeURIComponent(status)}` : '';
+  const res = await fetch(apiUrl(`/admin/reports${params}`), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function updateAdminReport(id, patch) {
+  const res = await fetch(apiUrl(`/admin/reports/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(patch),
+  });
+  return parseJson(res);
+}
+
+export async function fetchAdminFeedback(status) {
+  const params = status ? `?status=${encodeURIComponent(status)}` : '';
+  const res = await fetch(apiUrl(`/admin/feedback${params}`), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function updateAdminFeedback(id, patch) {
+  const res = await fetch(apiUrl(`/admin/feedback/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(patch),
+  });
+  return parseJson(res);
+}

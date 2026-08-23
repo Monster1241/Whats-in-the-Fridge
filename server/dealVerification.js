@@ -91,6 +91,8 @@ export function validateDealConsistency(deal) {
 }
 
 /**
+ * Prices are shown from seed data by default. Admin manual verification is optional
+ * and only affects the verified badge — not whether prices are displayed.
  * @param {Record<string, unknown>} deal
  */
 export async function verifyDealForDisplay(deal) {
@@ -100,6 +102,7 @@ export async function verifyDealForDisplay(deal) {
       status: /** @type {DealVerificationStatus} */ ('rejected'),
       priceConfirmed: false,
       showPrice: false,
+      verificationMethod: null,
       reason: consistency.reason,
       checkedAt: new Date().toISOString(),
     };
@@ -113,7 +116,7 @@ export async function verifyDealForDisplay(deal) {
       ? /** @type {DealVerificationStatus} */ ('confirmed')
       : /** @type {DealVerificationStatus} */ ('unverified'),
     priceConfirmed,
-    showPrice: priceConfirmed,
+    showPrice: true,
     verificationMethod: live.method ?? null,
     reason: live.note,
     checkedAt: live.checkedAt,

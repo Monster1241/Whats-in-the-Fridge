@@ -31,14 +31,14 @@ describe('dealVerification', () => {
     expect(validateDealStructure(baseDeal).ok).toBe(true);
   });
 
-  it('hides prices for seed data until manual verification', async () => {
+  it('shows prices for seed data without admin verification', async () => {
     const result = await verifyDealForDisplay(baseDeal);
     expect(result.priceConfirmed).toBe(false);
-    expect(result.showPrice).toBe(false);
+    expect(result.showPrice).toBe(true);
     expect(result.status).toBe('unverified');
   });
 
-  it('shows prices after manual catalogue verification', async () => {
+  it('marks admin-verified deals as confirmed with manual method', async () => {
     const result = await verifyDealForDisplay({
       ...baseDeal,
       priceVerifiedAt: new Date().toISOString(),

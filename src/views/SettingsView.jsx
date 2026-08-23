@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { fetchHouseholdMembers, removeHouseholdMember, sendPasswordResetEmail } from '../api.js';
 import { LegalFooterLinks } from '../components/LegalFooterLinks.jsx';
+import { UserFeedbackForm } from '../components/UserFeedbackForm.jsx';
 import { usePushNotifications } from '../context/PushNotificationContext.jsx';
 import {
   countEnabledModules,
@@ -40,6 +41,7 @@ import {
   Settings,
   Share2,
   ShoppingCart,
+  MessageSquare,
   Shield,
   Sun,
   Trash2,
@@ -662,6 +664,18 @@ export function SettingsView({
     );
   }
 
+  if (infoScreen === 'feedback') {
+    return (
+      <SettingsInfoScreen title="Send feedback" icon={MessageSquare} onBack={() => setInfoScreen(null)}>
+        <p className="text-muted mb-4 text-sm">
+          Share a bug, feature idea, or anything about deals and catalogues. Reports go to the team
+          inbox — not public reviews.
+        </p>
+        <UserFeedbackForm />
+      </SettingsInfoScreen>
+    );
+  }
+
   return (
     <div className="pb-28">
       <header className="mb-5">
@@ -1255,6 +1269,22 @@ export function SettingsView({
       )}
 
       <div className="mb-5 space-y-2">
+        <button
+          type="button"
+          onClick={() => setInfoScreen('feedback')}
+          className="surface-card flex w-full items-center gap-3 p-4 text-left transition active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+            <MessageSquare className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="text-heading block text-sm font-bold">Send feedback</span>
+            <span className="text-muted mt-0.5 block text-xs leading-relaxed">
+              Bugs, ideas, and help improving deals
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+        </button>
         <button
           type="button"
           onClick={() => setInfoScreen('privacy')}

@@ -6,6 +6,7 @@ import {
   STORE_CATALOGUES_COLLECTION,
 } from './storeCatalogues.js';
 import { ensureWeeklyDealIndexes, WEEKLY_DEALS_COLLECTION } from './weeklyDeals.js';
+import { ensureSupportInboxIndexes } from './supportInbox.js';
 
 const DB_NAME = 'whats-in-the-fridge';
 
@@ -153,6 +154,7 @@ async function ensureIndexes(db) {
   }
   await ensureWeeklyDealIndexes(db.collection(WEEKLY_DEALS_COLLECTION));
   await ensureStoreCatalogueIndexes(db.collection(STORE_CATALOGUES_COLLECTION));
+  await ensureSupportInboxIndexes();
 }
 
 async function ensureIndexesSafe(db) {

@@ -329,10 +329,8 @@ export async function mapWeeklyDealDoc(doc) {
     priceConfirmed: verification.priceConfirmed,
     verificationMethod: verification.verificationMethod ?? null,
     priceDisclaimer: verification.priceConfirmed
-      ? verification.verificationMethod === 'manual'
-        ? 'Price confirmed against the retailer catalogue.'
-        : null
-      : 'Price not verified — open the store catalogue to confirm before you shop.',
+      ? null
+      : 'Prices are indicative — confirm in the official store catalogue or in store before you shop.',
     catalogueUrl: getCatalogueVerifyUrl(store),
     verificationCheckedAt: verification.checkedAt,
   };
@@ -572,10 +570,10 @@ export async function fetchWeeklyDeals(filters = {}) {
     deals: filtered,
     locale,
     pricingPolicy: {
-      liveVerifiedOnly: false,
-      manualCuration: true,
+      showPricesByDefault: true,
+      optionalAdminVerification: true,
       message:
-        'Prices appear only after you verify them against each store catalogue. Unverified deals show the offer type without dollar amounts.',
+        'Deal prices are from our weekly catalogue list and may not match your store. Always double-check the official catalogue or shelf price before you shop.',
     },
     cycle: {
       validFrom: cycle.validFrom.toISOString(),

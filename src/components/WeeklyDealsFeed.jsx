@@ -5,6 +5,7 @@ import {
   Check,
   Download,
   ExternalLink,
+  Flag,
   Flame,
   MapPin,
   Plus,
@@ -14,6 +15,7 @@ import {
 import { fetchStoreCatalogues, fetchWeeklyDeals } from '../api.js';
 import { StoreLogo } from './StoreLogo.jsx';
 import { DealsFilterMenu } from './DealsFilterMenu.jsx';
+import { ReportDealModal } from './ReportDealModal.jsx';
 import {
   DEAL_TYPE_SUB_FILTERS,
   matchesDealTypeSubFilter,
@@ -349,9 +351,10 @@ function SectionToggle({ activeSection, onChange, dealsCount, cataloguesCount })
 function WeeklyDealCard({ deal, showAddedFeedback, onAdd, onOpen }) {
   const storeBadge = STORE_BADGE_STYLES[deal.store] ?? 'bg-slate-700 text-white';
   const dealBadgeStyle = getDealTypeBadgeStyle(deal);
-  const showPrice = deal.priceConfirmed === true && deal.dealPrice != null;
-  const original = showPrice ? formatPrice(deal.originalPrice) : null;
-  const dealPrice = showPrice ? formatPrice(deal.dealPrice) : null;
+  const hasPrice = deal.dealPrice != null;
+  const original = hasPrice ? formatPrice(deal.originalPrice) : null;
+  const dealPrice = hasPrice ? formatPrice(deal.dealPrice) : null;
+  const isVerified = deal.priceConfirmed === true && deal.verificationMethod === 'manual';
 
   return (
     <article className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-2xl border border-amber-200/60 bg-lm-card shadow-lm-card dark:border-amber-900/40 dark:bg-dm-card">
@@ -387,7 +390,7 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd, onOpen }) {
         </p>
 
         <div className="mt-2 flex items-end gap-2">
-          {showPrice ? (
+          {hasPrice ? (
             <>
               <p className="text-heading text-2xl font-extrabold leading-none">{dealPrice}</p>
               {original && (
@@ -395,14 +398,12 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd, onOpen }) {
               )}
             </>
           ) : (
-            <p className="text-xs font-semibold leading-snug text-amber-800 dark:text-amber-300">
-              Confirm price in catalogue before you shop
-            </p>
+            <p className="text-muted text-xs font-medium">Price unavailable</p>
           )}
         </div>
-        {showPrice && deal.verificationMethod === 'manual' && (
+        {isVerified && (
           <p className="mt-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
-            Catalogue verified
+            Verified price
           </p>
         )}
       </button>
@@ -439,15 +440,16 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd, onOpen }) {
   );
 }
 
-function WeeklyDealDetail({ deal, showAddedFeedback, onAdd, onBack }) {
+function WeeklyDealDetail({ deal, showAddedFeedback, onAdd, onBack, onReport }) {
   const storeBadge = STORE_BADGE_STYLES[deal.store] ?? 'bg-slate-700 text-white';
   const dealBadgeStyle = getDealTypeBadgeStyle(deal);
-  const showPrice = deal.priceConfirmed === true && deal.dealPrice != null;
-  const original = showPrice ? formatPrice(deal.originalPrice) : null;
-  const dealPrice = showPrice ? formatPrice(deal.dealPrice) : null;
-  const savings = showPrice ? getDealSavings(deal) : null;
+  const hasPrice = deal.dealPrice != null;
+  const original = hasPrice ? formatPrice(deal.originalPrice) : null;
+  const dealPrice = hasPrice ? formatPrice(deal.dealPrice) : null;
+  const savings = hasPrice ? getDealSavings(deal) : null;
   const expiryLabel = formatDealExpiry(deal.expiresAt);
   const catalogueUrl = deal.catalogueUrl ?? null;
+  const isVerified = deal.priceConfirmed === true && deal.verificationMethod === 'manual';
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -510,10 +512,15 @@ function WeeklyDealDetail({ deal, showAddedFeedback, onAdd, onBack }) {
           </div>
 
           <div className="rounded-2xl border border-amber-200/60 bg-lm-inset p-4 dark:border-amber-900/40 dark:bg-dm-inset">
-            <p className="text-muted text-xs font-semibold uppercase tracking-wide">
-              {showPrice ? 'Deal price' : 'Price verification'}
-            </p>
-            {showPrice ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-muted text-xs font-semibold uppercase tracking-wide">Deal price</p>
+              {isVerified && (
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+                  Verified price
+                </span>
+              )}
+            </div>
+            {hasPrice ? (
               <>
                 <div className="mt-2 flex flex-wrap items-end gap-3">
                   <p className="text-heading text-4xl font-extrabold leading-none">{dealPrice}</p>
@@ -528,22 +535,23 @@ function WeeklyDealDetail({ deal, showAddedFeedback, onAdd, onBack }) {
                 )}
               </>
             ) : (
-              <div className="mt-2 space-y-2">
-                <p className="text-sm font-semibold leading-relaxed text-amber-900 dark:text-amber-200">
-                  {deal.priceDisclaimer ||
-                    'We have not verified this price live. Open the store catalogue to confirm the current offer.'}
-                </p>
-                {catalogueUrl && (
-                  <button
-                    type="button"
-                    onClick={() => openExternalUrl(catalogueUrl)}
-                    className="inline-flex min-h-[2.75rem] items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700 active:scale-[0.98] dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white"
-                  >
-                    <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
-                    Confirm in {deal.storeLabel} catalogue
-                  </button>
-                )}
-              </div>
+              <p className="text-muted mt-2 text-sm">Price unavailable for this item.</p>
+            )}
+            {!isVerified && (
+              <p className="mt-3 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
+                {deal.priceDisclaimer ||
+                  'Prices may not be accurate — always double-check the official catalogue or in-store price.'}
+              </p>
+            )}
+            {catalogueUrl && (
+              <button
+                type="button"
+                onClick={() => openExternalUrl(catalogueUrl)}
+                className="mt-3 inline-flex min-h-[2.75rem] items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700 active:scale-[0.98] dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white"
+              >
+                <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+                View {deal.storeLabel} catalogue
+              </button>
             )}
           </div>
 
@@ -552,6 +560,15 @@ function WeeklyDealDetail({ deal, showAddedFeedback, onAdd, onBack }) {
               Offer valid until <span className="text-heading font-semibold">{expiryLabel}</span>
             </p>
           )}
+
+          <button
+            type="button"
+            onClick={onReport}
+            className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
+          >
+            <Flag className="h-3.5 w-3.5" aria-hidden />
+            Report wrong price or expired deal
+          </button>
 
           <button
             type="button"
@@ -683,6 +700,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const [error, setError] = useState(null);
   const [flashAddedIds, setFlashAddedIds] = useState(() => new Set());
   const [selectedDeal, setSelectedDeal] = useState(null);
+  const [reportDeal, setReportDeal] = useState(null);
   const flashTimersRef = useRef(new Map());
 
   const handleSectionChange = useCallback((section) => {
@@ -948,6 +966,10 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
         />
       )}
 
+      {reportDeal && (
+        <ReportDealModal deal={reportDeal} onClose={() => setReportDeal(null)} />
+      )}
+
       <div
         key={activeSection}
         id={`hot-deals-panel-${activeSection}`}
@@ -995,6 +1017,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
                 showAddedFeedback={showAddedFeedback(selectedDeal)}
                 onAdd={handleAdd}
                 onBack={() => setSelectedDeal(null)}
+                onReport={() => setReportDeal(selectedDeal)}
               />
             ) : (
               <>
@@ -1005,8 +1028,8 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
               </p>
             )}
             {pricingPolicy?.message && (
-              <p className="text-muted mb-3 rounded-xl border border-sky-200/80 bg-sky-50/70 px-3 py-2 text-xs leading-relaxed dark:border-sky-900/50 dark:bg-sky-950/25">
-                <span className="text-heading font-semibold">Pricing:</span> {pricingPolicy.message}
+              <p className="text-muted mb-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed dark:border-amber-900/50 dark:bg-amber-950/25">
+                <span className="text-heading font-semibold">Note:</span> {pricingPolicy.message}
               </p>
             )}
             <label className="relative mb-4 block">
