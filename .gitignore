@@ -25,3 +25,4 @@ ios/DerivedData
 ios/App/App/public
 *.xcuserstate
 xcuserdata/
+.env.example
