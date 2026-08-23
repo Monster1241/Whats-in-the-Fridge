@@ -400,6 +400,11 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd, onOpen }) {
             </p>
           )}
         </div>
+        {showPrice && deal.verificationMethod === 'manual' && (
+          <p className="mt-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+            Catalogue verified
+          </p>
+        )}
       </button>
 
       <button

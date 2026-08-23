@@ -23,6 +23,7 @@
     "refresh:grocery:sneak": "node tasks/refreshGroceryData.js --mode sneakPeek",
     "refresh:grocery:reset": "node tasks/refreshGroceryData.js --mode officialReset",
     "seed:weekly-deals": "node tasks/seedWeeklyDeals.js",
+    "verify:deals": "node tasks/verifyWeeklyDeals.js",
     "seed:recipes": "node server/scripts/seedRecipes.js"
   },
   "dependencies": {

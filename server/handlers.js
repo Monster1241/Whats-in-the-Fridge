@@ -45,7 +45,15 @@ import {
   groupWeeklyDeals,
   normalizeDealCategory,
   normalizeDealStore,
+  WEEKLY_DEALS_COLLECTION,
 } from './weeklyDeals.js';
+import { dealsAdminUnauthorized, verifyDealsAdminSecret } from './dealsAdminAuth.js';
+import {
+  listUnverifiedStoreDeals,
+  markDealManuallyVerified,
+  markStoreDealsManuallyVerified,
+} from './dealManualVerification.js';
+import { ObjectId } from 'mongodb';
 
 async function authPayload(user) {
   const isVerified = Boolean(user.isVerified);
@@ -733,6 +741,83 @@ export async function handleGetStoreCatalogues(req, res) {
     });
   } catch (err) {
     console.error('GET /api/deals/catalogues', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleListUnverifiedDeals(req, res) {
+  try {
+    if (!verifyDealsAdminSecret(req)) {
+      dealsAdminUnauthorized(res);
+      return;
+    }
+
+    await ensureDb();
+    const store = String(req.query?.store ?? '').trim() || null;
+    const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
+    const deals = await listUnverifiedStoreDeals(collection, { store: store ?? undefined });
+
+    res.status(200).json({ ok: true, count: deals.length, deals });
+  } catch (err) {
+    console.error('GET /api/deals/admin/unverified', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleVerifyWeeklyDeals(req, res) {
+  try {
+    if (!verifyDealsAdminSecret(req)) {
+      dealsAdminUnauthorized(res);
+      return;
+    }
+
+    await ensureDb();
+    const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
+    const store = normalizeDealStore(req.body?.store);
+    const dealId = String(req.body?.dealId ?? '').trim();
+    const verifiedBy = String(req.body?.verifiedBy ?? 'admin').trim();
+    const verificationSource = String(req.body?.verificationSource ?? '').trim() || undefined;
+    const dealPrice =
+      req.body?.dealPrice != null ? Number(req.body.dealPrice) : undefined;
+    const originalPrice =
+      req.body?.originalPrice !== undefined
+        ? req.body.originalPrice == null
+          ? null
+          : Number(req.body.originalPrice)
+        : undefined;
+
+    if (dealId) {
+      if (!ObjectId.isValid(dealId)) {
+        res.status(400).json({ error: 'Invalid dealId.' });
+        return;
+      }
+      const verified = await markDealManuallyVerified(collection, new ObjectId(dealId), {
+        verifiedBy,
+        verificationSource,
+        dealPrice,
+        originalPrice,
+      });
+      res.status(200).json({ ok: true, verified: [verified] });
+      return;
+    }
+
+    if (!store) {
+      res.status(400).json({
+        error: 'Provide dealId for one deal, or store to verify all active deals for that retailer.',
+      });
+      return;
+    }
+
+    const result = await markStoreDealsManuallyVerified(collection, {
+      store,
+      verifiedBy,
+      verificationSource,
+    });
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error('POST /api/deals/admin/verify', err);
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
   }

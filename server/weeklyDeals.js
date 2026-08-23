@@ -115,6 +115,10 @@ export const DEFAULT_SAVINGS_TEXT_BY_DEAL_TYPE = {
  * @property {string} storeWindowId
  * @property {Date} storeExpiresAt
  * @property {'seed'|'live'} dataSource
+ * @property {Date} [priceVerifiedAt]
+ * @property {string} [priceVerifiedForCycle]
+ * @property {string} [priceVerifiedBy]
+ * @property {string} [priceVerificationSource]
  * @property {Date} created_at
  * @property {Date} updated_at
  */
@@ -323,9 +327,12 @@ export async function mapWeeklyDealDoc(doc) {
     storeCycleStart: doc.storeCycleStart ?? null,
     verificationStatus: verification.status,
     priceConfirmed: verification.priceConfirmed,
+    verificationMethod: verification.verificationMethod ?? null,
     priceDisclaimer: verification.priceConfirmed
-      ? null
-      : 'Price not verified live — open the store catalogue to confirm before you shop.',
+      ? verification.verificationMethod === 'manual'
+        ? 'Price confirmed against the retailer catalogue.'
+        : null
+      : 'Price not verified — open the store catalogue to confirm before you shop.',
     catalogueUrl: getCatalogueVerifyUrl(store),
     verificationCheckedAt: verification.checkedAt,
   };
@@ -565,9 +572,10 @@ export async function fetchWeeklyDeals(filters = {}) {
     deals: filtered,
     locale,
     pricingPolicy: {
-      liveVerifiedOnly: true,
+      liveVerifiedOnly: false,
+      manualCuration: true,
       message:
-        'Prices are hidden until live store verification is available. Always confirm in the retailer catalogue.',
+        'Prices appear only after you verify them against each store catalogue. Unverified deals show the offer type without dollar amounts.',
     },
     cycle: {
       validFrom: cycle.validFrom.toISOString(),

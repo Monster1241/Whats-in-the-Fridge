@@ -31,11 +31,23 @@ describe('dealVerification', () => {
     expect(validateDealStructure(baseDeal).ok).toBe(true);
   });
 
-  it('hides prices for seed data until live verification exists', async () => {
+  it('hides prices for seed data until manual verification', async () => {
     const result = await verifyDealForDisplay(baseDeal);
     expect(result.priceConfirmed).toBe(false);
     expect(result.showPrice).toBe(false);
     expect(result.status).toBe('unverified');
+  });
+
+  it('shows prices after manual catalogue verification', async () => {
+    const result = await verifyDealForDisplay({
+      ...baseDeal,
+      priceVerifiedAt: new Date().toISOString(),
+      priceVerifiedForCycle: 'coles:weekly:2024-01-03T00:00:00.000Z',
+      storeCycleStart: 'coles:weekly:2024-01-03T00:00:00.000Z',
+    });
+    expect(result.priceConfirmed).toBe(true);
+    expect(result.showPrice).toBe(true);
+    expect(result.verificationMethod).toBe('manual');
   });
 
   it('rejects expired offers', () => {

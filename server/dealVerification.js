@@ -1,4 +1,7 @@
 import { CATALOGUE_TEMPLATES } from './storeCatalogues.js';
+import { isManuallyPriceVerified, verifyDealLive } from './dealManualVerification.js';
+
+export { isManuallyPriceVerified, verifyDealLive };
 
 /** @typedef {'seed'|'live'} DealDataSource */
 /** @typedef {'confirmed'|'unverified'|'rejected'} DealVerificationStatus */
@@ -88,28 +91,6 @@ export function validateDealConsistency(deal) {
 }
 
 /**
- * Live retailer verification is not available for seed data.
- * @param {Record<string, unknown>} deal
- * @returns {Promise<{ confirmed: boolean, checkedAt: string, note: string }>}
- */
-export async function verifyDealLive(deal) {
-  const source = String(deal.dataSource ?? 'seed');
-  if (source !== 'live') {
-    return {
-      confirmed: false,
-      checkedAt: new Date().toISOString(),
-      note: 'Live store price check is not available — confirm in the retailer catalogue.',
-    };
-  }
-
-  return {
-    confirmed: false,
-    checkedAt: new Date().toISOString(),
-    note: 'Live verification provider not configured.',
-  };
-}
-
-/**
  * @param {Record<string, unknown>} deal
  */
 export async function verifyDealForDisplay(deal) {
@@ -133,6 +114,7 @@ export async function verifyDealForDisplay(deal) {
       : /** @type {DealVerificationStatus} */ ('unverified'),
     priceConfirmed,
     showPrice: priceConfirmed,
+    verificationMethod: live.method ?? null,
     reason: live.note,
     checkedAt: live.checkedAt,
   };
