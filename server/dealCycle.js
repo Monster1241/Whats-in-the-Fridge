@@ -6,7 +6,16 @@ import { getStoreCatalogueRegions } from './storeCatalogues.js';
 const WEEKLY_REFERENCE = getCurrentWednesdayStart(new Date('2024-01-03T00:00:00.000Z'));
 const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 
-/** Alternating store groups refreshed each weekly cycle. */
+/** All retailers with seeded item deals — shown every week (no A/B rotation). */
+export const ALL_DEAL_STORES = /** @type {const} */ ([
+  'coles',
+  'woolworths',
+  'aldi',
+  'harrisfarm',
+  'costco',
+]);
+
+/** @deprecated No longer rotates; kept for reference only. */
 export const DEAL_STORE_ROTATIONS = /** @type {const} */ ([
   ['coles', 'woolworths', 'aldi'],
   ['harrisfarm', 'costco', 'woolworths'],
@@ -64,16 +73,15 @@ export function shouldRefreshDealsThisWeek(from = new Date()) {
 }
 
 /**
- * @param {number} cycleIndex
+ * @param {number} [_cycleIndex]
  * @returns {string[]}
  */
-export function getActiveDealStores(cycleIndex) {
-  const idx = Math.abs(Number(cycleIndex) || 0) % DEAL_STORE_ROTATIONS.length;
-  return [...DEAL_STORE_ROTATIONS[idx]];
+export function getActiveDealStores(_cycleIndex) {
+  return [...ALL_DEAL_STORES];
 }
 
 /**
- * Active rotation stores that operate in the user's catalogue region.
+ * Stores with deals available in the user's catalogue region.
  * @param {number} cycleIndex
  * @param {import('./catalogueRegions.js').CatalogueRegion} region
  */

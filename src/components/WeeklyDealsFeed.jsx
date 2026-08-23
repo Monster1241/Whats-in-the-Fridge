@@ -349,8 +349,9 @@ function SectionToggle({ activeSection, onChange, dealsCount, cataloguesCount })
 function WeeklyDealCard({ deal, showAddedFeedback, onAdd, onOpen }) {
   const storeBadge = STORE_BADGE_STYLES[deal.store] ?? 'bg-slate-700 text-white';
   const dealBadgeStyle = getDealTypeBadgeStyle(deal);
-  const original = formatPrice(deal.originalPrice);
-  const dealPrice = formatPrice(deal.dealPrice);
+  const showPrice = deal.priceConfirmed === true && deal.dealPrice != null;
+  const original = showPrice ? formatPrice(deal.originalPrice) : null;
+  const dealPrice = showPrice ? formatPrice(deal.dealPrice) : null;
 
   return (
     <article className="relative flex min-h-[10.5rem] flex-col overflow-hidden rounded-2xl border border-amber-200/60 bg-lm-card shadow-lm-card dark:border-amber-900/40 dark:bg-dm-card">
@@ -386,9 +387,17 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd, onOpen }) {
         </p>
 
         <div className="mt-2 flex items-end gap-2">
-          <p className="text-heading text-2xl font-extrabold leading-none">{dealPrice}</p>
-          {original && (
-            <p className="text-muted pb-0.5 text-sm font-medium line-through">{original}</p>
+          {showPrice ? (
+            <>
+              <p className="text-heading text-2xl font-extrabold leading-none">{dealPrice}</p>
+              {original && (
+                <p className="text-muted pb-0.5 text-sm font-medium line-through">{original}</p>
+              )}
+            </>
+          ) : (
+            <p className="text-xs font-semibold leading-snug text-amber-800 dark:text-amber-300">
+              Confirm price in catalogue before you shop
+            </p>
           )}
         </div>
       </button>
@@ -428,10 +437,12 @@ function WeeklyDealCard({ deal, showAddedFeedback, onAdd, onOpen }) {
 function WeeklyDealDetail({ deal, showAddedFeedback, onAdd, onBack }) {
   const storeBadge = STORE_BADGE_STYLES[deal.store] ?? 'bg-slate-700 text-white';
   const dealBadgeStyle = getDealTypeBadgeStyle(deal);
-  const original = formatPrice(deal.originalPrice);
-  const dealPrice = formatPrice(deal.dealPrice);
-  const savings = getDealSavings(deal);
+  const showPrice = deal.priceConfirmed === true && deal.dealPrice != null;
+  const original = showPrice ? formatPrice(deal.originalPrice) : null;
+  const dealPrice = showPrice ? formatPrice(deal.dealPrice) : null;
+  const savings = showPrice ? getDealSavings(deal) : null;
   const expiryLabel = formatDealExpiry(deal.expiresAt);
+  const catalogueUrl = deal.catalogueUrl ?? null;
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -494,17 +505,40 @@ function WeeklyDealDetail({ deal, showAddedFeedback, onAdd, onBack }) {
           </div>
 
           <div className="rounded-2xl border border-amber-200/60 bg-lm-inset p-4 dark:border-amber-900/40 dark:bg-dm-inset">
-            <p className="text-muted text-xs font-semibold uppercase tracking-wide">Deal price</p>
-            <div className="mt-2 flex flex-wrap items-end gap-3">
-              <p className="text-heading text-4xl font-extrabold leading-none">{dealPrice}</p>
-              {original && (
-                <p className="text-muted pb-1 text-lg font-medium line-through">{original}</p>
-              )}
-            </div>
-            {savings && (
-              <p className="mt-2 text-sm font-bold text-emerald-700 dark:text-emerald-400">
-                You save {formatPrice(savings.amount)} ({savings.percent}% off)
-              </p>
+            <p className="text-muted text-xs font-semibold uppercase tracking-wide">
+              {showPrice ? 'Deal price' : 'Price verification'}
+            </p>
+            {showPrice ? (
+              <>
+                <div className="mt-2 flex flex-wrap items-end gap-3">
+                  <p className="text-heading text-4xl font-extrabold leading-none">{dealPrice}</p>
+                  {original && (
+                    <p className="text-muted pb-1 text-lg font-medium line-through">{original}</p>
+                  )}
+                </div>
+                {savings && (
+                  <p className="mt-2 text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                    You save {formatPrice(savings.amount)} ({savings.percent}% off)
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="mt-2 space-y-2">
+                <p className="text-sm font-semibold leading-relaxed text-amber-900 dark:text-amber-200">
+                  {deal.priceDisclaimer ||
+                    'We have not verified this price live. Open the store catalogue to confirm the current offer.'}
+                </p>
+                {catalogueUrl && (
+                  <button
+                    type="button"
+                    onClick={() => openExternalUrl(catalogueUrl)}
+                    className="inline-flex min-h-[2.75rem] items-center justify-center gap-2 rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-slate-700 active:scale-[0.98] dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white"
+                  >
+                    <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+                    Confirm in {deal.storeLabel} catalogue
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -637,6 +671,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const [postcodeError, setPostcodeError] = useState('');
   const [deals, setDeals] = useState([]);
   const [dealCycle, setDealCycle] = useState(null);
+  const [pricingPolicy, setPricingPolicy] = useState(null);
   const [catalogues, setCatalogues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cataloguesLoading, setCataloguesLoading] = useState(true);
@@ -667,11 +702,13 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
       const data = await fetchWeeklyDeals({ postcode }, { force });
       setDeals(data.deals ?? []);
       setDealCycle(data.cycle ?? null);
+      setPricingPolicy(data.pricingPolicy ?? null);
       if (data.regionLabel) setRegionLabel(data.regionLabel);
       if (data.postcode) setPostcode(data.postcode);
     } catch (err) {
       setDeals([]);
       setDealCycle(null);
+      setPricingPolicy(null);
       setError(err.message || 'Could not load weekly deals.');
     } finally {
       setLoading(false);
@@ -857,7 +894,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
         return `No item deals for ${regionLabel} (${postcode}) this week — try another postcode or check back after Wednesday.`;
       }
       return dealCycle?.nextRefreshAt
-        ? 'No item deals this week — stores rotate every Wednesday.'
+        ? 'No item deals this week — check back after Wednesday.'
         : 'No weekly deals right now — check back after Wednesday.';
     }
     if (selectedStores.size > 0 || selectedDealTypes.size > 0) {
@@ -959,7 +996,12 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
             {dealCycle?.activeStoresForRegion?.length > 0 && (
               <p className="text-muted mb-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed dark:border-amber-900/50 dark:bg-amber-950/25">
                 <span className="text-heading font-semibold">This week near {postcode}:</span>{' '}
-                {activeStoreLabels}. Item deals refresh every Wednesday for your area.
+                {activeStoreLabels}. Each store refreshes on its own schedule (Wed weekly, Mon sneak peek for Coles/Woolworths, Sat ALDI Special Buys).
+              </p>
+            )}
+            {pricingPolicy?.message && (
+              <p className="text-muted mb-3 rounded-xl border border-sky-200/80 bg-sky-50/70 px-3 py-2 text-xs leading-relaxed dark:border-sky-900/50 dark:bg-sky-950/25">
+                <span className="text-heading font-semibold">Pricing:</span> {pricingPolicy.message}
               </p>
             )}
             <label className="relative mb-4 block">

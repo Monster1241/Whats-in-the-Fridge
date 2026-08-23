@@ -42,6 +42,10 @@
       "schedule": "1 13 * * 2"
     },
     {
+      "path": "/api/cron/store-deals",
+      "schedule": "0 13 * * 5"
+    },
+    {
       "path": "/api/cron/expiry-alerts",
       "schedule": "0 21 * * *"
     }
@@ -63,6 +67,11 @@
       "includeFiles": "server/**"
     },
     "api/cron/refresh-grocery-data.js": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "server/**"
+    },
+    "api/cron/store-deals.js": {
       "memory": 1024,
       "maxDuration": 30,
       "includeFiles": "server/**"

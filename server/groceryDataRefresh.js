@@ -8,14 +8,12 @@ import {
   STORE_CATALOGUES_COLLECTION,
 } from './storeCatalogues.js';
 import {
-  buildDealsForCycle,
+  refreshStoreDeals,
   WEEKLY_DEALS_ARCHIVE_COLLECTION,
   WEEKLY_DEALS_COLLECTION,
 } from './weeklyDeals.js';
-import {
-  getWeeklyCycleBounds,
-  serializeCycleStart,
-} from './dealCycle.js';
+import { ALL_DEAL_STORES } from './dealCycle.js';
+import { getStoresDueForDealRefresh } from './dealStoreSchedule.js';
 
 export const GROCERY_REFRESH_MODES = /** @type {const} */ ([
   'sneakPeek',
@@ -67,7 +65,11 @@ async function archiveAndClearExpired(now) {
   const dealsArchive = db.collection(WEEKLY_DEALS_ARCHIVE_COLLECTION);
   const cataloguesArchive = db.collection(STORE_CATALOGUES_ARCHIVE_COLLECTION);
 
-  const expiredDeals = await deals.find({ expiresAt: { $lt: now } }).toArray();
+  const expiredDeals = await deals
+    .find({
+      $or: [{ storeExpiresAt: { $lt: now } }, { expiresAt: { $lt: now } }],
+    })
+    .toArray();
   const expiredCatalogues = await catalogues.find({ validTo: { $lt: now } }).toArray();
 
   if (expiredDeals.length > 0) {
@@ -142,48 +144,51 @@ async function upsertCataloguesForCycle(cycle, mode) {
 }
 
 /**
+ * Refresh deals only for stores whose Sydney schedule window is due now.
+ * @param {Date} [now]
+ */
+export async function refreshDueStoreDeals(now = new Date()) {
+  const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
+  const due = getStoresDueForDealRefresh(now);
+  const seen = new Set();
+  /** @type {Array<Awaited<ReturnType<typeof refreshStoreDeals>>>} */
+  const refreshed = [];
+
+  for (const { store } of due) {
+    if (seen.has(store)) continue;
+    seen.add(store);
+    refreshed.push(await refreshStoreDeals(collection, store, now));
+  }
+
+  return { due: due.length, refreshed };
+}
+
+/**
+ * Force-refresh every store (e.g. after official weekly reset).
+ * @param {Date} [now]
+ */
+export async function refreshAllStoreDeals(now = new Date()) {
+  const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
+  const refreshed = [];
+
+  for (const store of ALL_DEAL_STORES) {
+    refreshed.push(await refreshStoreDeals(collection, store, now));
+  }
+
+  return { refreshed, total: refreshed.length };
+}
+
+/**
  * @param {{ validFrom: Date, validTo: Date, expiresAt: Date }} _cycle
  * @param {'sneakPeek'|'officialReset'} mode
  * @param {Date} [now]
  */
 async function upsertDealsForCycle(_cycle, mode, now = new Date()) {
-  const collection = getDb().collection(WEEKLY_DEALS_COLLECTION);
-  const weekly = getWeeklyCycleBounds(now);
-  const cycleStart = serializeCycleStart(weekly.validFrom);
-  const docs = buildDealsForCycle(weekly.expiresAt, {
-    cycleIndex: weekly.cycleIndex,
-    cycleStart,
-  });
-
   if (mode === 'officialReset') {
-    const removeResult = await collection.deleteMany({
-      $or: [{ expiresAt: { $lt: now } }, { cycleStart: { $ne: cycleStart } }],
-    });
-    const replaced = removeResult.deletedCount ?? 0;
-    if (docs.length > 0) {
-      await collection.insertMany(docs, { ordered: false });
-    }
-    return { inserted: docs.length, replaced, skipped: 0, total: docs.length };
+    return refreshAllStoreDeals(now);
   }
 
-  let inserted = 0;
-  let skipped = 0;
-
-  for (const doc of docs) {
-    const existing = await collection.findOne({
-      store: doc.store,
-      name: doc.name,
-      cycleStart,
-    });
-    if (existing) {
-      skipped += 1;
-      continue;
-    }
-    await collection.insertOne(doc);
-    inserted += 1;
-  }
-
-  return { inserted, replaced: 0, skipped, total: docs.length };
+  return refreshDueStoreDeals(now);
 }
 
 /**

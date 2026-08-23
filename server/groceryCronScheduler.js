@@ -1,5 +1,6 @@
 import {
   normalizeGroceryRefreshMode,
+  refreshDueStoreDeals,
   refreshGroceryData,
 } from './groceryDataRefresh.js';
 import {
@@ -29,6 +30,16 @@ export function startGroceryCronScheduler(options = {}) {
     let mode = null;
     if (isSydneyGroceryCronDue('sneakPeek', now)) mode = 'sneakPeek';
     if (isSydneyGroceryCronDue('officialReset', now)) mode = 'officialReset';
+
+    try {
+      const storeDealRefresh = await refreshDueStoreDeals(now);
+      if (storeDealRefresh.due > 0) {
+        console.log('[grocery-cron] per-store deals', JSON.stringify(storeDealRefresh));
+      }
+    } catch (err) {
+      console.error('[grocery-cron] per-store deals failed', err.message || err);
+    }
+
     if (!mode || !normalizeGroceryRefreshMode(mode) || fired.has(slotKey)) return;
 
     fired.add(slotKey);

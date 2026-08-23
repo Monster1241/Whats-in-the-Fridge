@@ -224,7 +224,7 @@ const CATALOGUE_TITLE_PREFIX = {
   costco: 'Costco Warehouse Savings',
 };
 
-const CATALOGUE_TEMPLATES = {
+export const CATALOGUE_TEMPLATES = {
   coles: {
     pdfUrl: 'https://www.coles.com.au/catalogues',
     imageUrl: 'https://www.coles.com.au/content/dam/coles/coles-assets/catalogue-cover.jpg',

@@ -676,7 +676,12 @@ export async function handleGetWeeklyDeals(req, res) {
     }
 
     const postcode = req.query?.postcode ?? null;
-    const { deals, locale } = await fetchWeeklyDeals({ store, category, dealType, postcode });
+    const { deals, locale, pricingPolicy, cycle: dealFetchCycle } = await fetchWeeklyDeals({
+      store,
+      category,
+      dealType,
+      postcode,
+    });
     const cycle = getDealCycleMeta(new Date(), locale.postcode);
     const payload = {
       filters: {
@@ -689,7 +694,8 @@ export async function handleGetWeeklyDeals(req, res) {
       },
       count: deals.length,
       deals,
-      cycle,
+      cycle: { ...cycle, ...dealFetchCycle },
+      pricingPolicy,
       postcode: locale.postcode,
       region: locale.region,
       regionLabel: locale.regionLabel,
