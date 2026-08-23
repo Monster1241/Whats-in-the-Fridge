@@ -8,6 +8,7 @@ import {
   X,
 } from 'lucide-react';
 import { IconActionButton } from './IconActionButton.jsx';
+import { MetaIcon } from './MetaIcon.jsx';
 import { calculateItemStatus } from '../inventory/consumption.js';
 import { getCategoryMeta, isOnShoppingList, STATUS } from '../inventory/constants.js';
 import { inventorySearchKey, searchInventoryItems } from '../inventory/searchInventory.js';
@@ -103,10 +104,10 @@ export function InventorySearch({
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-heading text-sm font-bold leading-snug">{item.name}</p>
-                        <p className="text-muted mt-0.5 text-xs">
+                        <p className="text-muted mt-0.5 flex items-center gap-1 text-xs">
                           {catMeta ? (
                             <>
-                              <span className="emoji">{catMeta.emoji}</span> {catMeta.label}
+                              <MetaIcon name={catMeta.label} className="h-3 w-3" /> {catMeta.label}
                             </>
                           ) : (
                             item.itemType

@@ -3,7 +3,7 @@ import { Calendar } from 'lucide-react';
 import { getCategoryMeta } from '../inventory/constants.js';
 import { formatExpiryUrgency } from '../inventory/expiryDisplay.js';
 import { SHOPPING_ACCENT } from '../inventory/uiAccents.js';
-import { Emoji } from './Emoji.jsx';
+import { MetaIcon } from './MetaIcon.jsx';
 
 export const KitchenStatusCard = memo(function KitchenStatusCard({ item, onFinished, onRestock }) {
   const urgencyLabel = formatExpiryUrgency(item);
@@ -20,8 +20,8 @@ export const KitchenStatusCard = memo(function KitchenStatusCard({ item, onFinis
           </p>
         )}
         {catMeta && (
-          <p className="text-muted mt-1 text-[10px]">
-            <Emoji>{catMeta.emoji}</Emoji> {catMeta.label}
+          <p className="text-muted mt-1 flex items-center gap-1 text-[10px]">
+            <MetaIcon name={catMeta.label} className="h-3 w-3" /> {catMeta.label}
           </p>
         )}
       </div>

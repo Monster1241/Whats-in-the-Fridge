@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { fetchHouseholdMembers, removeHouseholdMember, sendPasswordResetEmail } from '../api.js';
 import { LegalFooterLinks } from '../components/LegalFooterLinks.jsx';
 import { usePushNotifications } from '../context/PushNotificationContext.jsx';
@@ -12,6 +13,8 @@ import {
 } from '../inventory/modules.js';
 import { EXPIRING_SOON_DAYS } from '../inventory/expiryDisplay.js';
 import {
+  ArrowLeft,
+  ArrowRight,
   Bell,
   BookOpen,
   Check,
@@ -19,6 +22,7 @@ import {
   ChevronUp,
   ChefHat,
   Copy,
+  Database,
   Flame,
   FlaskConical,
   Info,
@@ -31,6 +35,7 @@ import {
   Settings,
   Share2,
   ShoppingCart,
+  Shield,
   Sun,
   Trash2,
   User,
@@ -38,7 +43,55 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { Emoji } from '../components/Emoji.jsx';
+import { MetaIcon } from '../components/MetaIcon.jsx';
+
+/** Viewport-centered confirm dialog (portaled so it is not trapped in the settings tab). */
+function SettingsModal({ titleId, children, onClose }) {
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4"
+      style={{
+        paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onClick={onClose}
+    >
+      <div
+        className="surface-card w-full max-w-md p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function SettingsInfoScreen({ title, icon: Icon, onBack, children }) {
+  return (
+    <div className="pb-8">
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-muted mb-5 inline-flex items-center gap-2 rounded-lg py-1.5 pr-2 text-sm font-semibold transition hover:text-emerald-700 active:scale-[0.98] dark:hover:text-emerald-400"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Back
+      </button>
+      <header className="mb-5">
+        <h1 className="text-heading flex items-center gap-2 text-xl font-extrabold tracking-tight">
+          {Icon ? <Icon className="h-5 w-5 text-emerald-600" aria-hidden /> : null}
+          {title}
+        </h1>
+      </header>
+      <div className="surface-card space-y-4 p-4 text-sm leading-relaxed">{children}</div>
+    </div>
+  );
+}
 
 function AppGuideSection({ enabledModules, onShowTipsAgain }) {
   const [open, setOpen] = useState(false);
@@ -306,6 +359,7 @@ export function SettingsView({
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetFeedback, setResetFeedback] = useState(null);
+  const [infoScreen, setInfoScreen] = useState(null);
 
   const enabledModulesSummary = useMemo(
     () =>
@@ -481,6 +535,61 @@ export function SettingsView({
     }
   };
 
+  if (infoScreen === 'privacy') {
+    return (
+      <SettingsInfoScreen title="Your privacy" icon={Shield} onBack={() => setInfoScreen(null)}>
+        <p className="text-muted">
+          We never sell your inventory, receipts, or chat messages. Household data is shared only with
+          people you invite. We use non-sensitive usage patterns (like how long items last in your
+          home, which features you use, and when items are AI-sorted) to improve predictions for your
+          household and to make the product more reliable — not to share your shopping habits
+          externally. Receipt photos are processed for scanning and are not kept on our servers
+          afterward.
+        </p>
+        <p className="text-muted">
+          Smart learning remembers how you categorize items and how long they last. Usage counts are
+          privacy-safe (no item names stored in analytics).
+        </p>
+        <p className="text-muted">
+          See the full{' '}
+          <a href="/privacy" className="font-semibold text-emerald-700 underline dark:text-emerald-400">
+            Privacy Policy
+          </a>{' '}
+          for details.
+        </p>
+      </SettingsInfoScreen>
+    );
+  }
+
+  if (infoScreen === 'dataSources') {
+    return (
+      <SettingsInfoScreen title="Data sources" icon={Database} onBack={() => setInfoScreen(null)}>
+        <p className="text-muted">
+          Barcode product names and categories are looked up from{' '}
+          <a
+            href="https://au.openfoodfacts.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-emerald-700 underline dark:text-emerald-400"
+          >
+            Open Food Facts
+          </a>{' '}
+          and{' '}
+          <a
+            href="https://au.openproductsfacts.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-emerald-700 underline dark:text-emerald-400"
+          >
+            Open Products Facts
+          </a>{' '}
+          (Australian and worldwide databases). Use-by dates are estimated from product data or
+          typical shelf life when not printed on the pack.
+        </p>
+      </SettingsInfoScreen>
+    );
+  }
+
   return (
     <div className="pb-28">
       <header className="mb-5">
@@ -577,10 +686,8 @@ export function SettingsView({
                       className="mt-1 h-4 w-4 rounded border-black/15 bg-lm-raised text-emerald-600 focus:ring-emerald-500 dark:border-white/20 dark:bg-dm-raised"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="text-heading text-sm font-semibold">
-                        <Emoji className="mr-1.5" aria-hidden>
-                          {mod.emoji}
-                        </Emoji>
+                      <p className="text-heading flex items-center gap-1.5 text-sm font-semibold">
+                        <MetaIcon name={mod.key} className="h-4 w-4" />
                         {mod.label}
                       </p>
                       <p className="text-muted mt-0.5 text-xs leading-relaxed">{mod.description}</p>
@@ -623,12 +730,6 @@ export function SettingsView({
             <dd className="text-heading min-w-0 break-all text-right font-semibold">
               {signInEmail || 'Not available'}
             </dd>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <dt className="text-muted shrink-0 text-xs font-semibold uppercase tracking-wide">
-              Sign-in method
-            </dt>
-            <dd className="text-heading text-right font-semibold">Email &amp; password (Firebase)</dd>
           </div>
           <div className="flex items-start justify-between gap-3">
             <dt className="text-muted shrink-0 text-xs font-semibold uppercase tracking-wide">
@@ -890,13 +991,11 @@ export function SettingsView({
       </section>
 
       {showLogoutConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="logout-title"
+        <SettingsModal
+          titleId="logout-title"
+          onClose={() => setShowLogoutConfirm(false)}
         >
-          <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 id="logout-title" className="text-heading text-lg font-bold">
@@ -934,18 +1033,16 @@ export function SettingsView({
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
+          
+        </SettingsModal>
       )}
 
       {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-account-title"
+        <SettingsModal
+          titleId="delete-account-title"
+          onClose={() => !deleteBusy && setShowDeleteConfirm(false)}
         >
-          <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 id="delete-account-title" className="text-heading text-lg font-bold">
@@ -990,18 +1087,16 @@ export function SettingsView({
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
+          
+        </SettingsModal>
       )}
 
       {confirmRemoveMember && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="remove-member-title"
+        <SettingsModal
+          titleId="remove-member-title"
+          onClose={() => !removeBusy && setConfirmRemoveMember(null)}
         >
-          <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 id="remove-member-title" className="text-heading text-lg font-bold">
@@ -1043,18 +1138,16 @@ export function SettingsView({
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
+          
+        </SettingsModal>
       )}
 
       {showLeaveConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="leave-household-title"
+        <SettingsModal
+          titleId="leave-household-title"
+          onClose={() => !leaveBusy && setShowLeaveConfirm(false)}
         >
-          <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 id="leave-household-title" className="text-heading text-lg font-bold">
@@ -1093,57 +1186,44 @@ export function SettingsView({
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
+          
+        </SettingsModal>
       )}
 
-      <section className="surface-card mb-5 p-4">
-        <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Your privacy</h2>
-        <p className="text-muted text-sm leading-relaxed">
-          We never sell your inventory, receipts, or chat messages. Household data is shared only with
-          people you invite.           We use non-sensitive usage patterns (like how long items last in your home, which features
-          you use, and when items are AI-sorted) to improve predictions for your household and to
-          make the product more reliable — not to share your shopping habits externally.
-          Receipt photos are processed for scanning and are not kept on our servers afterward.
-        </p>
-        <p className="text-muted mt-2 text-xs">
-          Smart learning remembers how you categorize items and how long they last. Usage counts are
-          privacy-safe (no item names stored in analytics).
-        </p>
-        <p className="text-muted mt-2 text-xs">
-          See{' '}
-          <a href="/privacy" className="font-semibold text-emerald-700 underline dark:text-emerald-400">
-            Privacy Policy
-          </a>{' '}
-          for full details.
-        </p>
-      </section>
-
-      <section className="surface-card mb-5 p-4">
-        <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Data sources</h2>
-        <p className="text-muted text-sm leading-relaxed">
-          Barcode product names and categories are looked up from{' '}
-          <a
-            href="https://au.openfoodfacts.org"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-emerald-700 underline dark:text-emerald-400"
-          >
-            Open Food Facts
-          </a>{' '}
-          and{' '}
-          <a
-            href="https://au.openproductsfacts.org"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-emerald-700 underline dark:text-emerald-400"
-          >
-            Open Products Facts
-          </a>{' '}
-          (Australian and worldwide databases). Use-by dates are estimated from product data or
-          typical shelf life when not printed on the pack.
-        </p>
-      </section>
+      <div className="mb-5 space-y-2">
+        <button
+          type="button"
+          onClick={() => setInfoScreen('privacy')}
+          className="surface-card flex w-full items-center gap-3 p-4 text-left transition active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+            <Shield className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="text-heading block text-sm font-bold">Your privacy</span>
+            <span className="text-muted mt-0.5 block text-xs leading-relaxed">
+              How we handle household data and learning
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+        </button>
+        <button
+          type="button"
+          onClick={() => setInfoScreen('dataSources')}
+          className="surface-card flex w-full items-center gap-3 p-4 text-left transition active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+            <Database className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="text-heading block text-sm font-bold">Data sources</span>
+            <span className="text-muted mt-0.5 block text-xs leading-relaxed">
+              Open Food Facts and product lookup details
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+        </button>
+      </div>
 
       <footer className="border-t border-slate-200 pt-6 dark:border-slate-700">
         <LegalFooterLinks />

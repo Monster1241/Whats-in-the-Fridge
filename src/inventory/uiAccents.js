@@ -42,3 +42,10 @@ export function itemTypeLabelEmoji(itemType) {
   if (itemType === ITEM_TYPE.HOUSEHOLD) return '🕯️';
   return '🍏';
 }
+
+/** Semantic icon key for item type (use with MetaIcon). */
+export function itemTypeIconName(itemType) {
+  if (itemType === ITEM_TYPE.BABY) return ITEM_TYPE.BABY;
+  if (itemType === ITEM_TYPE.HOUSEHOLD) return ITEM_TYPE.HOUSEHOLD;
+  return ITEM_TYPE.FOOD;
+}

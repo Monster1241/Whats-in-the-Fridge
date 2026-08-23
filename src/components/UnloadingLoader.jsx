@@ -1,9 +1,9 @@
-import { Emoji } from './Emoji.jsx';
+import { Egg, Milk, Wheat } from 'lucide-react';
 
 const GROCERY_ITEMS = [
-  { id: 'milk', emoji: '🥛', slot: 1 },
-  { id: 'bread', emoji: '🍞', slot: 2 },
-  { id: 'eggs', emoji: '🥚', slot: 3 },
+  { id: 'milk', Icon: Milk, slot: 1 },
+  { id: 'bread', Icon: Wheat, slot: 2 },
+  { id: 'eggs', Icon: Egg, slot: 3 },
 ];
 
 /**
@@ -30,7 +30,7 @@ export function UnloadingLoader({ size = 'md', className = '' }) {
                 key={`cart-${item.id}`}
                 className={`unload-loader__cart-stock unload-loader__cart-stock--${item.slot}`}
               >
-                <Emoji>{item.emoji}</Emoji>
+                <item.Icon className="h-[1em] w-[1em]" strokeWidth={2} />
               </span>
             ))}
           </div>
@@ -43,7 +43,7 @@ export function UnloadingLoader({ size = 'md', className = '' }) {
               key={item.id}
               className={`unload-loader__item unload-loader__item--${item.slot}`}
             >
-              <Emoji>{item.emoji}</Emoji>
+              <item.Icon className="h-[1em] w-[1em]" strokeWidth={2} />
             </span>
           ))}
         </div>
@@ -69,7 +69,7 @@ export function UnloadingLoader({ size = 'md', className = '' }) {
                     <div key={item.id} className="unload-loader__pantry-slot">
                       <span className={`unload-loader__pantry-pad unload-loader__pantry-pad--${item.slot}`} />
                       <span className={`unload-loader__shelf-slot unload-loader__shelf-slot--${item.slot}`}>
-                        <Emoji>{item.emoji}</Emoji>
+                        <item.Icon className="h-[1em] w-[1em]" strokeWidth={2} />
                       </span>
                     </div>
                   ))}

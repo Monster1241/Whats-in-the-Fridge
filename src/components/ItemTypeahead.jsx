@@ -10,6 +10,7 @@ import {
   vibrateBarcodeUnknown,
 } from '../inventory/barcodeLookup.js';
 import { BarcodeScanner } from './BarcodeScanner.jsx';
+import { MetaIcon } from './MetaIcon.jsx';
 
 export function ItemTypeahead({
   value,
@@ -205,14 +206,21 @@ export function ItemTypeahead({
                     >
                       <span className="min-w-0">
                         <span className="block font-medium">{entry.name}</span>
-                        <span className="text-muted mt-0.5 block text-[10px] font-semibold">
-                          <span className="emoji">{subMeta.emoji}</span> {subMeta.label}
+                        <span className="text-muted mt-0.5 flex items-center gap-1 text-[10px] font-semibold">
+                          <MetaIcon name={subMeta.label} className="h-3 w-3" /> {subMeta.label}
                         </span>
                       </span>
-                      <span className="text-muted shrink-0 text-[10px] font-semibold uppercase tracking-wide">
-                        <span className="emoji">
-                          {entry.itemType === 'Household' ? '🏠' : entry.itemType === 'Baby' ? '👶' : '🍽️'}
-                        </span>{' '}
+                      <span className="text-muted flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide">
+                        <MetaIcon
+                          name={
+                            entry.itemType === 'Household'
+                              ? 'Household'
+                              : entry.itemType === 'Baby'
+                                ? 'Baby'
+                                : 'Food'
+                          }
+                          className="h-3 w-3"
+                        />
                         {meta?.label ?? entry.category}
                       </span>
                     </button>

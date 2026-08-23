@@ -3,10 +3,10 @@ import { CircleCheck, Loader2, MapPin, Trash2 } from 'lucide-react';
 import { getCategoryMeta } from '../inventory/constants.js';
 import { getShoppingSuggestionForItem } from '../inventory/getSuggestedStore.js';
 import { formatInventoryQuantityLabel } from '../inventory/quantityDisplay.js';
-import { itemTypeLabelEmoji, SHOPPING_ACCENT } from '../inventory/uiAccents.js';
+import { itemTypeIconName, SHOPPING_ACCENT } from '../inventory/uiAccents.js';
 import { IconActionButton } from './IconActionButton.jsx';
 import { StoreBadgeSelector } from './StoreBadgeSelector.jsx';
-import { Emoji } from './Emoji.jsx';
+import { MetaIcon } from './MetaIcon.jsx';
 
 function ShoppingListBoughtButton({ itemName, onBought, busy = false }) {
   return (
@@ -58,9 +58,9 @@ export const ShoppingListItemRow = memo(function ShoppingListItemRow({
               ) : null}
             </p>
             {catMeta && (
-              <p className="mt-0.5 text-xs text-slate-500">
-                <Emoji>{itemTypeLabelEmoji(item.itemType)}</Emoji>{' '}
-                <Emoji>{catMeta.emoji}</Emoji> {catMeta.label}
+              <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
+                <MetaIcon name={itemTypeIconName(item.itemType)} className="h-3 w-3" />
+                <MetaIcon name={catMeta.label} className="h-3 w-3" /> {catMeta.label}
               </p>
             )}
             {item.sourceRecipe?.title && (

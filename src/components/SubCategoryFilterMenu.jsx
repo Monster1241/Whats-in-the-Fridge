@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ListFilter, X } from 'lucide-react';
+import { MetaIcon } from './MetaIcon.jsx';
 import {
   getSubcategoriesForCategory,
   getSubcategoryMeta,
@@ -129,8 +130,8 @@ export function SubCategoryFilterMenu({
                       className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-500 dark:bg-dm-card"
                     />
                     <span className="min-w-0 flex-1 text-sm font-medium text-slate-800 dark:text-slate-100">
-                      <span className="emoji mr-1" aria-hidden>
-                        {meta.emoji}
+                      <span className="mr-1 inline-flex align-middle" aria-hidden>
+                        <MetaIcon name={meta.label} className="h-3.5 w-3.5" />
                       </span>
                       {meta.label}
                     </span>

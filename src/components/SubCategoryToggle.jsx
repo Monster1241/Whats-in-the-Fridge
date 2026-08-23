@@ -3,7 +3,7 @@ import {
   getSubcategoryMeta,
   SUBCATEGORY_OTHER,
 } from '../inventory/subcategories.js';
-import { Emoji } from './Emoji.jsx';
+import { MetaIcon } from './MetaIcon.jsx';
 
 export function SubCategoryToggle({ itemType, category, value, onChange }) {
   const options = getSubcategoriesForCategory(itemType, category);
@@ -29,7 +29,7 @@ export function SubCategoryToggle({ itemType, category, value, onChange }) {
               }`}
               aria-pressed={selected}
             >
-              <Emoji aria-hidden>{meta.emoji}</Emoji>
+              <MetaIcon name={meta.label} className="h-3.5 w-3.5" />
               {meta.label}
             </button>
           );

@@ -3,7 +3,7 @@ import {
   getCategoryMeta,
   ITEM_TYPE,
 } from '../inventory/constants.js';
-import { Emoji } from './Emoji.jsx';
+import { MetaIcon } from './MetaIcon.jsx';
 
 export function StorageCategoryToggle({ itemType = ITEM_TYPE.FOOD, value, onChange }) {
   const options = getCategoriesForItemType(itemType);
@@ -22,16 +22,14 @@ export function StorageCategoryToggle({ itemType = ITEM_TYPE.FOOD, value, onChan
             key={cat}
             type="button"
             onClick={() => onChange(cat)}
-            className={`rounded-lg px-2 py-2 text-xs font-bold transition active:scale-95 ${
+            className={`inline-flex items-center justify-center gap-1 rounded-lg px-2 py-2 text-xs font-bold transition active:scale-95 ${
               selected
                 ? meta.tabActive
                 : 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200'
             }`}
             aria-pressed={selected}
           >
-            <Emoji className="mr-0.5" aria-hidden>
-              {meta.emoji}
-            </Emoji>
+            <MetaIcon name={meta.label} className="h-3.5 w-3.5" />
             {cat}
           </button>
         );

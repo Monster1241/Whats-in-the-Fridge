@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { fetchAiRecipeMatches, addRecipeIngredientsToShoppingList } from '../api.js';
 import { FridgeScoutChat } from './FridgeScoutChat.jsx';
+import { MetaIcon } from './MetaIcon.jsx';
 import {
   buildRecipeTweakPrompt,
   buildRecipeTweakSummary,
@@ -393,8 +394,8 @@ function RecipeCard({
                     </>
                   ) : (
                     <>
-                      <span>
-                        <span className="emoji">{tweak.emoji}</span> {tweak.label}
+                      <span className="inline-flex items-center gap-1">
+                        <MetaIcon name={tweak.label} className="h-3.5 w-3.5" /> {tweak.label}
                       </span>
                     </>
                   )}

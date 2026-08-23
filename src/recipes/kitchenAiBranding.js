@@ -75,5 +75,5 @@ export function buildRecipeTweakSummary(recipe, mode) {
   const tweak = RECIPE_TWEAK_MODES[mode];
   const title = String(recipe?.title ?? 'this recipe').trim();
   if (!tweak) return title;
-  return `${tweak.emoji} ${tweak.label}: ${title}`;
+  return `${tweak.label}: ${title}`;
 }
