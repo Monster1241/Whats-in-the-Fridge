@@ -657,14 +657,34 @@ export async function fetchAdminDashboard() {
   return parseJson(res);
 }
 
-export async function fetchAdminUnverifiedDeals(store) {
-  const params = store ? `?store=${encodeURIComponent(store)}` : '';
-  const res = await fetch(apiUrl(`/admin/deals/unverified${params}`), { headers: authHeaders() });
+export async function fetchAdminDeals(store, verified = false) {
+  const params = new URLSearchParams();
+  if (store) params.set('store', store);
+  params.set('verified', verified ? 'true' : 'false');
+  const query = params.toString();
+  const res = await fetch(apiUrl(`/admin/deals?${query}`), { headers: authHeaders() });
   return parseJson(res);
+}
+
+export async function fetchAdminUnverifiedDeals(store) {
+  return fetchAdminDeals(store, false);
+}
+
+export async function fetchAdminVerifiedDeals(store) {
+  return fetchAdminDeals(store, true);
 }
 
 export async function verifyAdminDeal(payload) {
   const res = await fetch(apiUrl('/admin/deals/verify'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function unverifyAdminDeal(payload) {
+  const res = await fetch(apiUrl('/admin/deals/unverify'), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(payload),

@@ -30,3 +30,10 @@ describe('dealManualVerification', () => {
     ).toBe(false);
   });
 });
+
+describe('unmarkDealManuallyVerified', () => {
+  it('is exported for admin unverify flow', async () => {
+    const { unmarkDealManuallyVerified } = await import('./dealManualVerification.js');
+    expect(typeof unmarkDealManuallyVerified).toBe('function');
+  });
+});

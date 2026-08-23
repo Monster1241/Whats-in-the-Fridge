@@ -6,7 +6,9 @@ import {
   handleAdminMe,
   handleAdminUpdateFeedback,
   handleAdminUpdateReport,
+  handleListAdminDeals,
   handleListUnverifiedDeals,
+  handleUnverifyWeeklyDeals,
   handleVerifyWeeklyDeals,
 } from '../adminHandlers.js';
 import { asyncRoute } from '../routeUtils.js';
@@ -19,12 +21,20 @@ adminRouter.get(
   asyncRoute(handleAdminDashboard, 'GET /api/admin/dashboard', 'Could not load dashboard.'),
 );
 adminRouter.get(
+  '/deals',
+  asyncRoute(handleListAdminDeals, 'GET /api/admin/deals', 'Could not list deals.'),
+);
+adminRouter.get(
   '/deals/unverified',
   asyncRoute(handleListUnverifiedDeals, 'GET /api/admin/deals/unverified', 'Could not list deals.'),
 );
 adminRouter.post(
   '/deals/verify',
   asyncRoute(handleVerifyWeeklyDeals, 'POST /api/admin/deals/verify', 'Could not verify deals.'),
+);
+adminRouter.post(
+  '/deals/unverify',
+  asyncRoute(handleUnverifyWeeklyDeals, 'POST /api/admin/deals/unverify', 'Could not unverify deals.'),
 );
 adminRouter.get(
   '/reports',

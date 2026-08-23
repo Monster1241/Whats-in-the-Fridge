@@ -130,6 +130,7 @@ async function ensureIndexes(db) {
   await db.collection('users').createIndex({ email: 1 }, { unique: true });
   await db.collection('users').createIndex({ firebase_uid: 1 }, { sparse: true });
   await db.collection('users').createIndex({ household_id: 1 });
+  await db.collection('users').createIndex({ last_active_at: 1 });
   await households.createIndex(
     { invite_code: 1 },
     {
@@ -334,6 +335,24 @@ export async function findUserById(userId) {
   }
   const doc = await users.findOne({ _id: oid });
   return mapUserDoc(doc);
+}
+
+/** Throttled heartbeat for admin "live users" (at most once per 5 minutes). */
+export async function touchUserLastActive(userId, now = new Date()) {
+  const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);
+  try {
+    await getDb()
+      .collection('users')
+      .updateOne(
+        {
+          _id: new ObjectId(userId),
+          $or: [{ last_active_at: { $exists: false } }, { last_active_at: { $lt: fiveMinAgo } }],
+        },
+        { $set: { last_active_at: now } },
+      );
+  } catch {
+    // Non-critical — ignore heartbeat failures
+  }
 }
 
 /** Marks legacy unverified accounts as verified (verification step disabled for now). */

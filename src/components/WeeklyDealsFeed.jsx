@@ -929,14 +929,6 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const dealsCount = loading ? 0 : filteredDeals.length;
   const cataloguesCount = cataloguesLoading ? 0 : orderedCatalogues.length;
 
-  const activeStoreLabels = useMemo(() => {
-    const stores = dealCycle?.activeStoresForRegion ?? dealCycle?.activeStores ?? [];
-    if (!stores.length) return '';
-    return stores
-      .map((id) => STORE_FILTERS.find((store) => store.id === id)?.label ?? id)
-      .join(', ');
-  }, [dealCycle]);
-
   return (
     <div className="pb-4" aria-label="Hot deals portal">
       <div className="mb-4 flex items-start gap-2">
@@ -1021,12 +1013,6 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
               />
             ) : (
               <>
-            {dealCycle?.activeStoresForRegion?.length > 0 && (
-              <p className="text-muted mb-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed dark:border-amber-900/50 dark:bg-amber-950/25">
-                <span className="text-heading font-semibold">This week near {postcode}:</span>{' '}
-                {activeStoreLabels}. Each store refreshes on its own schedule (Wed weekly, Mon sneak peek for Coles/Woolworths, Sat ALDI Special Buys).
-              </p>
-            )}
             {pricingPolicy?.message && (
               <p className="text-muted mb-3 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-xs leading-relaxed dark:border-amber-900/50 dark:bg-amber-950/25">
                 <span className="text-heading font-semibold">Note:</span> {pricingPolicy.message}

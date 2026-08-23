@@ -1,11 +1,15 @@
 import { ObjectId } from 'mongodb';
 import { requireAdmin } from './adminAuth.js';
+import { getAdminUserStats } from './adminUserStats.js';
 import { ensureDb } from './ensureDb.js';
 import { toFriendlyError } from './errors.js';
 import {
+  listAdminStoreDeals,
   listUnverifiedStoreDeals,
   markDealManuallyVerified,
   markStoreDealsManuallyVerified,
+  unmarkDealManuallyVerified,
+  unmarkStoreDealsManuallyVerified,
 } from './dealManualVerification.js';
 import {
   getSupportInboxCounts,
@@ -53,9 +57,32 @@ export async function handleAdminDashboard(req, res) {
     if (!admin) return;
 
     const counts = await getSupportInboxCounts();
-    res.status(200).json({ ok: true, counts });
+    const users = await getAdminUserStats();
+    res.status(200).json({ ok: true, counts: { ...counts, ...users } });
   } catch (err) {
     console.error('GET /api/admin/dashboard', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleListAdminDeals(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const store = String(req.query?.store ?? '').trim() || null;
+    const verifiedRaw = String(req.query?.verified ?? 'false').trim().toLowerCase();
+    const verified = verifiedRaw === 'true' || verifiedRaw === '1';
+    const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
+    const deals = await listAdminStoreDeals(collection, {
+      store: store ?? undefined,
+      verified,
+    });
+
+    res.status(200).json({ ok: true, count: deals.length, verified, deals });
+  } catch (err) {
+    console.error('GET /api/admin/deals', err);
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
   }
@@ -70,7 +97,7 @@ export async function handleListUnverifiedDeals(req, res) {
     const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
     const deals = await listUnverifiedStoreDeals(collection, { store: store ?? undefined });
 
-    res.status(200).json({ ok: true, count: deals.length, deals });
+    res.status(200).json({ ok: true, count: deals.length, verified: false, deals });
   } catch (err) {
     console.error('GET /api/admin/deals/unverified', err);
     const friendly = toFriendlyError(err);
@@ -128,6 +155,41 @@ export async function handleVerifyWeeklyDeals(req, res) {
     res.status(200).json({ ok: true, ...result });
   } catch (err) {
     console.error('POST /api/admin/deals/verify', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleUnverifyWeeklyDeals(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
+    const store = normalizeDealStore(req.body?.store);
+    const dealId = String(req.body?.dealId ?? '').trim();
+
+    if (dealId) {
+      if (!ObjectId.isValid(dealId)) {
+        res.status(400).json({ error: 'Invalid dealId.' });
+        return;
+      }
+      const unverified = await unmarkDealManuallyVerified(collection, new ObjectId(dealId));
+      res.status(200).json({ ok: true, unverified: [unverified] });
+      return;
+    }
+
+    if (!store) {
+      res.status(400).json({
+        error: 'Provide dealId for one deal, or store to unverify all verified deals for that retailer.',
+      });
+      return;
+    }
+
+    const result = await unmarkStoreDealsManuallyVerified(collection, { store });
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error('POST /api/admin/deals/unverify', err);
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
   }

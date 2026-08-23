@@ -1,6 +1,6 @@
 import { getBearerUser } from '../auth.js';
 import { ensureDb } from '../ensureDb.js';
-import { findUserById } from '../db.js';
+import { findUserById, touchUserLastActive } from '../db.js';
 import { toFriendlyError } from '../errors.js';
 
 /**
@@ -50,6 +50,8 @@ export async function requireAuth(req, res, next) {
     household_id: user.household_id,
     isVerified: user.isVerified,
   };
+
+  void touchUserLastActive(user.id);
 
   next();
 }

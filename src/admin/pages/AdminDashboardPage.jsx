@@ -48,12 +48,29 @@ export function AdminDashboardPage() {
   return (
     <div>
       <h1 className="text-heading mb-1 text-xl font-extrabold">Dashboard</h1>
-      <p className="text-muted mb-6 text-sm">Overview of deals curation and user support.</p>
+      <p className="text-muted mb-6 text-sm">Overview of users, deals curation, and support.</p>
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Total users"
+          value={counts?.totalUsers ?? 0}
+          hint="Active accounts only — deleted users are removed from the database"
+        />
+        <StatCard
+          label="Live users"
+          value={counts?.liveUsers ?? 0}
+          hint={`Used the app in the last ${counts?.liveWindowMinutes ?? 15} minutes`}
+        />
+        <StatCard
+          label="Active today"
+          value={counts?.activeToday ?? 0}
+          hint="Signed in or synced in the last 24 hours"
+        />
+      </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
           label="Unverified deals"
           value={counts?.unverifiedDeals ?? 0}
-          hint="Need catalogue check before prices show"
+          hint="Optional — verify to show the verified badge"
         />
         <StatCard
           label="Open reports"

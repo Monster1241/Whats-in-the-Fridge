@@ -167,14 +167,96 @@ export async function markStoreDealsManuallyVerified(collection, options = {}) {
 
 /**
  * @param {import('mongodb').Collection} collection
+ * @param {import('mongodb').ObjectId|string} target
+ */
+export async function unmarkDealManuallyVerified(collection, target) {
+  const now = new Date();
+  const filter =
+    typeof target === 'object' && target !== null && '_id' in target
+      ? { _id: target._id }
+      : { _id: target };
+
+  const existing = await collection.findOne(filter);
+  if (!existing) {
+    const err = new Error('Deal not found.');
+    err.status = 404;
+    throw err;
+  }
+
+  if (!existing.priceVerifiedAt) {
+    return {
+      id: existing._id.toString(),
+      name: existing.name,
+      store: existing.store,
+      alreadyUnverified: true,
+    };
+  }
+
+  await collection.updateOne(filter, {
+    $unset: {
+      priceVerifiedAt: '',
+      priceVerifiedForCycle: '',
+      priceVerifiedBy: '',
+      priceVerificationSource: '',
+    },
+    $set: { updated_at: now },
+  });
+
+  return {
+    id: existing._id.toString(),
+    name: existing.name,
+    store: existing.store,
+    alreadyUnverified: false,
+  };
+}
+
+/**
+ * @param {import('mongodb').Collection} collection
  * @param {{ store?: string, now?: Date }} [options]
  */
-export async function listUnverifiedStoreDeals(collection, options = {}) {
+export async function unmarkStoreDealsManuallyVerified(collection, options = {}) {
   const now = options.now instanceof Date ? options.now : new Date();
+  const store = options.store?.trim().toLowerCase();
+  if (!store) {
+    const err = new Error('store is required.');
+    err.status = 400;
+    throw err;
+  }
+
+  const docs = await collection
+    .find({
+      store,
+      priceVerifiedAt: { $exists: true },
+      $or: [{ storeExpiresAt: { $gte: now } }, { expiresAt: { $gte: now } }],
+    })
+    .toArray();
+
+  const unverified = [];
+  for (const doc of docs) {
+    unverified.push(await unmarkDealManuallyVerified(collection, doc._id));
+  }
+
+  return { store, count: unverified.length, unverified };
+}
+
+/**
+ * @param {import('mongodb').Collection} collection
+ * @param {{ store?: string, verified?: boolean, now?: Date }} [options]
+ */
+export async function listAdminStoreDeals(collection, options = {}) {
+  const now = options.now instanceof Date ? options.now : new Date();
+  const verified = options.verified === true;
+
   const query = {
-    priceVerifiedAt: { $exists: false },
     $or: [{ storeExpiresAt: { $gte: now } }, { expiresAt: { $gte: now } }],
   };
+
+  if (verified) {
+    query.priceVerifiedAt = { $exists: true };
+  } else {
+    query.priceVerifiedAt = { $exists: false };
+  }
+
   if (options.store?.trim()) {
     query.store = options.store.trim().toLowerCase();
   }
@@ -182,7 +264,15 @@ export async function listUnverifiedStoreDeals(collection, options = {}) {
   const docs = await collection
     .find(query)
     .sort({ store: 1, name: 1 })
-    .project({ name: 1, store: 1, dealPrice: 1, originalPrice: 1, storeCycleStart: 1 })
+    .project({
+      name: 1,
+      store: 1,
+      dealPrice: 1,
+      originalPrice: 1,
+      storeCycleStart: 1,
+      priceVerifiedAt: 1,
+      priceVerifiedBy: 1,
+    })
     .toArray();
 
   return docs.map((doc) => ({
@@ -192,5 +282,19 @@ export async function listUnverifiedStoreDeals(collection, options = {}) {
     dealPrice: doc.dealPrice,
     originalPrice: doc.originalPrice ?? null,
     storeCycleStart: doc.storeCycleStart ?? null,
+    priceVerified: Boolean(doc.priceVerifiedAt),
+    priceVerifiedAt:
+      doc.priceVerifiedAt instanceof Date
+        ? doc.priceVerifiedAt.toISOString()
+        : doc.priceVerifiedAt ?? null,
+    priceVerifiedBy: doc.priceVerifiedBy ?? null,
   }));
+}
+
+/**
+ * @param {import('mongodb').Collection} collection
+ * @param {{ store?: string, now?: Date }} [options]
+ */
+export async function listUnverifiedStoreDeals(collection, options = {}) {
+  return listAdminStoreDeals(collection, { ...options, verified: false });
 }

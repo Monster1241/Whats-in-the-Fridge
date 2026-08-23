@@ -32,6 +32,7 @@ import {
   dedupeFcmTokens,
   getHouseholdFcmTokens,
   removeInvalidFcmTokens,
+  touchUserLastActive,
 } from './db.js';
 import { sendPushToTokens } from './fcm.js';
 import { fetchActiveCataloguesPerStore } from './storeCatalogues.js';
@@ -90,6 +91,7 @@ async function requireAuth(req, res) {
     res.status(401).json({ error: 'Session expired. Please log in again.' });
     return null;
   }
+  void touchUserLastActive(user.id);
   return { session, user };
 }
 
@@ -196,6 +198,8 @@ export async function handleFirebaseSession(req, res) {
       }
       user = await linkUserFirebaseAccount(user.id, firebaseUid, emailVerified);
     }
+
+    void touchUserLastActive(user.id);
 
     res.status(200).json(await authPayload(user));
   } catch (err) {
