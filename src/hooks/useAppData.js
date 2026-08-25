@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { clearAllInventory, fetchAppState, restoreClearedInventory, saveAppState, syncInventory } from '../api.js';
 import { toInventoryClearBackupSummary } from '../inventory/clearBackup.js';
+import { cacheAppStateResponse, getActiveHouseholdId } from '../inventory/offlineCache.js';
 import { migrateItems, inventoryChangedByMigration, normalizeName } from '../inventory/itemUtils.js';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules } from '../inventory/modules.js';
 import {
@@ -40,6 +41,7 @@ export function useAppData(enabled) {
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState(null);
   const [saveError, setSaveError] = useState(null);
+  const [offlineMode, setOfflineMode] = useState(false);
   const [items, setItems] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [enabledModules, setEnabledModules] = useState({ ...DEFAULT_ENABLED_MODULES });
@@ -53,6 +55,7 @@ export function useAppData(enabled) {
   const [inventoryClearBackup, setInventoryClearBackup] = useState(null);
 
   const skipSaveRef = useRef(true);
+  const offlineModeRef = useRef(false);
   const saveTimerRef = useRef(null);
   const saveEpochRef = useRef(0);
   const saveInFlightRef = useRef(false);
@@ -82,6 +85,11 @@ export function useAppData(enabled) {
     usageInsights,
     inventoryRevision: inventoryRevisionRef.current,
   };
+
+  const setOffline = useCallback((next) => {
+    offlineModeRef.current = Boolean(next);
+    setOfflineMode(Boolean(next));
+  }, []);
 
   const applyState = useCallback((state) => {
     hasUnsyncedEditsRef.current = false;
@@ -125,10 +133,15 @@ export function useAppData(enabled) {
       usageInsights: normalizeUsageInsights(state.usageInsights),
       inventoryRevision: revision,
     };
-    skipSaveRef.current = !needsPersist;
+    // Never auto-persist migration/offline caches while offline.
+    skipSaveRef.current = !needsPersist || Boolean(state.fromOfflineCache) || offlineModeRef.current;
   }, []);
 
   const persistLatest = useCallback(async (epoch, { retryOnConflict = true } = {}) => {
+    if (offlineModeRef.current) {
+      setSaveError('Offline — changes will sync when you are back online.');
+      return;
+    }
     const localSnapshot = toApiStateSnapshot(latestRef.current);
     const base = lastSyncedRef.current;
     const inventoryPayload = buildInventorySyncPayload(
@@ -160,9 +173,14 @@ export function useAppData(enabled) {
       }
       if (epoch !== saveEpochRef.current) return;
       skipSaveRef.current = true;
-      if (state) applyState(state);
+      if (state) {
+        applyState(state);
+        const householdId = getActiveHouseholdId();
+        if (householdId) cacheAppStateResponse(householdId, state);
+      }
       hasUnsyncedEditsRef.current = false;
       setSaveError(null);
+      setOffline(false);
     } catch (err) {
       if (retryOnConflict && err?.conflict && err.body?.state) {
         const serverState = err.body.state;
@@ -219,7 +237,7 @@ export function useAppData(enabled) {
         saveInFlightRef.current = false;
       }
     }
-  }, [applyState]);
+  }, [applyState, setOffline]);
 
   const reload = useCallback(async () => {
     if (!enabled) return null;
@@ -229,6 +247,7 @@ export function useAppData(enabled) {
       const state = await fetchAppState();
       skipSaveRef.current = true;
       applyState(state);
+      setOffline(Boolean(state?.fromOfflineCache));
       setError(null);
       setSaveError(null);
       return state;
@@ -238,7 +257,7 @@ export function useAppData(enabled) {
     } finally {
       setLoading(false);
     }
-  }, [applyState, enabled]);
+  }, [applyState, enabled, setOffline]);
 
   useEffect(() => {
     if (!enabled) {
@@ -256,6 +275,7 @@ export function useAppData(enabled) {
         if (!cancelled) {
           skipSaveRef.current = true;
           applyState(state);
+          setOffline(Boolean(state?.fromOfflineCache));
           setLoading(false);
         }
       } catch (err) {
@@ -269,10 +289,19 @@ export function useAppData(enabled) {
     return () => {
       cancelled = true;
     };
-  }, [applyState, enabled]);
+  }, [applyState, enabled, setOffline]);
 
   useEffect(() => {
-    if (!enabled || loading || error) return undefined;
+    if (!enabled) return undefined;
+    const onOnline = () => {
+      void reload().catch(() => {});
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [enabled, reload]);
+
+  useEffect(() => {
+    if (!enabled || loading || error || offlineMode) return undefined;
 
     if (skipSaveRef.current) {
       skipSaveRef.current = false;
@@ -295,7 +324,7 @@ export function useAppData(enabled) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     };
-  }, [items, settings, savedIds, recipeLibrary, onboarding, restockHistory, itemKnowledge, usageInsights, loading, error, enabled, persistLatest]);
+  }, [items, settings, savedIds, recipeLibrary, onboarding, restockHistory, itemKnowledge, usageInsights, loading, error, enabled, offlineMode, persistLatest]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -533,6 +562,7 @@ export function useAppData(enabled) {
     saveError,
     dismissSaveError,
     reload,
+    offlineMode,
     items,
     updateItems,
     patchItems,

@@ -181,6 +181,7 @@ export default function App() {
     saveError,
     dismissSaveError,
     reload,
+    offlineMode,
     items,
     updateItems,
     patchItems,
@@ -326,6 +327,7 @@ export default function App() {
             syncUsageInsights={syncUsageInsights}
             onboarding={onboarding}
             enabledModules={enabledModules}
+            offlineMode={offlineMode}
           />
         )}
         {activeTab === 'deals' && (

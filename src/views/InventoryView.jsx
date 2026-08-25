@@ -908,6 +908,7 @@ export function InventoryView({
   syncUsageInsights,
   onboarding,
   enabledModules,
+  offlineMode = false,
 }) {
   const isShoppingPage = mode === 'shopping';
   const { isDismissed, dismiss } = onboarding;
@@ -1555,6 +1556,14 @@ export function InventoryView({
             ? 'Shared list for your household — tap Add to pantry when you have bought an item.'
             : `Track food & supplies · expiring within ${EXPIRING_SOON_DAYS} days`}
         </p>
+        {offlineMode ? (
+          <p
+            className="mt-2 inline-flex items-center rounded-full border border-amber-200/90 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+            role="status"
+          >
+            Offline Mode — Showing cached inventory
+          </p>
+        ) : null}
       </header>
 
       <InventorySearch

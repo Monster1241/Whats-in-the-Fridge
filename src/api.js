@@ -1,3 +1,17 @@
+import {
+  cacheAppStateResponse,
+  cacheInventoryResponse,
+  cacheShoppingListResponse,
+  decodeAuthTokenPayload,
+  isOfflineNetworkError,
+  readCachedAppState,
+  readCachedInventory,
+  readCachedShoppingList,
+  resolveHouseholdIdForCache,
+  setActiveHouseholdId,
+  withOfflineMeta,
+} from './inventory/offlineCache.js';
+
 /** Absolute API origin for Capacitor; relative `/api` only works in Vite/browser proxy. */
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
@@ -26,6 +40,8 @@ export function setAuthToken(token) {
   try {
     if (token) {
       localStorage.setItem(TOKEN_KEY, token);
+      const payload = decodeAuthTokenPayload(token);
+      if (payload?.householdId) setActiveHouseholdId(payload.householdId);
     } else {
       localStorage.removeItem(TOKEN_KEY);
     }
@@ -279,10 +295,25 @@ export async function deleteAccount() {
 }
 
 export async function fetchAppState() {
-  const res = await fetch(apiUrl(`/state`), {
-    headers: authHeaders(),
-  });
-  return parseJson(res);
+  const householdId = resolveHouseholdIdForCache(getAuthToken());
+  try {
+    const res = await fetch(apiUrl(`/state`), {
+      headers: authHeaders(),
+    });
+    const state = await parseJson(res);
+    const id =
+      householdId ||
+      resolveHouseholdIdForCache(getAuthToken()) ||
+      decodeAuthTokenPayload(getAuthToken())?.householdId;
+    if (id) cacheAppStateResponse(String(id), state);
+    return { ...state, fromOfflineCache: false };
+  } catch (err) {
+    if (!isOfflineNetworkError(err)) throw err;
+    const id = householdId || resolveHouseholdIdForCache(getAuthToken());
+    const cached = id ? readCachedAppState(id) : null;
+    if (!cached?.payload) throw err;
+    return withOfflineMeta(cached.payload, cached.cachedAt);
+  }
 }
 
 export async function saveAppState(partial) {
@@ -536,8 +567,20 @@ export async function checkApiHealth() {
 }
 
 export async function fetchInventory() {
-  const res = await fetch(apiUrl(`/inventory`), { headers: authHeaders() });
-  return parseJson(res);
+  const householdId = resolveHouseholdIdForCache(getAuthToken());
+  try {
+    const res = await fetch(apiUrl(`/inventory`), { headers: authHeaders() });
+    const data = await parseJson(res);
+    const id = householdId || resolveHouseholdIdForCache(getAuthToken());
+    if (id) cacheInventoryResponse(String(id), data);
+    return { ...data, fromOfflineCache: false };
+  } catch (err) {
+    if (!isOfflineNetworkError(err)) throw err;
+    const id = householdId || resolveHouseholdIdForCache(getAuthToken());
+    const cached = id ? readCachedInventory(id) : null;
+    if (!cached?.payload) throw err;
+    return withOfflineMeta(cached.payload, cached.cachedAt);
+  }
 }
 
 export async function createInventoryItem(payload) {
@@ -567,8 +610,20 @@ export async function deleteInventoryItemApi(id) {
 }
 
 export async function fetchShoppingList() {
-  const res = await fetch(apiUrl(`/shopping-list`), { headers: authHeaders() });
-  return parseJson(res);
+  const householdId = resolveHouseholdIdForCache(getAuthToken());
+  try {
+    const res = await fetch(apiUrl(`/shopping-list`), { headers: authHeaders() });
+    const data = await parseJson(res);
+    const id = householdId || resolveHouseholdIdForCache(getAuthToken());
+    if (id) cacheShoppingListResponse(String(id), data);
+    return { ...data, fromOfflineCache: false };
+  } catch (err) {
+    if (!isOfflineNetworkError(err)) throw err;
+    const id = householdId || resolveHouseholdIdForCache(getAuthToken());
+    const cached = id ? readCachedShoppingList(id) : null;
+    if (!cached?.payload) throw err;
+    return withOfflineMeta(cached.payload, cached.cachedAt);
+  }
 }
 
 export async function addShoppingListItem(payload) {

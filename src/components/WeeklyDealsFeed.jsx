@@ -930,7 +930,7 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const cataloguesCount = cataloguesLoading ? 0 : orderedCatalogues.length;
 
   return (
-    <div className="pb-4" aria-label="Hot deals portal">
+    <div className="pb-16" aria-label="Hot deals portal">
       <div className="mb-4 flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <SectionToggle
@@ -1112,6 +1112,19 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
           </>
         )}
       </div>
+
+      <aside
+        role="note"
+        aria-label="Pricing and affiliation notice"
+        className="sticky bottom-2 z-20 mt-4 rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 text-[10px] leading-relaxed text-slate-600 shadow-sm backdrop-blur-md dark:border-slate-700 dark:bg-zinc-950/95 dark:text-slate-300"
+      >
+        <p>
+          <span className="font-semibold text-slate-800 dark:text-slate-100">Notice:</span> Deals,
+          prices, and special offers are user-reported or aggregated for reference only. Prices
+          in-store at checkout prevail. Not affiliated with or endorsed by Coles, Woolworths, or
+          ALDI.
+        </p>
+      </aside>
     </div>
   );
 }

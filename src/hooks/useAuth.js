@@ -11,6 +11,7 @@ import {
   resendVerificationEmail,
   signup,
 } from '../api.js';
+import { setActiveHouseholdId } from '../inventory/offlineCache.js';
 
 const BOOT_TIMEOUT_MS = 10_000;
 const AUTH_FLOW_TIMEOUT_MS = 10_000;
@@ -53,6 +54,9 @@ export function useAuth() {
     setUser(data.user);
     setNeedsVerification(Boolean(data.needsVerification));
     setNeedsHousehold(Boolean(data.needsHousehold));
+    if (data.user?.householdId) {
+      setActiveHouseholdId(data.user.householdId);
+    }
   }, []);
 
   const refreshSession = useCallback(async () => {
