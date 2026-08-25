@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import {
   addShoppingListItem as addShoppingListItemApi,
   classifyInventoryItem,
@@ -49,6 +50,7 @@ import {
 import {
   EXPIRING_SOON_DAYS,
   getDisplayStatus,
+  isExpired,
   isExpiringSoon,
   sortByUrgencyThenName,
 } from '../inventory/expiryDisplay.js';
@@ -140,18 +142,23 @@ function groupByCategory(items, category, itemType, selectedSubCategories = null
     );
   };
 
+  const expired = filterBySub(
+    inCategory.filter(isExpired).sort(sortByUrgencyThenName),
+  );
   const expiring = filterBySub(
     inCategory.filter(isExpiringSoon).sort(sortByUrgencyThenName),
   );
   const plentiful = filterBySub(
     inCategory
-      .filter((item) => !isExpiringSoon(item))
+      .filter((item) => !isExpired(item) && !isExpiringSoon(item))
       .sort((a, b) => a.name.localeCompare(b.name)),
   );
 
   return {
+    expired,
     expiring,
     plentiful,
+    expiredGroups: groupItemsBySubCategory(expired, itemType, category),
     expiringGroups: groupItemsBySubCategory(expiring, itemType, category),
     plentifulGroups: groupItemsBySubCategory(plentiful, itemType, category),
     subCategoryCounts: countItemsBySubCategory(inCategory, itemType, category),
@@ -322,6 +329,11 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
     status: STATUS.FRESH,
     expiryDate,
   });
+  const expiredHint = !needToBuy && hasExpiry && expiryDate && isExpired({
+    ...item,
+    status: STATUS.FRESH,
+    expiryDate,
+  });
 
   const handleItemTypeChange = (nextType) => {
     setItemType(nextType);
@@ -370,14 +382,23 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
     unit: unit.trim(),
   });
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4"
+      style={{
+        paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="item-editor-title"
     >
-      <div className="surface-card w-full max-w-md p-5 shadow-2xl">
+      <div
+        className="surface-card max-h-[min(90vh,720px)] w-full max-w-md overflow-y-auto p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h3 id="item-editor-title" className="text-heading text-lg font-bold">
@@ -511,6 +532,11 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
             )}
           </>
         )}
+        {expiredHint && (
+          <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-950/50 dark:text-rose-200">
+            This date is in the past — it will show under Expired automatically.
+          </p>
+        )}
         {expiringHint && (
           <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
             This date is within {EXPIRING_SOON_DAYS} days — it will show under Expiring Soon
@@ -535,7 +561,8 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -1900,6 +1927,37 @@ export function InventoryView({
                 counts={categoryGrouped.subCategoryCounts}
               />
             </InventorySectionHeader>
+
+            {categoryGrouped.expired.length > 0 && (
+              <InventorySection
+                title="Expired"
+                iconName="expiring"
+                accent="text-rose-700"
+                itemCount={categoryGrouped.expired.length}
+                emptyText=""
+                grouped
+              >
+                {categoryGrouped.expiredGroups.map((group) => (
+                  <div key={`expired-${group.subCategory}`}>
+                    <h3 className="text-muted mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
+                      <MetaIcon name={group.meta.label} className="h-3.5 w-3.5" />
+                      {group.meta.label}
+                    </h3>
+                    <ul className="space-y-2">
+                      {group.items.map((item) => (
+                        <InventoryItemRow
+                          key={item.id}
+                          item={item}
+                          onOpenEditor={setEditingItem}
+                          onDelete={(id) => deleteItem(id, { trackHistory: true })}
+                          onMoveToShopping={moveItemToShoppingList}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </InventorySection>
+            )}
 
             {categoryGrouped.expiring.length > 0 && (
               <InventorySection

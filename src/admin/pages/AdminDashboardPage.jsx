@@ -1,14 +1,30 @@
 import { useEffect, useState } from 'react';
 import { fetchAdminDashboard } from '../../api.js';
 
-function StatCard({ label, value, hint }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-zinc-950">
+function StatCard({ label, value, hint, href }) {
+  const className =
+    'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition dark:border-slate-800 dark:bg-zinc-950' +
+    (href
+      ? ' block hover:border-sky-300 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:hover:border-sky-700'
+      : '');
+
+  const content = (
+    <>
       <p className="text-muted text-xs font-semibold uppercase tracking-wide">{label}</p>
       <p className="text-heading mt-2 text-3xl font-extrabold tabular-nums">{value}</p>
       {hint && <p className="text-muted mt-1 text-xs">{hint}</p>}
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <a href={href} className={className} aria-label={`Open ${label}`}>
+        {content}
+      </a>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 export function AdminDashboardPage() {
@@ -71,16 +87,19 @@ export function AdminDashboardPage() {
           label="Unverified deals"
           value={counts?.unverifiedDeals ?? 0}
           hint="Optional — verify to show the verified badge"
+          href="/admin/deals"
         />
         <StatCard
           label="Open reports"
           value={counts?.openReports ?? 0}
           hint="Wrong prices, missing deals, bugs"
+          href="/admin/reports"
         />
         <StatCard
           label="Open feedback"
           value={counts?.openFeedback ?? 0}
           hint="Ideas and general messages"
+          href="/admin/feedback"
         />
       </div>
     </div>

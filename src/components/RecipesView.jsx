@@ -21,7 +21,13 @@ import {
   RECIPE_TWEAK_MODES,
 } from '../recipes/kitchenAiBranding.js';
 import { ITEM_TYPE, STATUS } from '../inventory/constants.js';
+import { isExpired } from '../inventory/expiryDisplay.js';
 import { findFoodItemForIngredient } from '../recipes/ingredientMatching.js';
+import {
+  getDietaryPreferenceModeLabel,
+  isDietaryPreferenceActive,
+  normalizeDietaryPreference,
+} from '../recipes/dietaryPreferences.js';
 import { BUILTIN_RECIPES } from '../recipes/recipeCatalog.js';
 import {
   analyzeRecipe,
@@ -290,9 +296,11 @@ function RecipeCard({
               <span
                 key={ing.name}
                 className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  ing.status === STATUS.EXPIRING
-                    ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700'
-                    : 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:ring-emerald-700'
+                  ing.status === STATUS.EXPIRED
+                    ? 'bg-rose-100 text-rose-900 ring-1 ring-rose-300 dark:bg-rose-950/70 dark:text-rose-200 dark:ring-rose-700'
+                    : ing.status === STATUS.EXPIRING
+                      ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700'
+                      : 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:ring-emerald-700'
                 }`}
               >
                 {ing.name}
@@ -432,7 +440,7 @@ function RecipeCard({
   );
 }
 
-export function RecipesView({ items, updateItems, replaceItemsFromServer, savedRecipes }) {
+export function RecipesView({ items, updateItems, replaceItemsFromServer, savedRecipes, dietaryPreference }) {
   const { savedIds, isSaved, toggleSave, recipeLibrary, rememberRecipe, mergeRecipeLibrary } =
     savedRecipes;
   const [recipeView, setRecipeView] = useState(RECIPE_VIEW.MATCHED);
@@ -458,6 +466,9 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
   const [scoutTweakingMode, setScoutTweakingMode] = useState('');
   const [recipeShopFeedback, setRecipeShopFeedback] = useState('');
   const scoutChatRef = useRef(null);
+  const activeDietaryPreference = normalizeDietaryPreference(dietaryPreference);
+  const dietaryModeLabel = getDietaryPreferenceModeLabel(activeDietaryPreference);
+  const showDietaryBadge = isDietaryPreferenceActive(activeDietaryPreference);
 
   const fetchCravingCatalogMatches = useCallback(
     async (craving) => {
@@ -570,39 +581,46 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
     });
   }, []);
 
+  const usableRecipeItems = useMemo(
+    () =>
+      items.filter(
+        (item) =>
+          item.itemType === ITEM_TYPE.FOOD &&
+          item.status !== STATUS.OUT &&
+          !isExpired(item),
+      ),
+    [items],
+  );
+
   const cravingMatchCards = useMemo(
     () =>
       cravingMatches.map((recipe) => ({
         recipe,
-        analysis: analyzeRecipe(recipe, items),
+        analysis: analyzeRecipe(recipe, usableRecipeItems),
       })),
-    [cravingMatches, items],
+    [cravingMatches, usableRecipeItems],
   );
 
   const aiRecipeCards = useMemo(
     () =>
       aiRecipes.map((recipe) => {
-        const analysis = analyzeRecipe(recipe, items);
+        const analysis = analyzeRecipe(recipe, usableRecipeItems);
         if (recipe.missingIngredients?.length) {
           analysis.need = recipe.missingIngredients;
         }
         return { recipe, analysis };
       }),
-    [aiRecipes, items],
+    [aiRecipes, usableRecipeItems],
   );
 
   const pantryIngredients = useMemo(
-    () =>
-      items
-        .filter((item) => item.itemType === ITEM_TYPE.FOOD && item.status !== STATUS.OUT)
-        .map((item) => item.name)
-        .slice(0, 12),
-    [items],
+    () => usableRecipeItems.map((item) => item.name).slice(0, 12),
+    [usableRecipeItems],
   );
 
   const cookableRecipes = useMemo(() => {
     const scored = getAllKnownRecipes(recipeLibrary).map((recipe) => {
-      const analysis = analyzeRecipe(recipe, items);
+      const analysis = analyzeRecipe(recipe, usableRecipeItems);
       return { recipe, analysis, score: analysis.stockedCount };
     });
 
@@ -626,7 +644,7 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
       .slice(0, MIN_MATCHED_RECIPES_TO_SHOW - strict.length);
 
     return [...strict, ...filler];
-  }, [items, recipeLibrary]);
+  }, [usableRecipeItems, recipeLibrary]);
 
   const localSearchResults = useMemo(
     () => searchLocalRecipes(searchQuery, recipeLibrary),
@@ -639,10 +657,10 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
       .filter(Boolean)
       .map((recipe) => ({
         recipe,
-        analysis: analyzeRecipe(recipe, items),
+        analysis: analyzeRecipe(recipe, usableRecipeItems),
       }))
       .sort((a, b) => a.recipe.title.localeCompare(b.recipe.title));
-  }, [savedIds, recipeLibrary, items]);
+  }, [savedIds, recipeLibrary, usableRecipeItems]);
 
   const mergedSearchResults = useMemo(() => {
     const byId = new Map();
@@ -650,15 +668,15 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
     for (const recipe of remoteResults) byId.set(recipe.id, recipe);
     let list = [...byId.values()];
     if (pantryOnly) {
-      list = list.filter((recipe) => analyzeRecipe(recipe, items).stockedCount >= 1);
+      list = list.filter((recipe) => analyzeRecipe(recipe, usableRecipeItems).stockedCount >= 1);
     }
     return list
       .map((recipe) => ({
         recipe,
-        analysis: analyzeRecipe(recipe, items),
+        analysis: analyzeRecipe(recipe, usableRecipeItems),
       }))
       .sort((a, b) => b.analysis.stockedCount - a.analysis.stockedCount);
-  }, [localSearchResults, remoteResults, pantryOnly, items]);
+  }, [localSearchResults, remoteResults, pantryOnly, usableRecipeItems]);
 
   useEffect(() => {
     const trimmed = searchQuery.trim();
@@ -793,6 +811,12 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
       <header className={`page-header shrink-0 ${recipeView === RECIPE_VIEW.SCOUT ? 'px-4 sm:px-5' : ''}`}>
         <h1 className="page-header__title">What Can We Cook?</h1>
         <p className="page-header__subtitle">{pageSubtitle}</p>
+        {showDietaryBadge && (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200">
+            <Sparkles className="h-3 w-3" aria-hidden />
+            {dietaryModeLabel}
+          </p>
+        )}
       </header>
 
       {recipeShopFeedback && (
@@ -1032,7 +1056,12 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
         }
         aria-hidden={recipeView !== RECIPE_VIEW.SCOUT}
       >
-        <FridgeScoutChat ref={scoutChatRef} expanded fullscreen />
+        <FridgeScoutChat
+          ref={scoutChatRef}
+          expanded
+          fullscreen
+          dietaryPreference={activeDietaryPreference}
+        />
       </div>
 
       {recipeView === RECIPE_VIEW.MATCHED && cravingMatchCards.length > 0 && !isAiLoading && (

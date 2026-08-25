@@ -14,6 +14,10 @@ import {
 } from '../inventory/modules.js';
 import { EXPIRING_SOON_DAYS } from '../inventory/expiryDisplay.js';
 import {
+  DIETARY_PREFERENCE_OPTIONS,
+  normalizeDietaryPreference,
+} from '../recipes/dietaryPreferences.js';
+import {
   isValidAustralianPostcode,
   POSTCODE_CHANGE_EVENT,
   readStoredPostcode,
@@ -34,6 +38,7 @@ import {
   FlaskConical,
   Info,
   KeyRound,
+  Leaf,
   Loader2,
   LogOut,
   Moon,
@@ -114,6 +119,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'Switch Ambient, Fresh, and Freezer to organise pantry, fridge, and frozen items.',
         'Pantry (Ambient) quantities show as total grams or ml — e.g. two 400g tins display as 800g total.',
         'Tap a row\'s status badge to edit quantity, expiry, storage, or mark an item out of stock.',
+        `Items past their expiry date appear under Expired with a rose badge.`,
         `Items expiring within ${EXPIRING_SOON_DAYS} days appear under Expiring Soon with an amber badge.`,
         'Mark items as running low in the editor, or let Predicted low / Almost finished flag staples from how long they last in your home.',
         'Use More options when adding to pick Home Essentials or Baby Care categories.',
@@ -163,7 +169,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       steps: [
         'Copy or share your invite code in Settings so someone can join the same fridge.',
         'Everyone in the household sees the same inventory, shopping list, and saved recipes — edits sync live.',
-        'Enable push notifications in Settings for expiry alerts and partner shopping pings (no item names in the alert).',
+        'Enable push notifications in Settings for expiry alerts (expiring soon and expired) and partner shopping pings (no item names in the alert).',
         'Scanning a receipt? Items already on the shopping list are moved to Fridge automatically when names match.',
         'On your phone, use Add to Home Screen to install the app for a fullscreen experience.',
       ],
@@ -316,8 +322,8 @@ function PushNotificationsSettings() {
         Push notifications
       </h2>
       <p className="text-muted mb-3 text-sm">
-        Get notified when food in your fridge is expiring soon. Alerts never include item
-        names. Works when the app is open (banner) or in the background (system notification).
+        Get notified when food in your fridge is expiring soon or has expired. Alerts never include
+        item names. Works when the app is open (banner) or in the background (system notification).
       </p>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
@@ -478,6 +484,15 @@ export function SettingsView({
   const setTheme = (theme) => {
     updateSettings((prev) => ({ ...prev, theme }));
   };
+
+  const setDietaryPreference = (dietaryPreference) => {
+    updateSettings((prev) => ({
+      ...prev,
+      dietaryPreference: normalizeDietaryPreference(dietaryPreference),
+    }));
+  };
+
+  const activeDietaryPreference = normalizeDietaryPreference(settings?.dietaryPreference);
 
   const handleModuleToggle = async (moduleKey, checked) => {
     setModulesError('');
@@ -723,6 +738,43 @@ export function SettingsView({
       </section>
 
       <PushNotificationsSettings />
+
+      <section className="surface-card mb-5 p-4">
+        <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
+          <Leaf className="h-4 w-4 text-emerald-600" aria-hidden />
+          Dietary preferences
+        </h2>
+        <p className="text-muted mb-3 text-sm">
+          Applies to AI recipes and Fridge Scout for everyone in your household.
+        </p>
+        <div className="space-y-2">
+          {DIETARY_PREFERENCE_OPTIONS.map((option) => {
+            const selected = activeDietaryPreference === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setDietaryPreference(option.value)}
+                className={`surface-inset w-full rounded-xl border-2 p-3 text-left transition active:scale-[0.99] ${
+                  selected
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40'
+                    : 'border-transparent'
+                }`}
+                aria-pressed={selected}
+              >
+                <p className="text-heading text-sm font-semibold">{option.label}</p>
+                <p className="text-muted mt-0.5 text-xs leading-relaxed">{option.description}</p>
+              </button>
+            );
+          })}
+        </div>
+        {activeDietaryPreference !== 'none' && (
+          <p className="text-muted mt-3 text-[11px] leading-relaxed">
+            Scout tries to follow your diet, but always double-check ingredients — especially for
+            allergies or hidden animal products.
+          </p>
+        )}
+      </section>
 
       <section className="surface-card mb-5 overflow-hidden p-4">
         <button

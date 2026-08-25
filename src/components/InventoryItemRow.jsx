@@ -6,6 +6,7 @@ import { formatInventoryQuantityLabel } from '../inventory/quantityDisplay.js';
 import {
   formatExpiryUrgency,
   getDisplayStatus,
+  isExpired,
   isExpiringSoon,
 } from '../inventory/expiryDisplay.js';
 import { IconActionButton } from './IconActionButton.jsx';
@@ -24,13 +25,22 @@ export const InventoryItemRow = memo(function InventoryItemRow({
   const subMeta = getSubcategoryMeta(item.subCategory, item.itemType, item.category);
   const displayStatus = getDisplayStatus(item);
   const quantityLabel = formatInventoryQuantityLabel(item);
+  const expired = isExpired(item);
+  const expiringSoon = !expired && isExpiringSoon(item);
 
   return (
     <li className="surface-row group flex items-center gap-2 px-3 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-heading truncate text-sm font-medium">{item.name}</p>
-          {isExpiringSoon(item) && (
+          <p className={`text-heading truncate text-sm font-medium ${expired ? 'text-rose-800 dark:text-rose-300' : ''}`}>
+            {item.name}
+          </p>
+          {expired && (
+            <span className="rounded-full bg-rose-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+              Expired
+            </span>
+          )}
+          {expiringSoon && (
             <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-900 shadow-sm">
               Expiring Soon
             </span>
@@ -57,7 +67,11 @@ export const InventoryItemRow = memo(function InventoryItemRow({
         {urgencyLabel && isInStockInventory(item) && (
           <p
             className={`mt-0.5 flex items-center gap-1 text-xs ${
-              isExpiringSoon(item) ? 'text-amber-700' : 'text-slate-600'
+              expired
+                ? 'font-semibold text-rose-700 dark:text-rose-400'
+                : expiringSoon
+                  ? 'text-amber-700'
+                  : 'text-slate-600'
             }`}
           >
             <Calendar className="h-3 w-3 shrink-0" />

@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 const COLOR_LEGEND = [
   { swatch: 'bg-emerald-600', label: 'Emerald', desc: 'In stock · plentiful · primary actions' },
   { swatch: 'bg-amber-500', label: 'Amber', desc: 'Expiring soon (within 3 days)' },
+  { swatch: 'bg-rose-700', label: 'Deep rose', desc: 'Past expiry date — expired' },
   { swatch: 'bg-orange-500', label: 'Orange', desc: 'Almost finished or marked as running low' },
   { swatch: 'bg-rose-600', label: 'Rose', desc: 'Out of stock — sends item to the shopping list' },
   { swatch: 'bg-sky-600', label: 'Sky', desc: 'Shopping tab · list · add-to-pantry flow' },

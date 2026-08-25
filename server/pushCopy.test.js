@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildExpiryAlertMessage, buildShoppingPingNotification } from './pushCopy.js';
+import {
+  buildCombinedExpiryAlertMessage,
+  buildExpiryAlertMessage,
+  buildShoppingPingNotification,
+} from './pushCopy.js';
 
 describe('buildExpiryAlertMessage', () => {
   it('omits item names and uses count-only copy', () => {
@@ -15,6 +19,13 @@ describe('buildExpiryAlertMessage', () => {
 
   it('returns null for empty counts', () => {
     expect(buildExpiryAlertMessage(0)).toBeNull();
+  });
+});
+
+describe('buildCombinedExpiryAlertMessage', () => {
+  it('covers expired-only alerts', () => {
+    const msg = buildCombinedExpiryAlertMessage(0, 2);
+    expect(msg?.title).toBe('2 items expired');
   });
 });
 

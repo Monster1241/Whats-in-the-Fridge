@@ -4,7 +4,7 @@ import {
   removeInvalidFcmTokens,
 } from './db.js';
 import { sendPushToTokens } from './fcm.js';
-import { buildExpiryAlertMessage } from './pushCopy.js';
+import { buildCombinedExpiryAlertMessage } from './pushCopy.js';
 
 /** Match client EXPIRING_SOON_DAYS (food). */
 export const EXPIRY_ALERT_DAYS = 3;
@@ -24,7 +24,16 @@ function expiryAlertKey(item) {
 }
 
 /**
- * In-stock food with an expiry date within the alert window.
+ * Past the expiry calendar day (local). Shopping-list items are ignored.
+ * @param {{ status?: string, expiryDate?: string|null }} item
+ */
+export function isExpiredInventoryItem(item) {
+  if (!item?.expiryDate || item.status === 'out') return false;
+  return daysUntilExpiry(item.expiryDate) < 0;
+}
+
+/**
+ * In-stock food with an expiry date within the alert window (not yet expired).
  * @param {Array<{ status?: string, itemType?: string, expiryDate?: string|null, name?: string, id?: string }>} items
  */
 export function findExpiringSoonItems(items, maxDays = EXPIRY_ALERT_DAYS) {
@@ -32,8 +41,23 @@ export function findExpiringSoonItems(items, maxDays = EXPIRY_ALERT_DAYS) {
     .filter((item) => {
       if (!item?.expiryDate || item.status === 'out') return false;
       if (item.itemType && item.itemType !== 'Food') return false;
+      if (isExpiredInventoryItem(item)) return false;
       const days = daysUntilExpiry(item.expiryDate);
       return days >= 0 && days <= maxDays;
+    })
+    .sort((a, b) => String(a.expiryDate).localeCompare(String(b.expiryDate)));
+}
+
+/**
+ * In-stock food past its expiry date.
+ * @param {Array<{ status?: string, itemType?: string, expiryDate?: string|null, name?: string, id?: string }>} items
+ */
+export function findExpiredItems(items) {
+  return (items ?? [])
+    .filter((item) => {
+      if (!item?.expiryDate || item.status === 'out') return false;
+      if (item.itemType && item.itemType !== 'Food') return false;
+      return isExpiredInventoryItem(item);
     })
     .sort((a, b) => String(a.expiryDate).localeCompare(String(b.expiryDate)));
 }
@@ -85,8 +109,8 @@ async function loadInventoryByHousehold(db) {
 }
 
 /**
- * Daily cron: notify households about food expiring within EXPIRY_ALERT_DAYS.
- * Each item+expiry pair is alerted at most once (tracked on the household doc).
+ * Daily cron: notify households about food expiring soon or already expired.
+ * Each item+expiry pair is alerted at most once per alert type (tracked on the household doc).
  *
  * @param {import('mongodb').Db} db
  */
@@ -100,6 +124,8 @@ export async function runExpiryAlerts(db) {
   let householdsChecked = 0;
   let householdsNotified = 0;
   let pushesSent = 0;
+  let expiringSoonAlerts = 0;
+  let expiredAlerts = 0;
   const invalidTokens = [];
 
   for (const household of householdDocs) {
@@ -107,27 +133,41 @@ export async function runExpiryAlerts(db) {
     const householdId = household._id.toString();
     const items = inventoryByHousehold.get(householdId) ?? [];
     const expiring = findExpiringSoonItems(items);
-    if (expiring.length === 0) continue;
+    const expired = findExpiredItems(items);
+    if (expiring.length === 0 && expired.length === 0) continue;
 
-    const sentMap =
+    const soonSentMap =
       household.expiryAlertsSent && typeof household.expiryAlertsSent === 'object'
         ? { ...household.expiryAlertsSent }
         : {};
+    const expiredSentMap =
+      household.expiredAlertsSent && typeof household.expiredAlertsSent === 'object'
+        ? { ...household.expiredAlertsSent }
+        : {};
 
-    const pending = expiring.filter((item) => !sentMap[expiryAlertKey(item)]);
-    if (pending.length === 0) continue;
+    const pendingSoon = expiring.filter((item) => !soonSentMap[expiryAlertKey(item)]);
+    const pendingExpired = expired.filter((item) => !expiredSentMap[expiryAlertKey(item)]);
+    if (pendingSoon.length === 0 && pendingExpired.length === 0) continue;
 
     const tokens = await getHouseholdMemberTokens(db, householdId);
     if (tokens.length === 0) continue;
 
-    const message = buildExpiryAlertMessage(pending.length);
+    const message = buildCombinedExpiryAlertMessage(pendingSoon.length, pendingExpired.length);
     if (!message) continue;
+
+    const alertKind =
+      pendingSoon.length > 0 && pendingExpired.length > 0
+        ? 'mixed'
+        : pendingExpired.length > 0
+          ? 'expired'
+          : 'expiring_soon';
 
     const { successCount, invalidTokens: stale } = await sendPushToTokens(tokens, {
       title: message.title,
       body: message.body,
       data: {
         type: 'expiry_alert',
+        alertKind,
         url: '/',
       },
     });
@@ -135,17 +175,28 @@ export async function runExpiryAlerts(db) {
     if (successCount === 0) continue;
 
     const now = new Date().toISOString();
-    for (const item of pending) {
-      sentMap[expiryAlertKey(item)] = now;
+    for (const item of pendingSoon) {
+      soonSentMap[expiryAlertKey(item)] = now;
+    }
+    for (const item of pendingExpired) {
+      expiredSentMap[expiryAlertKey(item)] = now;
     }
 
     await households.updateOne(
       { _id: household._id },
-      { $set: { expiryAlertsSent: sentMap, updated_at: new Date() } },
+      {
+        $set: {
+          expiryAlertsSent: soonSentMap,
+          expiredAlertsSent: expiredSentMap,
+          updated_at: new Date(),
+        },
+      },
     );
 
     householdsNotified += 1;
     pushesSent += successCount;
+    expiringSoonAlerts += pendingSoon.length;
+    expiredAlerts += pendingExpired.length;
     invalidTokens.push(...stale);
   }
 
@@ -158,6 +209,8 @@ export async function runExpiryAlerts(db) {
     householdsChecked,
     householdsNotified,
     pushesSent,
+    expiringSoonAlerts,
+    expiredAlerts,
     invalidTokensRemoved: invalidTokens.length,
   };
 }

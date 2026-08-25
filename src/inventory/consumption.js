@@ -183,11 +183,6 @@ function daysUntilExpiry(iso) {
   return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-function isExpiryUrgent(item, expiringSoonDays = EXPIRING_SOON_DAYS) {
-  if (!item?.expiryDate || isOnShoppingList(item)) return false;
-  return daysUntilExpiry(item.expiryDate) <= expiringSoonDays;
-}
-
 /**
  * Resolve how many days of supply to use for predicted-low timing.
  * Prefers household-learned intervals, then stored duration, then defaults.
@@ -250,7 +245,11 @@ export function isAlmostFinished(item, restockHistory) {
  */
 export function calculateItemStatus(item) {
   if (!item || isOnShoppingList(item)) return STATUS.OUT;
-  if (isExpiryUrgent(item)) return STATUS.EXPIRING;
+  if (item.expiryDate) {
+    const days = daysUntilExpiry(item.expiryDate);
+    if (days < 0) return STATUS.EXPIRED;
+    if (days <= EXPIRING_SOON_DAYS) return STATUS.EXPIRING;
+  }
   if (isAlmostFinished(item)) return STATUS.ALMOST_FINISHED;
   return STATUS.FRESH;
 }

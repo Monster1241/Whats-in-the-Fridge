@@ -19,6 +19,7 @@ import {
 export const DEFAULT_SETTINGS = {
   theme: 'light',
   user: { name: '', email: '' },
+  dietaryPreference: 'none',
 };
 
 const SAVE_DELAY_MS = 400;

@@ -1,7 +1,7 @@
 import { STATUS_META } from '../inventory/uiAccents.js';
 
 export function StatusBadge({ status, onOpenPicker }) {
-  const meta = STATUS_META[status];
+  const meta = STATUS_META[status] ?? STATUS_META.fresh;
   return (
     <button
       type="button"

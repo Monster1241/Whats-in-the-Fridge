@@ -11,9 +11,15 @@ export function daysUntilExpiry(iso) {
   return Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
 }
 
+export function isExpired(item) {
+  if (!item?.expiryDate || isOnShoppingList(item)) return false;
+  return daysUntilExpiry(item.expiryDate) < 0;
+}
+
 export function isExpiringSoon(item, maxDays = EXPIRING_SOON_DAYS) {
   if (!item?.expiryDate || isOnShoppingList(item)) return false;
-  return daysUntilExpiry(item.expiryDate) <= maxDays;
+  const days = daysUntilExpiry(item.expiryDate);
+  return days >= 0 && days <= maxDays;
 }
 
 export function getDisplayStatus(item) {

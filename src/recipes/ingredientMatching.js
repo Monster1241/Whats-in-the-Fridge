@@ -1,4 +1,5 @@
 import { isOnShoppingList, ITEM_TYPE } from '../inventory/constants.js';
+import { isExpired } from '../inventory/expiryDisplay.js';
 import { normalizeName } from '../inventory/itemUtils.js';
 import { PRODUCT_CATALOG } from '../inventory/productCatalog.js';
 
@@ -173,7 +174,9 @@ export function findFoodItemForIngredient(ingredientName, items) {
   const list = Array.isArray(items) ? items : [];
   return (
     list.find((item) => {
-      if (item.itemType !== ITEM_TYPE.FOOD || isOnShoppingList(item)) return false;
+      if (item.itemType !== ITEM_TYPE.FOOD || isOnShoppingList(item) || isExpired(item)) {
+        return false;
+      }
       return ingredientsMatch(ingredientName, item.name);
     }) ?? null
   );

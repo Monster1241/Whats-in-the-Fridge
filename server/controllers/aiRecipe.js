@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { getHouseholdMeta, getInventoryForHousehold, upsertHouseholdRecipes } from '../db.js';
-import { EXPIRY_ALERT_DAYS, findExpiringSoonItems } from '../expiryAlerts.js';
+import { EXPIRY_ALERT_DAYS, findExpiringSoonItems, isExpiredInventoryItem } from '../expiryAlerts.js';
 import { enrichRecipeWithMatchMeta, findMatchingLibraryRecipes } from '../recipeMatching.js';
 import {
   createAiRecipeId,
@@ -11,6 +11,11 @@ import {
 } from '../recipeSchema.js';
 import { getRecipeMainIngredient } from '../../src/recipes/recipeUtils.js';
 import { ensureNumberedInstructions } from '../../src/recipes/instructionFormat.js';
+import {
+  buildDietaryPromptInstructions,
+  getRemixModeInstruction,
+  normalizeDietaryPreference,
+} from '../../src/recipes/dietaryPreferences.js';
 
 const MODEL_ID = process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
 const AI_RECIPE_COUNT = 5;
@@ -65,6 +70,7 @@ const REMIX_RESPONSE_SCHEMA = RECIPE_OBJECT_SCHEMA;
 
 const SYSTEM_INSTRUCTION = `You are a practical home-cooking assistant for Australian households.
 Given a list of in-stock pantry and fridge items, create exactly ${AI_RECIPE_COUNT} original, fully-formed recipes a family could cook this week.
+Never use or invent expired items — the inventory list excludes anything past its expiry date.
 
 Recipe mix (required):
 - ${PANTRY_FIRST_RECIPE_COUNT} "pantry-first" recipes: build mainly from the household inventory. Prioritize items marked EXPIRING SOON. missingIngredients should be empty or only 1–2 common staples (salt, oil, etc.).
@@ -77,6 +83,7 @@ Return strict JSON only — no markdown fences or commentary.`;
 
 const REMIX_SYSTEM_INSTRUCTION = `You are FitChef, a nutrition-savvy recipe remix assistant for Australian households.
 Given an existing recipe, create one improved variant that follows the requested remix mode while keeping the dish recognisable and delicious.
+Only use inventory items provided in the prompt — never suggest expired food.
 Return a fully-formed recipe with title, prepTime, cookTime, cuisine, category, ingredients, numbered step-by-step instructions (prep, heat levels, timings), calories, macros, tags, and missingIngredients.
 Use clear Australian pantry ingredient names.
 Return strict JSON only — no markdown fences or commentary.`;
@@ -102,10 +109,20 @@ function isOnShoppingList(item) {
 }
 
 function classifyForRecipeMatching(item, expiringIds) {
-  if (!item || isOnShoppingList(item)) return null;
+  if (!item || isOnShoppingList(item) || isExpiredInventoryItem(item)) return null;
   const id = String(item.id ?? item.name ?? '').trim();
   if (expiringIds.has(id)) return 'ExpiringSoon';
   return 'Plentiful';
+}
+
+function itemsForRecipeAi(allItems, expiringIds) {
+  return allItems
+    .map((item) => {
+      const matchStatus = classifyForRecipeMatching(item, expiringIds);
+      if (!matchStatus) return null;
+      return { ...item, _matchStatus: matchStatus };
+    })
+    .filter(Boolean);
 }
 
 function formatInventoryForPrompt(items) {
@@ -125,8 +142,13 @@ function formatInventoryForPrompt(items) {
   return lines.join('\n');
 }
 
-function buildFilterInstructions({ cravings, quickTag }) {
+function buildFilterInstructions({ cravings, quickTag, dietaryPreference }) {
   const parts = [];
+
+  const dietaryInstructions = buildDietaryPromptInstructions(dietaryPreference);
+  if (dietaryInstructions) {
+    parts.push(dietaryInstructions);
+  }
 
   if (cravings) {
     parts.push(
@@ -284,17 +306,14 @@ function stripPersistedMeta(recipe) {
   return persisted;
 }
 
-function getRemixModeInstruction(mode) {
-  switch (mode) {
-    case 'higher_protein':
-      return 'Remix for HIGHER PROTEIN: increase protein by adjusting quantities or substituting ingredients (e.g. Greek yogurt, extra lean meat, legumes, tofu) while maintaining taste. Update macros accordingly. Add "High Protein" to tags.';
-    case 'lower_calorie':
-      return 'Remix for LOWER CALORIE: swap high-calorie items for lighter alternatives (e.g. reduce oil/cream, use lean proteins, more vegetables). Update calories and macros. Add "Lower Calorie" to tags.';
-    case 'quick_speed':
-      return 'Remix for QUICK SPEED: simplify preparation steps and cooking techniques to reduce total prep + cook time. Add "Under 15 Mins" or similar to tags if applicable.';
-    default:
-      return 'Improve the recipe while keeping it practical.';
-  }
+function resolveHouseholdDietaryPreference(householdMeta) {
+  return normalizeDietaryPreference(householdMeta?.settings?.dietaryPreference);
+}
+
+function appendDietaryToSystemInstruction(baseInstruction, dietaryPreference) {
+  const dietaryInstructions = buildDietaryPromptInstructions(dietaryPreference);
+  if (!dietaryInstructions) return baseInstruction;
+  return `${baseInstruction}\n\n${dietaryInstructions}`;
 }
 
 function resolveHouseholdId(req) {
@@ -332,18 +351,11 @@ export async function generateAILiveMatches(req, res) {
     expiringItems.map((item) => String(item.id ?? item.name ?? '').trim()).filter(Boolean),
   );
 
-  const matchedItems = allItems
-    .map((item) => {
-      const matchStatus = classifyForRecipeMatching(item, expiringIds);
-      if (!matchStatus) return null;
-      return { ...item, _matchStatus: matchStatus };
-    })
-    .filter(Boolean)
-    .filter((item) => item._matchStatus === 'Plentiful' || item._matchStatus === 'ExpiringSoon');
+  const matchedItems = itemsForRecipeAi(allItems, expiringIds);
 
   const matchedFromLibrary = findMatchingLibraryRecipes(
     recipeLibrary,
-    allItems,
+    matchedItems,
     expiringIds,
     { limit: 6 },
   );
@@ -356,7 +368,8 @@ export async function generateAILiveMatches(req, res) {
     .slice(0, 40);
 
   const inventoryList = formatInventoryForPrompt(matchedItems);
-  const filterInstructions = buildFilterInstructions({ cravings, quickTag });
+  const dietaryPreference = resolveHouseholdDietaryPreference(householdMeta);
+  const filterInstructions = buildFilterInstructions({ cravings, quickTag, dietaryPreference });
   const ai = getGenAI();
 
   const response = await ai.models.generateContent({
@@ -367,14 +380,14 @@ export async function generateAILiveMatches(req, res) {
         : '- (none yet)'
     }${filterInstructions}\n\nCreate ${AI_RECIPE_COUNT} new, original recipes: ${PANTRY_FIRST_RECIPE_COUNT} mostly from on-hand inventory (prioritize expiring-soon items), and ${STRETCH_RECIPE_COUNT} creative "shop & cook" ideas that use what's in the fridge as a base but list extra ingredients to buy in missingIngredients.`,
     config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: appendDietaryToSystemInstruction(SYSTEM_INSTRUCTION, dietaryPreference),
       responseMimeType: 'application/json',
       responseSchema: RECIPE_RESPONSE_SCHEMA,
       temperature: 0.65,
     },
   });
 
-  const generatedRecipes = parseAiRecipesResponse(response.text, allItems, expiringIds);
+  const generatedRecipes = parseAiRecipesResponse(response.text, matchedItems, expiringIds);
   const recipesToSave = generatedRecipes.map(stripPersistedMeta);
 
   await upsertHouseholdRecipes(householdId, recipesToSave);
@@ -431,33 +444,24 @@ export async function remixRecipe(req, res) {
     expiringItems.map((item) => String(item.id ?? item.name ?? '').trim()).filter(Boolean),
   );
 
-  const inventoryList = formatInventoryForPrompt(
-    allItems
-      .filter((item) => !isOnShoppingList(item))
-      .map((item) => {
-        const id = String(item.id ?? item.name ?? '').trim();
-        return {
-          ...item,
-          _matchStatus: expiringIds.has(id) ? 'ExpiringSoon' : 'Plentiful',
-        };
-      }),
-  );
-
-  const modeInstruction = getRemixModeInstruction(mode);
+  const matchedItems = itemsForRecipeAi(allItems, expiringIds);
+  const inventoryList = formatInventoryForPrompt(matchedItems);
+  const dietaryPreference = resolveHouseholdDietaryPreference(householdMeta);
+  const modeInstruction = getRemixModeInstruction(mode, dietaryPreference);
   const ai = getGenAI();
 
   const response = await ai.models.generateContent({
     model: MODEL_ID,
     contents: `Original recipe to remix:\n${JSON.stringify(sourceRecipe, null, 2)}\n\nAvailable household inventory:\n${inventoryList}\n\nRemix mode: ${mode}\n${modeInstruction}\n\nPrefer on-hand inventory where possible. List any missing staples in missingIngredients.`,
     config: {
-      systemInstruction: REMIX_SYSTEM_INSTRUCTION,
+      systemInstruction: appendDietaryToSystemInstruction(REMIX_SYSTEM_INSTRUCTION, dietaryPreference),
       responseMimeType: 'application/json',
       responseSchema: REMIX_RESPONSE_SCHEMA,
       temperature: 0.55,
     },
   });
 
-  const remixedRecipe = parseRemixResponse(response.text, allItems, expiringIds, recipeId);
+  const remixedRecipe = parseRemixResponse(response.text, matchedItems, expiringIds, recipeId);
   await upsertHouseholdRecipes(householdId, [stripPersistedMeta(remixedRecipe)]);
 
   res.json({ recipe: remixedRecipe });
@@ -465,7 +469,8 @@ export async function remixRecipe(req, res) {
 
 const CHAT_SYSTEM_INSTRUCTION = `You are Scout, the friendly AI cooking guide inside "What's in the Fridge?" — built for Australian households.
 Help users decide what to cook with their current fridge and pantry items.
-Be practical, concise, and warm. Suggest recipes, substitutions, meal ideas, and ways to use expiring ingredients.
+Be practical, concise, and warm. Suggest recipes, substitutions, meal ideas, and ways to use expiring-soon ingredients.
+Never suggest cooking with expired items — they are not included in the inventory list below.
 Use Australian English and common AU supermarket ingredient names.
 Keep replies short: 2–4 sentences or brief bullet points unless the user asks for detail.
 You may suggest a small shopping list only when staples are missing.
@@ -497,18 +502,14 @@ export async function chatPantryChef(req, res) {
   }
 
   const allItems = await getInventoryForHousehold(householdId);
+  const householdMeta = await getHouseholdMeta(householdId);
+  const dietaryPreference = resolveHouseholdDietaryPreference(householdMeta);
   const expiringItems = findExpiringSoonItems(allItems, EXPIRY_ALERT_DAYS);
   const expiringIds = new Set(
     expiringItems.map((item) => String(item.id ?? item.name ?? '').trim()).filter(Boolean),
   );
 
-  const matchedItems = allItems
-    .map((item) => {
-      const matchStatus = classifyForRecipeMatching(item, expiringIds);
-      if (!matchStatus) return null;
-      return { ...item, _matchStatus: matchStatus };
-    })
-    .filter(Boolean);
+  const matchedItems = itemsForRecipeAi(allItems, expiringIds);
 
   const inventoryList = formatInventoryForPrompt(matchedItems);
   const ai = getGenAI();
@@ -522,7 +523,10 @@ export async function chatPantryChef(req, res) {
     model: MODEL_ID,
     contents,
     config: {
-      systemInstruction: `${CHAT_SYSTEM_INSTRUCTION}\n\nCurrent household inventory:\n${inventoryList}`,
+      systemInstruction: appendDietaryToSystemInstruction(
+        `${CHAT_SYSTEM_INSTRUCTION}\n\nCurrent household inventory:\n${inventoryList}`,
+        dietaryPreference,
+      ),
       temperature: 0.7,
     },
   });

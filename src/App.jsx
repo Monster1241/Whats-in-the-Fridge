@@ -7,6 +7,7 @@ import { VerifyEmailScreen } from './components/VerifyEmailScreen.jsx';
 import { useAppData } from './hooks/useAppData.js';
 import { useAuth } from './hooks/useAuth.js';
 import { PushNotificationProvider } from './context/PushNotificationContext.jsx';
+import { ExpiryNotificationSync } from './components/ExpiryNotificationSync.jsx';
 import { checkApiHealth } from './api.js';
 import { readStoredPostcode } from './inventory/postcodeStorage.js';
 import { isOnShoppingList, STATUS } from './inventory/constants.js';
@@ -291,6 +292,7 @@ export default function App() {
 
   return (
     <PushNotificationProvider enabled={auth.canUseApp}>
+    <ExpiryNotificationSync items={items} enabled={!loading} />
     <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
       <main className="app-main flex-1 overflow-y-auto px-4 sm:px-5">
         <div key={activeTab} className={flowEnterClass(tabFlowDir, 'animate-page')}>
@@ -333,6 +335,7 @@ export default function App() {
               updateItems={updateItems}
               replaceItemsFromServer={replaceItemsFromServer}
               savedRecipes={savedRecipes}
+              dietaryPreference={settings.dietaryPreference}
             />
           </Suspense>
         )}

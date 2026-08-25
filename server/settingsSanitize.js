@@ -1,6 +1,9 @@
+import { normalizeDietaryPreference } from '../src/recipes/dietaryPreferences.js';
+
 export const DEFAULT_SETTINGS = {
   theme: 'light',
   user: { name: '', email: '' },
+  dietaryPreference: 'none',
 };
 
 const MAX_NAME_LEN = 80;
@@ -8,7 +11,7 @@ const MAX_EMAIL_LEN = 254;
 
 /**
  * @param {unknown} raw
- * @returns {{ theme: 'light'|'dark', user: { name: string, email: string } }}
+ * @returns {{ theme: 'light'|'dark', user: { name: string, email: string }, dietaryPreference: 'none'|'vegetarian'|'vegan' }}
  */
 export function sanitizeSettings(raw) {
   const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -22,5 +25,6 @@ export function sanitizeSettings(raw) {
       name: String(user.name ?? '').trim().slice(0, MAX_NAME_LEN),
       email: String(user.email ?? '').trim().slice(0, MAX_EMAIL_LEN),
     },
+    dietaryPreference: normalizeDietaryPreference(source.dietaryPreference),
   };
 }

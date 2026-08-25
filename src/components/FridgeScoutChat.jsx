@@ -19,6 +19,11 @@ import {
   FRIDGE_SCOUT_TAGLINE,
   FRIDGE_SCOUT_WELCOME,
 } from '../recipes/kitchenAiBranding.js';
+import {
+  getDietaryPreferenceModeLabel,
+  isDietaryPreferenceActive,
+  normalizeDietaryPreference,
+} from '../recipes/dietaryPreferences.js';
 
 function toUserFacingChatError(message) {
   const text = String(message ?? '').trim();
@@ -79,7 +84,7 @@ function TypingIndicator() {
 }
 
 export const FridgeScoutChat = forwardRef(function FridgeScoutChat(
-  { expanded = false, fullscreen = false },
+  { expanded = false, fullscreen = false, dietaryPreference = 'none' },
   ref,
 ) {
   const [messages, setMessages] = useState(loadCachedMessages);
@@ -230,6 +235,9 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat(
   }
 
   const showWelcome = messages.length === 0;
+  const activeDietaryPreference = normalizeDietaryPreference(dietaryPreference);
+  const dietaryModeLabel = getDietaryPreferenceModeLabel(activeDietaryPreference);
+  const showDietaryBadge = isDietaryPreferenceActive(activeDietaryPreference);
 
   return (
     <div
@@ -243,6 +251,12 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat(
           <div className="min-w-0">
             <p className="fridge-scout-messenger__title">{FRIDGE_SCOUT_NAME}</p>
             <p className="fridge-scout-messenger__subtitle">{FRIDGE_SCOUT_TAGLINE}</p>
+            {showDietaryBadge && (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50/90 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200">
+                <Sparkles className="h-2.5 w-2.5" aria-hidden />
+                {dietaryModeLabel}
+              </p>
+            )}
           </div>
         </div>
         <div className="relative" ref={menuRef}>

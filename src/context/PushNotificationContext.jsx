@@ -40,7 +40,21 @@ export function PushNotificationProvider({ enabled = false, children }) {
   const vapidConfigured = isNative || Boolean(getFirebaseVapidKey());
   const permission = isNative ? 'default' : getWebNotificationPermission();
 
-  const dismissBanner = useCallback(() => setBanner(null), []);
+  const dismissBanner = useCallback(() => {
+    setBanner((current) => {
+      current?.onAcknowledge?.();
+      return null;
+    });
+  }, []);
+
+  const showLocalBanner = useCallback(({ title, body, onAcknowledge }) => {
+    setBanner({
+      id: `${Date.now()}-${Math.random()}`,
+      title,
+      body,
+      onAcknowledge,
+    });
+  }, []);
 
   const syncToken = useCallback(async ({ prompt = false } = {}) => {
     if (syncInFlight.current) return;
@@ -147,14 +161,15 @@ export function PushNotificationProvider({ enabled = false, children }) {
       isNative,
       enablePush,
       dismissBanner,
+      showLocalBanner,
     }),
-    [status, error, permission, vapidConfigured, isNative, enablePush, dismissBanner],
+    [status, error, permission, vapidConfigured, isNative, enablePush, dismissBanner, showLocalBanner],
   );
 
   return (
     <PushNotificationContext.Provider value={value}>
       {children}
-      {enabled && banner ? (
+      {banner ? (
         <PushNotificationBanner
           title={banner.title}
           body={banner.body}

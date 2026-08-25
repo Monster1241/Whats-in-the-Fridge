@@ -12,6 +12,7 @@ describe('sanitizeSettings', () => {
     ).toEqual({
       theme: 'dark',
       user: { name: 'Ada', email: 'ada@example.com' },
+      dietaryPreference: 'none',
     });
   });
 
@@ -19,10 +20,12 @@ describe('sanitizeSettings', () => {
     expect(sanitizeSettings(null)).toEqual({
       theme: 'light',
       user: { name: '', email: '' },
+      dietaryPreference: 'none',
     });
     expect(sanitizeSettings({ theme: 'neon', user: 'nope' })).toEqual({
       theme: 'light',
       user: { name: '', email: '' },
+      dietaryPreference: 'none',
     });
   });
 
@@ -33,5 +36,10 @@ describe('sanitizeSettings', () => {
     });
     expect(out.user.name).toHaveLength(80);
     expect(out.user.email.length).toBeLessThanOrEqual(254);
+  });
+
+  it('sanitizes dietary preference', () => {
+    expect(sanitizeSettings({ dietaryPreference: 'vegan' }).dietaryPreference).toBe('vegan');
+    expect(sanitizeSettings({ dietaryPreference: 'invalid' }).dietaryPreference).toBe('none');
   });
 });

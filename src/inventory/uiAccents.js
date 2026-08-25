@@ -25,6 +25,11 @@ export const STATUS_META = {
     badge: 'bg-amber-500 text-slate-900',
     section: 'expiring',
   },
+  [STATUS.EXPIRED]: {
+    label: 'Expired',
+    badge: 'bg-rose-700 text-white',
+    section: 'expired',
+  },
   [STATUS.ALMOST_FINISHED]: {
     label: 'Almost Finished',
     badge: 'bg-orange-500 text-white',

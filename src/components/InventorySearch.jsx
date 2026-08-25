@@ -16,6 +16,7 @@ import { inventorySearchKey, searchInventoryItems } from '../inventory/searchInv
 const STATUS_LABELS = {
   [STATUS.FRESH]: { label: 'In stock', className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300' },
   [STATUS.EXPIRING]: { label: 'Expiring soon', className: 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200' },
+  [STATUS.EXPIRED]: { label: 'Expired', className: 'bg-rose-100 text-rose-900 dark:bg-rose-950/60 dark:text-rose-200' },
   [STATUS.ALMOST_FINISHED]: { label: 'Running low', className: 'bg-orange-100 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200' },
   [STATUS.OUT]: { label: 'Need to buy', className: 'bg-sky-100 text-sky-900 dark:bg-sky-950/60 dark:text-sky-200' },
 };
