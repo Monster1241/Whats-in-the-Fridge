@@ -1263,7 +1263,7 @@ export function SettingsView({
           icon={Headphones}
           iconClassName="bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
           title="Support chat"
-          subtitle="Message the team — we reply when we're online"
+          subtitle="Get help from the team in this chat"
           onClick={() => setInfoScreen('support')}
         />
         <SettingsNavRow

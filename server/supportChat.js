@@ -22,7 +22,7 @@ export const SUPPORT_CATEGORIES = /** @type {const} */ ([
 export const SUPPORT_SEVERITIES = /** @type {const} */ (['low', 'medium', 'high']);
 
 const WELCOME_MESSAGE =
-  "Message the Fridge support team here — lost items, two accounts, login issues, deals, or bugs. We'll reply when we're available; add as much detail as you can.";
+  "Welcome to Fridge support. Tell us how we can help — include what you were doing and any error messages if you have them. We read every message and reply here as soon as we can.";
 
 function getDb() {
   const db = globalThis._mongo?.db;

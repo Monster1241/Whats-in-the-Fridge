@@ -78,8 +78,8 @@ export function SupportChatPanel() {
   return (
     <div className="flex min-h-[24rem] flex-col">
       <p className="text-muted mb-3 text-sm leading-relaxed">
-        Message the support team directly. We&apos;re not always online — leave details and we&apos;ll
-        reply here when we can.
+        We&apos;re here to help. Send a message below — the team will reply in this chat when
+        available.
       </p>
 
       {error ? (
