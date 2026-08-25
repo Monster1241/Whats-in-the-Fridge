@@ -30,6 +30,30 @@ export const RECIPE_TWEAK_MODES = {
   },
 };
 
+function formatRecipeContext(recipe) {
+  const title = String(recipe?.title ?? 'Untitled recipe').trim();
+  const ingredients = Array.isArray(recipe?.ingredients)
+    ? recipe.ingredients.map((entry) => String(entry).trim()).filter(Boolean).join(', ')
+    : '';
+  const instructions = Array.isArray(recipe?.instructions)
+    ? recipe.instructions
+        .map((step, index) => `${index + 1}. ${String(step).trim()}`)
+        .filter(Boolean)
+        .join('\n')
+    : '';
+
+  const meta = [
+    recipe?.prepTime ? `Prep: ${recipe.prepTime}` : '',
+    recipe?.cookTime ? `Cook: ${recipe.cookTime}` : '',
+    recipe?.calories ? `~${recipe.calories} cal` : '',
+    recipe?.macros?.protein ? `Protein: ${recipe.macros.protein}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return { title, ingredients, instructions, meta };
+}
+
 /**
  * @param {import('../recipes/recipeUtils.js').Recipe | Record<string, unknown>} recipe
  * @param {'higher_protein' | 'lower_calorie'} mode
@@ -38,25 +62,7 @@ export function buildRecipeTweakPrompt(recipe, mode) {
   const tweak = RECIPE_TWEAK_MODES[mode];
   if (!tweak || !recipe) return '';
 
-  const title = String(recipe.title ?? 'Untitled recipe').trim();
-  const ingredients = Array.isArray(recipe.ingredients)
-    ? recipe.ingredients.map((entry) => String(entry).trim()).filter(Boolean).join(', ')
-    : '';
-  const instructions = Array.isArray(recipe.instructions)
-    ? recipe.instructions
-        .map((step, index) => `${index + 1}. ${String(step).trim()}`)
-        .filter(Boolean)
-        .join('\n')
-    : '';
-
-  const meta = [
-    recipe.prepTime ? `Prep: ${recipe.prepTime}` : '',
-    recipe.cookTime ? `Cook: ${recipe.cookTime}` : '',
-    recipe.calories ? `~${recipe.calories} cal` : '',
-    recipe.macros?.protein ? `Protein: ${recipe.macros.protein}` : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const { title, ingredients, instructions, meta } = formatRecipeContext(recipe);
 
   return `Please tweak this recipe to ${tweak.instruction}.
 
@@ -76,4 +82,30 @@ export function buildRecipeTweakSummary(recipe, mode) {
   const title = String(recipe?.title ?? 'this recipe').trim();
   if (!tweak) return title;
   return `${tweak.label}: ${title}`;
+}
+
+/**
+ * Open Scout with this recipe as context (same flow as tweak, for free-form chat).
+ * @param {import('../recipes/recipeUtils.js').Recipe | Record<string, unknown>} recipe
+ */
+export function buildRecipeChatPrompt(recipe) {
+  if (!recipe) return '';
+  const { title, ingredients, instructions, meta } = formatRecipeContext(recipe);
+
+  return `I want to chat about this recipe. Help me with cooking tips, ingredient swaps, timing, or anything I'm unsure about. Prefer what I already have in my fridge when you suggest changes.
+
+**${title}**
+${meta ? `${meta}\n` : ''}
+Ingredients: ${ingredients || '(not listed)'}
+
+Steps:
+${instructions || '(not listed)'}
+
+Give a short helpful overview, then invite my follow-up questions.`;
+}
+
+/** Short label shown in chat bubbles when opening a recipe in Scout. */
+export function buildRecipeChatSummary(recipe) {
+  const title = String(recipe?.title ?? 'this recipe').trim();
+  return `Chat: ${title}`;
 }

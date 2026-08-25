@@ -4,8 +4,11 @@ import {
   ChefHat,
   ChevronDown,
   ChevronUp,
+  Clock,
   ExternalLink,
+  Flame,
   Loader2,
+  MessageCircle,
   Search,
   ShoppingCart,
   Sparkles,
@@ -15,6 +18,8 @@ import { fetchAiRecipeMatches, addRecipeIngredientsToShoppingList } from '../api
 import { FridgeScoutChat } from './FridgeScoutChat.jsx';
 import { MetaIcon } from './MetaIcon.jsx';
 import {
+  buildRecipeChatPrompt,
+  buildRecipeChatSummary,
   buildRecipeTweakPrompt,
   buildRecipeTweakSummary,
   FRIDGE_SCOUT_PERSONA,
@@ -22,7 +27,6 @@ import {
 } from '../recipes/kitchenAiBranding.js';
 import { ITEM_TYPE, STATUS } from '../inventory/constants.js';
 import { isExpired } from '../inventory/expiryDisplay.js';
-import { findFoodItemForIngredient } from '../recipes/ingredientMatching.js';
 import {
   getDietaryPreferenceModeLabel,
   isDietaryPreferenceActive,
@@ -140,20 +144,20 @@ function CollapsibleInstructions({ recipe }) {
 
   if (stepCount === 0) {
     return (
-      <p className="text-muted mb-4 text-xs italic">No cooking instructions available for this recipe.</p>
+      <p className="text-muted text-xs italic">No cooking instructions available for this recipe.</p>
     );
   }
 
   return (
-    <div className="surface-inset mb-4 p-3">
+    <div className="rounded-xl bg-slate-50/80 p-3 dark:bg-zinc-900/50">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         className="flex w-full items-center justify-between gap-2 text-left"
         aria-expanded={open}
       >
-        <span className="text-muted text-xs font-semibold uppercase tracking-wide">
-          Cooking instructions ({stepCount} steps)
+        <span className="text-heading text-xs font-semibold">
+          Instructions · {stepCount} step{stepCount === 1 ? '' : 's'}
         </span>
         {open ? (
           <ChevronUp className="h-4 w-4 text-slate-500" aria-hidden />
@@ -162,14 +166,14 @@ function CollapsibleInstructions({ recipe }) {
         )}
       </button>
       {open && (
-        <ol className="mt-3 list-decimal space-y-2 border-t border-slate-200 pt-3 pl-5 text-sm leading-relaxed text-slate-700 dark:border-slate-600 dark:text-slate-300">
+        <ol className="mt-3 list-decimal space-y-2.5 border-t border-slate-200/80 pt-3 pl-5 text-sm leading-relaxed text-slate-700 dark:border-slate-700 dark:text-slate-300">
           {steps.map((step, index) => (
             <li key={`${recipe.id}-step-${index}`}>{step}</li>
           ))}
         </ol>
       )}
       {!open && (
-        <p className="text-muted mt-2 text-xs">Tap to expand step-by-step directions.</p>
+        <p className="text-muted mt-1.5 text-xs">Tap to expand step-by-step directions.</p>
       )}
     </div>
   );
@@ -189,7 +193,7 @@ function AiRecipeMetaBadges({ recipe }) {
   }
 
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-1.5">
       {recipe.isAiGenerated && (
         <span className="rounded-full bg-teal-100 px-2.5 py-1 text-[11px] font-semibold text-teal-900 ring-1 ring-teal-300 dark:bg-teal-950/60 dark:text-teal-200 dark:ring-teal-700/80">
           AI generated
@@ -220,228 +224,269 @@ function AiRecipeMetaBadges({ recipe }) {
 function RecipeCard({
   recipe,
   analysis,
-  isSaved,
-  onToggleSave,
-  onMarkCooked,
   onAddNeedToShoppingList,
   onAskScoutToTweak,
+  onAskScoutToChat,
   scoutTweakingId,
   scoutTweakingMode,
 }) {
   const [showAddConfirm, setShowAddConfirm] = useState(false);
+  const scoutBusy = scoutTweakingId === recipe.id;
+  const chatActive = scoutBusy && scoutTweakingMode === 'chat';
+  const safeAnalysis = analysis ?? { canCook: false, have: [], need: [] };
+
+  const metaBits = [
+    recipe.cuisine,
+    recipe.category,
+    recipe.prepTime ? { icon: Clock, text: recipe.prepTime } : null,
+    recipe.cookTime ? { icon: Flame, text: `Cook ${recipe.cookTime}` } : null,
+    recipe.calories ? `~${recipe.calories} cal` : null,
+    recipe.macros?.protein ? `Protein ${recipe.macros.protein}` : null,
+  ].filter(Boolean);
 
   return (
-    <li className="surface-card p-4 shadow-lg">
-      {recipe.imageUrl && (
-        <img
-          src={recipe.imageUrl}
-          alt=""
-          className="mb-3 h-36 w-full rounded-xl object-cover"
-          loading="lazy"
-        />
-      )}
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-heading text-lg font-bold">{recipe.title}</h2>
-          <p className="text-muted text-xs font-medium">
-            {recipe.cuisine ? `${recipe.cuisine} · ` : ''}
-            {recipe.category ? `${recipe.category} · ` : ''}
-            Prep: {recipe.prepTime}
-            {recipe.cookTime ? ` · Cook: ${recipe.cookTime}` : ''}
-            {recipe.calories ? ` · ~${recipe.calories} cal` : ''}
-            {recipe.macros?.protein ? ` · Protein: ${recipe.macros.protein}` : ''}
-          </p>
-          <AiRecipeMetaBadges recipe={recipe} />
-          {recipe.source === 'themealdb' && recipe.sourceUrl && (
-            <a
-              href={recipe.sourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-violet-700 hover:underline dark:text-violet-300"
-            >
-              <ExternalLink className="h-3 w-3" aria-hidden />
-              View on TheMealDB
-            </a>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {analysis.canCook && (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300">
-              Ready!
+    <li className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-emerald-500/20 hover:shadow-lg dark:border-white/[0.08] dark:bg-dm-card dark:hover:border-emerald-500/25">
+      {recipe.imageUrl ? (
+        <div className="relative h-44 w-full overflow-hidden bg-slate-100 dark:bg-zinc-900">
+          <img
+            src={recipe.imageUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 p-3.5">
+            <h2 className="text-[1.05rem] font-bold leading-snug tracking-tight text-white drop-shadow-sm">
+              {recipe.title}
+            </h2>
+          </div>
+          {safeAnalysis.canCook && (
+            <span className="absolute right-3 top-3 rounded-full bg-emerald-500/95 px-2.5 py-1 text-[11px] font-bold tracking-wide text-white shadow-sm">
+              Ready to cook
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => onToggleSave(recipe)}
-            className={`flex h-10 w-10 items-center justify-center rounded-xl border transition active:scale-95 ${
-              isSaved
-                ? 'border-violet-300 bg-violet-100 text-violet-700 dark:border-violet-700 dark:bg-violet-950/60 dark:text-violet-300'
-                : 'border-black/[0.08] bg-lm-inset text-slate-500 hover:border-violet-300 hover:text-violet-600 dark:border-white/10 dark:bg-dm-raised dark:hover:text-violet-400'
-            }`}
-            aria-label={isSaved ? 'Remove from saved recipes' : 'Save recipe'}
-            aria-pressed={isSaved}
-          >
-            <Bookmark className={`h-5 w-5 ${isSaved ? 'fill-current' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {analysis.have.length > 0 ? (
-        <div className="mb-3">
-          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
-            What you have
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {analysis.have.map((ing) => (
-              <span
-                key={ing.name}
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  ing.status === STATUS.EXPIRED
-                    ? 'bg-rose-100 text-rose-900 ring-1 ring-rose-300 dark:bg-rose-950/70 dark:text-rose-200 dark:ring-rose-700'
-                    : ing.status === STATUS.EXPIRING
-                      ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-700'
-                      : 'bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300 dark:bg-emerald-950/70 dark:text-emerald-200 dark:ring-emerald-700'
-                }`}
-              >
-                {ing.name}
-              </span>
-            ))}
-          </div>
         </div>
       ) : (
-        <p className="text-muted mb-3 text-xs">
-          Add matching ingredients in Fridge to see what you already have for this recipe.
-        </p>
-      )}
-
-      {analysis.need.length > 0 && (
-        <div className="mb-4">
-          <p className="text-muted mb-1.5 text-xs font-semibold uppercase tracking-wide">
-            What you need
-          </p>
-          <ul className="mb-3 flex flex-wrap gap-1.5">
-            {analysis.need.map((name) => (
-              <li
-                key={name}
-                className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-300 dark:bg-rose-950/80 dark:text-rose-200 dark:ring-rose-700"
-              >
-                {name}
-              </li>
-            ))}
-          </ul>
-          {showAddConfirm ? (
-            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950/40">
-              <p className="text-heading text-sm font-semibold">Add to shopping list?</p>
-              <p className="text-muted mt-1 text-xs leading-relaxed">
-                Add {analysis.need.length} missing ingredient
-                {analysis.need.length === 1 ? '' : 's'} from &ldquo;{recipe.title}&rdquo; to your
-                household shopping list.
-              </p>
-              <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAddConfirm(false)}
-                  className="flex-1 rounded-lg border border-black/[0.08] bg-lm-raised py-2.5 text-xs font-semibold text-slate-700 dark:border-white/10 dark:bg-dm-raised dark:text-zinc-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onAddNeedToShoppingList(analysis.need, recipe);
-                    setShowAddConfirm(false);
-                  }}
-                  className="flex-1 rounded-lg bg-sky-600 py-2.5 text-xs font-semibold text-white active:scale-[0.98]"
-                >
-                  Add all
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowAddConfirm(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 py-2.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 active:scale-[0.98] dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-950"
-            >
-              <ShoppingCart className="h-4 w-4" aria-hidden />
-              Add all to shopping list
-            </button>
-          )}
+        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-50 via-teal-50 to-sky-50 px-4 pb-3 pt-4 dark:from-emerald-950/40 dark:via-teal-950/30 dark:to-sky-950/40">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-heading text-[1.05rem] font-bold leading-snug tracking-tight">
+              {recipe.title}
+            </h2>
+            {safeAnalysis.canCook && (
+              <span className="shrink-0 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-500/25 dark:bg-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/20">
+                Ready
+              </span>
+            )}
+          </div>
         </div>
       )}
 
-      <CollapsibleInstructions recipe={recipe} />
-
-      {onAskScoutToTweak && (
-        <div className="mb-3">
-          <p className="text-muted mb-2 text-[10px] font-bold uppercase tracking-wide">
-            Tweak with {FRIDGE_SCOUT_PERSONA}
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            {(['higher_protein', 'lower_calorie']).map((mode) => {
-              const tweak = RECIPE_TWEAK_MODES[mode];
-              const isActive = scoutTweakingId === recipe.id && scoutTweakingMode === mode;
-              const isBusy = scoutTweakingId === recipe.id;
+      <div className="space-y-3.5 p-4">
+        {metaBits.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {metaBits.map((bit, index) => {
+              if (typeof bit === 'string') {
+                return (
+                  <span
+                    key={`${bit}-${index}`}
+                    className="rounded-full bg-slate-100/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:bg-zinc-800 dark:text-slate-200"
+                  >
+                    {bit}
+                  </span>
+                );
+              }
+              if (bit?.icon) {
+                const Icon = bit.icon;
+                return (
+                  <span
+                    key={`${bit.text}-${index}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-100/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:bg-zinc-800 dark:text-slate-200"
+                  >
+                    <Icon className="h-3 w-3 opacity-70" aria-hidden />
+                    {bit.text}
+                  </span>
+                );
+              }
               return (
-                <button
-                  key={mode}
-                  type="button"
-                  disabled={isBusy}
-                  onClick={() => onAskScoutToTweak(recipe, mode)}
-                  title={`Ask Scout to ${tweak.label.toLowerCase()} for this recipe`}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 ${
-                    mode === 'higher_protein'
-                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-950/60'
-                      : 'border-lime-200 bg-lime-50 text-lime-900 hover:bg-lime-100 dark:border-lime-800/60 dark:bg-lime-950/40 dark:text-lime-100 dark:hover:bg-lime-950/60'
-                  }`}
+                <span
+                  key={`${String(bit)}-${index}`}
+                  className="rounded-full bg-slate-100/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:bg-zinc-800 dark:text-slate-200"
                 >
-                  {isActive ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                      Asking Scout…
-                    </>
-                  ) : (
-                    <>
-                      <span className="inline-flex items-center gap-1">
-                        <MetaIcon name={tweak.label} className="h-3.5 w-3.5" /> {tweak.label}
-                      </span>
-                    </>
-                  )}
-                </button>
+                  {bit}
+                </span>
               );
             })}
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        <button
-          type="button"
-          onClick={() => onMarkCooked(recipe)}
-          className="surface-inset flex flex-1 items-center justify-center gap-2 py-3 text-sm font-semibold text-slate-800 transition hover:border-emerald-500 hover:text-emerald-700 active:scale-[0.98] dark:text-slate-200 dark:hover:border-emerald-600 dark:hover:text-emerald-400"
-        >
-          <ChefHat className="h-4 w-4" aria-hidden />
-          Cooked It!
-        </button>
-        <button
-          type="button"
-          onClick={() => onToggleSave(recipe)}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition active:scale-[0.98] ${
-            isSaved
-              ? 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-700 dark:bg-violet-950/50 dark:text-violet-200'
-              : 'border-slate-200 text-slate-700 hover:border-violet-300 hover:text-violet-700 dark:border-slate-600 dark:text-slate-300 dark:hover:text-violet-400'
-          }`}
-        >
-          <Bookmark className={`h-4 w-4 ${isSaved ? 'fill-current' : ''}`} />
-          {isSaved ? 'Saved' : 'Save recipe'}
-        </button>
+        <AiRecipeMetaBadges recipe={recipe} />
+
+        {recipe.source === 'themealdb' && recipe.sourceUrl && (
+          <a
+            href={recipe.sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-700 hover:underline dark:text-violet-300"
+          >
+            <ExternalLink className="h-3 w-3" aria-hidden />
+            View on TheMealDB
+          </a>
+        )}
+
+        {safeAnalysis.have.length > 0 ? (
+          <div>
+            <p className="text-muted mb-1.5 text-[11px] font-semibold uppercase tracking-wide">
+              In your fridge
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {safeAnalysis.have.map((ing) => (
+                <span
+                  key={ing.name}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    ing.status === STATUS.EXPIRED
+                      ? 'bg-rose-100 text-rose-900 ring-1 ring-rose-200 dark:bg-rose-950/70 dark:text-rose-200 dark:ring-rose-800'
+                      : ing.status === STATUS.EXPIRING
+                        ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-200 dark:bg-amber-950/70 dark:text-amber-200 dark:ring-amber-800'
+                        : 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-200 dark:ring-emerald-800'
+                  }`}
+                >
+                  {ing.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-muted text-xs leading-relaxed">
+            Add matching ingredients in Fridge to see what you already have for this recipe.
+          </p>
+        )}
+
+        {safeAnalysis.need.length > 0 && (
+          <div>
+            <p className="text-muted mb-1.5 text-[11px] font-semibold uppercase tracking-wide">
+              Still need
+            </p>
+            <ul className="mb-2.5 flex flex-wrap gap-1.5">
+              {safeAnalysis.need.map((name) => (
+                <li
+                  key={name}
+                  className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-800 ring-1 ring-rose-200 dark:bg-rose-950/70 dark:text-rose-200 dark:ring-rose-800"
+                >
+                  {name}
+                </li>
+              ))}
+            </ul>
+            {showAddConfirm ? (
+              <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-950/40">
+                <p className="text-heading text-sm font-semibold">Add to shopping list?</p>
+                <p className="text-muted mt-1 text-xs leading-relaxed">
+                  Add {safeAnalysis.need.length} missing ingredient
+                  {safeAnalysis.need.length === 1 ? '' : 's'} from &ldquo;{recipe.title}&rdquo;.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddConfirm(false)}
+                    className="flex-1 rounded-lg border border-black/[0.08] bg-white py-2.5 text-xs font-semibold text-slate-700 dark:border-white/10 dark:bg-dm-raised dark:text-zinc-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onAddNeedToShoppingList(safeAnalysis.need, recipe);
+                      setShowAddConfirm(false);
+                    }}
+                    className="flex-1 rounded-lg bg-sky-600 py-2.5 text-xs font-semibold text-white active:scale-[0.98]"
+                  >
+                    Add all
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAddConfirm(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200/80 bg-sky-50 py-2.5 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 active:scale-[0.98] dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200 dark:hover:bg-sky-950/60"
+              >
+                <ShoppingCart className="h-4 w-4" aria-hidden />
+                Add missing to shopping list
+              </button>
+            )}
+          </div>
+        )}
+
+        <CollapsibleInstructions recipe={recipe} />
+
+        {(onAskScoutToTweak || onAskScoutToChat) && (
+          <div className="border-t border-slate-100 pt-3.5 dark:border-white/[0.06]">
+            <p className="text-muted mb-2 text-[11px] font-semibold uppercase tracking-wide">
+              Ask {FRIDGE_SCOUT_PERSONA}
+            </p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {onAskScoutToChat ? (
+                <button
+                  type="button"
+                  disabled={scoutBusy}
+                  onClick={() => onAskScoutToChat(recipe)}
+                  title={`Open this recipe with ${FRIDGE_SCOUT_PERSONA} in chat`}
+                  className="flex items-center justify-center gap-1.5 rounded-xl border border-teal-200 bg-teal-50 px-2 py-2.5 text-xs font-semibold text-teal-900 transition hover:bg-teal-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 dark:border-teal-800/60 dark:bg-teal-950/40 dark:text-teal-100 dark:hover:bg-teal-950/60"
+                >
+                  {chatActive ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      Opening…
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle className="h-3.5 w-3.5" aria-hidden />
+                      Chat
+                    </>
+                  )}
+                </button>
+              ) : null}
+              {onAskScoutToTweak
+                ? (['higher_protein', 'lower_calorie']).map((mode) => {
+                    const tweak = RECIPE_TWEAK_MODES[mode];
+                    const isActive = scoutBusy && scoutTweakingMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        disabled={scoutBusy}
+                        onClick={() => onAskScoutToTweak(recipe, mode)}
+                        title={`Ask Scout to ${tweak.label.toLowerCase()} for this recipe`}
+                        className={`flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 ${
+                          mode === 'higher_protein'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100'
+                            : 'border-lime-200 bg-lime-50 text-lime-900 hover:bg-lime-100 dark:border-lime-800/60 dark:bg-lime-950/40 dark:text-lime-100'
+                        }`}
+                      >
+                        {isActive ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                            Asking…
+                          </>
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            <MetaIcon name={tweak.label} className="h-3.5 w-3.5" />
+                            {tweak.label}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })
+                : null}
+            </div>
+          </div>
+        )}
       </div>
     </li>
   );
 }
 
 export function RecipesView({ items, updateItems, replaceItemsFromServer, savedRecipes, dietaryPreference }) {
-  const { savedIds, isSaved, toggleSave, recipeLibrary, rememberRecipe, mergeRecipeLibrary } =
+  const { savedIds, recipeLibrary, mergeRecipeLibrary } =
     savedRecipes;
   const [recipeView, setRecipeView] = useState(RECIPE_VIEW.MATCHED);
   const [searchQuery, setSearchQuery] = useState('');
@@ -569,6 +614,26 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
 
     setScoutTweakingId(recipe.id);
     setScoutTweakingMode(mode);
+    setRecipeView(RECIPE_VIEW.SCOUT);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(async () => {
+        await scoutChatRef.current?.sendMessage(prompt, { summary });
+        setScoutTweakingId(null);
+        setScoutTweakingMode('');
+        scoutChatRef.current?.focus();
+      });
+    });
+  }, []);
+
+  const handleAskScoutToChat = useCallback(async (recipe) => {
+    if (!recipe?.id) return;
+    const prompt = buildRecipeChatPrompt(recipe);
+    if (!prompt) return;
+    const summary = buildRecipeChatSummary(recipe);
+
+    setScoutTweakingId(recipe.id);
+    setScoutTweakingMode('chat');
     setRecipeView(RECIPE_VIEW.SCOUT);
 
     requestAnimationFrame(() => {
@@ -727,32 +792,6 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
       setSearchLoading(false);
     }
   }, []);
-
-  const handleToggleSave = useCallback(
-    (recipe) => {
-      if (recipe.source === 'themealdb' || recipe.isAiGenerated) {
-        rememberRecipe(recipe);
-      }
-      toggleSave(recipe.id);
-    },
-    [rememberRecipe, toggleSave],
-  );
-
-  const markCooked = (recipe) => {
-    updateItems((prev) => {
-      const next = [...prev];
-      for (const ingredient of recipe.ingredients) {
-        const match = findFoodItemForIngredient(ingredient, next);
-        if (match) {
-          const idx = next.findIndex((item) => item.id === match.id);
-          if (idx >= 0) {
-            next[idx] = { ...next[idx], status: STATUS.OUT };
-          }
-        }
-      }
-      return next;
-    });
-  };
 
   const addNeededToShoppingList = async (neededIngredients, recipe) => {
     if (!neededIngredients?.length) return;
@@ -1079,11 +1118,9 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
                   key={recipe.id}
                   recipe={recipe}
                   analysis={analysis}
-                  isSaved={isSaved(recipe.id)}
-                  onToggleSave={handleToggleSave}
-                  onMarkCooked={markCooked}
                   onAddNeedToShoppingList={addNeededToShoppingList}
                   onAskScoutToTweak={handleAskScoutToTweak}
+                  onAskScoutToChat={handleAskScoutToChat}
                   scoutTweakingId={scoutTweakingId}
                   scoutTweakingMode={scoutTweakingMode}
                 />
@@ -1110,11 +1147,9 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
                   key={recipe.id}
                   recipe={recipe}
                   analysis={analysis}
-                  isSaved={isSaved(recipe.id)}
-                  onToggleSave={handleToggleSave}
-                  onMarkCooked={markCooked}
                   onAddNeedToShoppingList={addNeededToShoppingList}
                   onAskScoutToTweak={handleAskScoutToTweak}
+                  onAskScoutToChat={handleAskScoutToChat}
                   scoutTweakingId={scoutTweakingId}
                   scoutTweakingMode={scoutTweakingMode}
                 />
@@ -1176,7 +1211,7 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
           }
           description={
             recipeView === RECIPE_VIEW.SAVED
-              ? 'Tap the bookmark on any recipe to save favourites for quick access.'
+              ? 'Recipes you saved earlier will show up here for quick access.'
               : recipeView === RECIPE_VIEW.SEARCH
                 ? searchQuery.trim().length < 2
                   ? 'Search by dish name, cuisine, or ingredient — or tap a pantry item above.'
@@ -1196,11 +1231,9 @@ export function RecipesView({ items, updateItems, replaceItemsFromServer, savedR
                 key={recipe.id}
                 recipe={recipe}
                 analysis={analysis}
-                isSaved={isSaved(recipe.id)}
-                onToggleSave={handleToggleSave}
-                onMarkCooked={markCooked}
                 onAddNeedToShoppingList={addNeededToShoppingList}
                 onAskScoutToTweak={handleAskScoutToTweak}
+                onAskScoutToChat={handleAskScoutToChat}
                 scoutTweakingId={scoutTweakingId}
                 scoutTweakingMode={scoutTweakingMode}
               />
