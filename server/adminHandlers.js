@@ -28,6 +28,13 @@ import {
   deleteAdminDeal,
   updateAdminDeal,
 } from './adminDealCrud.js';
+import {
+  appendSupportMessage,
+  getSupportThreadById,
+  listSupportThreads,
+  markSupportThreadRead,
+  updateSupportThread,
+} from './supportChat.js';
 
 export async function handleAdminMe(req, res) {
   try {
@@ -315,5 +322,82 @@ export async function handleAdminUpdateFeedback(req, res) {
     console.error('PATCH /api/admin/feedback/:id', err);
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleAdminListSupportChats(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const status = String(req.query?.status ?? '').trim() || undefined;
+    const threads = await listSupportThreads({ status });
+    res.status(200).json({ ok: true, count: threads.length, threads });
+  } catch (err) {
+    console.error('GET /api/admin/support-chats', err);
+    const friendly = toFriendlyError(err);
+    res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleAdminGetSupportChat(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const id = String(req.params?.id ?? '').trim();
+    const thread = await getSupportThreadById(id);
+    const marked = await markSupportThreadRead(id, 'admin');
+    res.status(200).json({ ok: true, thread: marked });
+  } catch (err) {
+    console.error('GET /api/admin/support-chats/:id', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
+  }
+}
+
+export async function handleAdminReplySupportChat(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const id = String(req.params?.id ?? '').trim();
+    const body = String(req.body?.message ?? req.body?.body ?? '').trim();
+    if (!body) {
+      res.status(400).json({ error: 'Message is required.' });
+      return;
+    }
+
+    await getSupportThreadById(id);
+    const thread = await appendSupportMessage(id, {
+      role: 'admin',
+      body,
+      status: 'in_progress',
+      bumpUnreadFor: 'user',
+    });
+    res.status(201).json({ ok: true, thread });
+  } catch (err) {
+    console.error('POST /api/admin/support-chats/:id/messages', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
+  }
+}
+
+export async function handleAdminUpdateSupportChat(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const id = String(req.params?.id ?? '').trim();
+    const thread = await updateSupportThread(id, {
+      status: req.body?.status,
+      category: req.body?.category,
+      severity: req.body?.severity,
+    });
+    res.status(200).json({ ok: true, thread });
+  } catch (err) {
+    console.error('PATCH /api/admin/support-chats/:id', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
   }
 }

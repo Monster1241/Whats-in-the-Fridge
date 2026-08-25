@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { handleSubmitFeedback, handleSubmitReport } from '../supportHandlers.js';
+import {
+  handleGetSupportChat,
+  handlePostSupportChatMessage,
+  handleSubmitFeedback,
+  handleSubmitReport,
+} from '../supportHandlers.js';
 import { asyncRoute } from '../routeUtils.js';
 import { supportRateLimit } from '../rateLimit.js';
 
@@ -14,4 +19,18 @@ supportRouter.post(
   '/feedback',
   supportRateLimit,
   asyncRoute(handleSubmitFeedback, 'POST /api/support/feedback', 'Could not submit feedback.'),
+);
+
+supportRouter.get(
+  '/chat',
+  asyncRoute(handleGetSupportChat, 'GET /api/support/chat', 'Could not load support chat.'),
+);
+supportRouter.post(
+  '/chat/messages',
+  supportRateLimit,
+  asyncRoute(
+    handlePostSupportChatMessage,
+    'POST /api/support/chat/messages',
+    'Could not send support message.',
+  ),
 );

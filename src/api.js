@@ -765,3 +765,48 @@ export async function updateAdminFeedback(id, patch) {
   });
   return parseJson(res);
 }
+
+export async function fetchSupportChat() {
+  const res = await fetch(apiUrl('/support/chat'), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function sendSupportChatMessage(message) {
+  const res = await fetch(apiUrl('/support/chat/messages'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ message }),
+  });
+  return parseJson(res);
+}
+
+export async function fetchAdminSupportChats(status) {
+  const params = status ? `?status=${encodeURIComponent(status)}` : '';
+  const res = await fetch(apiUrl(`/admin/support-chats${params}`), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function fetchAdminSupportChat(id) {
+  const res = await fetch(apiUrl(`/admin/support-chats/${encodeURIComponent(id)}`), {
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
+export async function replyAdminSupportChat(id, message) {
+  const res = await fetch(apiUrl(`/admin/support-chats/${encodeURIComponent(id)}/messages`), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ message }),
+  });
+  return parseJson(res);
+}
+
+export async function updateAdminSupportChat(id, patch) {
+  const res = await fetch(apiUrl(`/admin/support-chats/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(patch),
+  });
+  return parseJson(res);
+}

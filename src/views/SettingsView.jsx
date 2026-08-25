@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { fetchHouseholdMembers, removeHouseholdMember, sendPasswordResetEmail } from '../api.js';
 import { LegalFooterLinks } from '../components/LegalFooterLinks.jsx';
 import { UserFeedbackForm } from '../components/UserFeedbackForm.jsx';
+import { SupportChatPanel } from '../components/SupportChatPanel.jsx';
 import { usePushNotifications } from '../context/PushNotificationContext.jsx';
 import {
   countEnabledModules,
@@ -37,6 +38,7 @@ import {
   Copy,
   Database,
   Flame,
+  Headphones,
   Info,
   KeyRound,
   Leaf,
@@ -728,12 +730,20 @@ export function SettingsView({
     );
   }
 
+  if (infoScreen === 'support') {
+    return (
+      <SettingsInfoScreen title="Support chat" icon={Headphones} onBack={() => setInfoScreen(null)}>
+        <SupportChatPanel />
+      </SettingsInfoScreen>
+    );
+  }
+
   if (infoScreen === 'feedback') {
     return (
       <SettingsInfoScreen title="Send feedback" icon={MessageSquare} onBack={() => setInfoScreen(null)}>
         <p className="text-muted mb-4 text-sm">
-          Share a bug, feature idea, or anything about deals and catalogues. Reports go to the team
-          inbox — not public reviews.
+          Share a bug, feature idea, or anything about deals and catalogues. For account or data
+          problems, use Support chat so we can dig in.
         </p>
         <UserFeedbackForm />
       </SettingsInfoScreen>
@@ -1250,8 +1260,15 @@ export function SettingsView({
           onClick={() => setInfoScreen('household')}
         />
         <SettingsNavRow
-          icon={MessageSquare}
+          icon={Headphones}
           iconClassName="bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
+          title="Support chat"
+          subtitle="Message the team — we reply when we're online"
+          onClick={() => setInfoScreen('support')}
+        />
+        <SettingsNavRow
+          icon={MessageSquare}
+          iconClassName="bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
           title="Send feedback"
           subtitle="Bugs, ideas, and help improving deals"
           onClick={() => setInfoScreen('feedback')}

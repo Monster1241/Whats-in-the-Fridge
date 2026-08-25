@@ -1,11 +1,15 @@
 import { Router } from 'express';
 import {
   handleAdminDashboard,
+  handleAdminGetSupportChat,
   handleAdminListFeedback,
   handleAdminListReports,
+  handleAdminListSupportChats,
   handleAdminMe,
+  handleAdminReplySupportChat,
   handleAdminUpdateFeedback,
   handleAdminUpdateReport,
+  handleAdminUpdateSupportChat,
   handleCreateAdminDeal,
   handleDeleteAdminDeal,
   handleListAdminDeals,
@@ -66,4 +70,28 @@ adminRouter.get(
 adminRouter.patch(
   '/feedback/:id',
   asyncRoute(handleAdminUpdateFeedback, 'PATCH /api/admin/feedback/:id', 'Could not update feedback.'),
+);
+adminRouter.get(
+  '/support-chats',
+  asyncRoute(handleAdminListSupportChats, 'GET /api/admin/support-chats', 'Could not list support chats.'),
+);
+adminRouter.get(
+  '/support-chats/:id',
+  asyncRoute(handleAdminGetSupportChat, 'GET /api/admin/support-chats/:id', 'Could not load support chat.'),
+);
+adminRouter.post(
+  '/support-chats/:id/messages',
+  asyncRoute(
+    handleAdminReplySupportChat,
+    'POST /api/admin/support-chats/:id/messages',
+    'Could not reply to support chat.',
+  ),
+);
+adminRouter.patch(
+  '/support-chats/:id',
+  asyncRoute(
+    handleAdminUpdateSupportChat,
+    'PATCH /api/admin/support-chats/:id',
+    'Could not update support chat.',
+  ),
 );

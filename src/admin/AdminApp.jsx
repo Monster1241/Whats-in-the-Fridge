@@ -8,6 +8,7 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage.jsx';
 import { AdminDealsPage } from './pages/AdminDealsPage.jsx';
 import { AdminReportsPage } from './pages/AdminReportsPage.jsx';
 import { AdminFeedbackPage } from './pages/AdminFeedbackPage.jsx';
+import { AdminSupportChatsPage } from './pages/AdminSupportChatsPage.jsx';
 import { getAdminPageFromPath, navigateAdmin as goToAdminPage } from './adminNavigation.js';
 
 const ADMIN_ACCESS_CACHE_KEY = 'fridge.adminAccess';
@@ -71,6 +72,8 @@ function renderAdminPage(page, navigateAdmin) {
   switch (page) {
     case 'deals':
       return <AdminDealsPage />;
+    case 'support':
+      return <AdminSupportChatsPage />;
     case 'reports':
       return <AdminReportsPage />;
     case 'feedback':

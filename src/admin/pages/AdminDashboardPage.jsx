@@ -90,12 +90,23 @@ export function AdminDashboardPage({ navigateAdmin }) {
           hint="Signed in or synced in the last 24 hours"
         />
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Unverified deals"
           value={counts?.unverifiedDeals ?? 0}
           hint="Optional — verify to show the verified badge"
           to="/admin/deals"
+          navigateAdmin={navigateAdmin}
+        />
+        <StatCard
+          label="Support chats"
+          value={counts?.unreadSupportChats ?? counts?.openSupportChats ?? 0}
+          hint={
+            counts?.unreadSupportChats
+              ? `${counts.unreadSupportChats} unread · ${counts.openSupportChats ?? 0} open`
+              : 'User messages waiting for a reply'
+          }
+          to="/admin/support"
           navigateAdmin={navigateAdmin}
         />
         <StatCard

@@ -1,4 +1,9 @@
 import { WEEKLY_DEALS_COLLECTION } from './weeklyDeals.js';
+import {
+  countOpenSupportChats,
+  countUnreadSupportChatsForAdmin,
+  ensureSupportChatIndexes,
+} from './supportChat.js';
 
 export const USER_REPORTS_COLLECTION = 'userReports';
 export const USER_FEEDBACK_COLLECTION = 'userFeedback';
@@ -47,6 +52,7 @@ export async function ensureSupportInboxIndexes() {
   await feedback.createIndex({ status: 1, createdAt: -1 });
   await feedback.createIndex({ userId: 1, createdAt: -1 });
   await audit.createIndex({ createdAt: -1 });
+  await ensureSupportChatIndexes();
 }
 
 function sanitizeStatus(value) {
@@ -271,14 +277,23 @@ export async function getSupportInboxCounts(now = new Date()) {
   const feedback = db.collection(USER_FEEDBACK_COLLECTION);
   const deals = db.collection(WEEKLY_DEALS_COLLECTION);
 
-  const [openReports, openFeedback, unverifiedDeals] = await Promise.all([
-    reports.countDocuments({ status: 'open' }),
-    feedback.countDocuments({ status: 'open' }),
-    deals.countDocuments({
-      priceVerifiedAt: { $exists: false },
-      $or: [{ storeExpiresAt: { $gte: now } }, { expiresAt: { $gte: now } }],
-    }),
-  ]);
+  const [openReports, openFeedback, unverifiedDeals, openSupportChats, unreadSupportChats] =
+    await Promise.all([
+      reports.countDocuments({ status: 'open' }),
+      feedback.countDocuments({ status: 'open' }),
+      deals.countDocuments({
+        priceVerifiedAt: { $exists: false },
+        $or: [{ storeExpiresAt: { $gte: now } }, { expiresAt: { $gte: now } }],
+      }),
+      countOpenSupportChats(),
+      countUnreadSupportChatsForAdmin(),
+    ]);
 
-  return { openReports, openFeedback, unverifiedDeals };
+  return {
+    openReports,
+    openFeedback,
+    unverifiedDeals,
+    openSupportChats,
+    unreadSupportChats,
+  };
 }

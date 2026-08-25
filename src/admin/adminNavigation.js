@@ -1,6 +1,7 @@
 export function getAdminPageFromPath(pathname = window.location.pathname) {
   const path = String(pathname || '').replace(/\/$/, '') || '/admin';
   if (path === '/admin/deals') return 'deals';
+  if (path === '/admin/support') return 'support';
   if (path === '/admin/reports') return 'reports';
   if (path === '/admin/feedback') return 'feedback';
   return 'dashboard';
@@ -10,6 +11,8 @@ export function adminPathForPage(page) {
   switch (page) {
     case 'deals':
       return '/admin/deals';
+    case 'support':
+      return '/admin/support';
     case 'reports':
       return '/admin/reports';
     case 'feedback':
