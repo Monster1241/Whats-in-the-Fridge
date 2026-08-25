@@ -151,8 +151,8 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'Switch Ambient, Fresh, and Freezer to organise pantry, fridge, and frozen items.',
         'Pantry (Ambient) quantities show as total grams or ml — e.g. two 400g tins display as 800g total.',
         'Tap a row\'s status badge to edit quantity, expiry, storage, or mark an item out of stock.',
-        `Items past their expiry date appear under Expired with a rose badge.`,
-        `Items expiring within ${EXPIRING_SOON_DAYS} days appear under Expiring Soon with an amber badge.`,
+        `Items past their expiry date appear under Expired (rose) on every storage tab in that module.`,
+        `Items expiring within ${EXPIRING_SOON_DAYS} days appear under Expiring Soon (amber) on every storage tab. Those sections hide when empty.`,
         'Mark items as running low in the editor, or let Predicted low / Almost finished flag staples from how long they last in your home.',
         'Use More options when adding to pick Home Essentials or Baby Care categories.',
       ],
@@ -751,11 +751,7 @@ export function SettingsView({
   }
 
   if (infoScreen === 'support') {
-    return (
-      <SettingsInfoScreen title="Support chat" icon={Headphones} onBack={() => setInfoScreen(null)}>
-        <SupportChatPanel />
-      </SettingsInfoScreen>
-    );
+    return <SupportChatPanel onBack={() => setInfoScreen(null)} />;
   }
 
   if (infoScreen === 'feedback') {

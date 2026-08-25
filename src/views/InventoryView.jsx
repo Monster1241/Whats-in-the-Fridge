@@ -129,13 +129,28 @@ function EmptyState({ icon: Icon, title, description }) {
   );
 }
 
+/** Group urgency rows by storage location so Fridge / Pantry / Freezer stay clear. */
+function groupItemsByStorageCategory(items, itemType) {
+  const categories = getCategoriesForItemType(itemType);
+  return categories
+    .map((cat) => {
+      const groupItems = (items ?? [])
+        .filter((item) => item.category === cat)
+        .sort(sortByUrgencyThenName);
+      return {
+        subCategory: cat,
+        meta: getCategoryMeta(cat, itemType) ?? { label: cat },
+        items: groupItems,
+      };
+    })
+    .filter((group) => group.items.length > 0);
+}
+
 function groupByCategory(items, category, itemType, selectedSubCategories = null) {
-  const inCategory = items.filter(
-    (item) =>
-      item.category === category &&
-      item.itemType === itemType &&
-      isInStockInventory(item),
+  const inType = items.filter(
+    (item) => item.itemType === itemType && isInStockInventory(item),
   );
+  const inCategory = inType.filter((item) => item.category === category);
   const filterBySub = (list) => {
     if (!selectedSubCategories || selectedSubCategories.size === 0) return list;
     return list.filter((item) =>
@@ -143,12 +158,10 @@ function groupByCategory(items, category, itemType, selectedSubCategories = null
     );
   };
 
-  const expired = filterBySub(
-    inCategory.filter(isExpired).sort(sortByUrgencyThenName),
-  );
-  const expiring = filterBySub(
-    inCategory.filter(isExpiringSoon).sort(sortByUrgencyThenName),
-  );
+  // Expired / expiring: every category in this module so nothing urgent is hidden
+  // behind another storage tab. Sections stay hidden when the lists are empty.
+  const expired = inType.filter(isExpired).sort(sortByUrgencyThenName);
+  const expiring = inType.filter(isExpiringSoon).sort(sortByUrgencyThenName);
   const plentiful = filterBySub(
     inCategory
       .filter((item) => !isExpired(item) && !isExpiringSoon(item))
@@ -159,8 +172,8 @@ function groupByCategory(items, category, itemType, selectedSubCategories = null
     expired,
     expiring,
     plentiful,
-    expiredGroups: groupItemsBySubCategory(expired, itemType, category),
-    expiringGroups: groupItemsBySubCategory(expiring, itemType, category),
+    expiredGroups: groupItemsByStorageCategory(expired, itemType),
+    expiringGroups: groupItemsByStorageCategory(expiring, itemType),
     plentifulGroups: groupItemsBySubCategory(plentiful, itemType, category),
     subCategoryCounts: countItemsBySubCategory(inCategory, itemType, category),
   };
@@ -535,13 +548,13 @@ function ItemEditorSheet({ item, onSave, onClose, enabledModules }) {
         )}
         {expiredHint && (
           <p className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:bg-rose-950/50 dark:text-rose-200">
-            This date is in the past — it will show under Expired automatically.
+            This date is in the past — it will show under Expired on every storage tab.
           </p>
         )}
         {expiringHint && (
           <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
             This date is within {EXPIRING_SOON_DAYS} days — it will show under Expiring Soon
-            automatically.
+            on every storage tab.
           </p>
         )}
 

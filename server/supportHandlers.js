@@ -111,6 +111,27 @@ export async function handleGetSupportChat(req, res) {
   }
 }
 
+/** Open the active support chat, or create a fresh one after a closed conversation. */
+export async function handleStartSupportChat(req, res) {
+  try {
+    const auth = await requireVerifiedUser(req, res);
+    if (!auth) return;
+
+    const thread = await getOrCreateSupportThread({
+      userId: auth.user.id,
+      userEmail: auth.user.email,
+      householdId: auth.user.household_id,
+    });
+    const marked = await markSupportThreadRead(thread.id, 'user');
+    const threads = await listSupportThreadsForUser(auth.user.id);
+    res.status(200).json({ ok: true, thread: marked, threads });
+  } catch (err) {
+    console.error('POST /api/support/chat', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
+  }
+}
+
 export async function handlePostSupportChatMessage(req, res) {
   try {
     const auth = await requireVerifiedUser(req, res);

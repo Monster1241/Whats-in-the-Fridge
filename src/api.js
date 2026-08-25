@@ -827,6 +827,16 @@ export async function fetchSupportChat(threadId) {
   return parseJson(res);
 }
 
+/** Open the active support chat, or create a new one after a closed conversation. */
+export async function startSupportChat() {
+  const res = await fetch(apiUrl('/support/chat'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({}),
+  });
+  return parseJson(res);
+}
+
 export async function sendSupportChatMessage(message) {
   const res = await fetch(apiUrl('/support/chat/messages'), {
     method: 'POST',

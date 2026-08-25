@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   handleGetSupportChat,
   handlePostSupportChatMessage,
+  handleStartSupportChat,
   handleSubmitFeedback,
   handleSubmitReport,
 } from '../supportHandlers.js';
@@ -24,6 +25,11 @@ supportRouter.post(
 supportRouter.get(
   '/chat',
   asyncRoute(handleGetSupportChat, 'GET /api/support/chat', 'Could not load support chat.'),
+);
+supportRouter.post(
+  '/chat',
+  supportRateLimit,
+  asyncRoute(handleStartSupportChat, 'POST /api/support/chat', 'Could not start support chat.'),
 );
 supportRouter.post(
   '/chat/messages',
