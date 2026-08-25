@@ -6,7 +6,7 @@ import {
 } from './auth.js';
 import { toFriendlyError } from './errors.js';
 import { sanitizeRecipeLibrary } from './recipeSchema.js';
-import { sanitizeSettings } from './settingsSanitize.js';
+import { sanitizeSettings, sanitizeUserProfile } from './settingsSanitize.js';
 import { buildShoppingPingNotification } from './pushCopy.js';
 import { normalizeUsageInsights } from '../src/inventory/usageInsights.js';
 import { verifyFirebaseIdToken } from './firebaseAdmin.js';
@@ -27,6 +27,7 @@ import {
   removeHouseholdMember,
   setUserHousehold,
   updateHouseholdAppState,
+  updateUserProfile,
   verifyUserEmail,
   deleteUserAccount,
   dedupeFcmTokens,
@@ -285,7 +286,7 @@ export async function handleCreateHousehold(req, res) {
     const household = await createHousehold(auth.user.id);
     await setUserHousehold(auth.user.id, household.id);
     const user = await findUserById(auth.user.id);
-    const state = await getHouseholdAppState(household.id);
+    const state = await getHouseholdAppState(household.id, auth.user.id);
 
     res.status(201).json({
       ...(await authPayload(user)),
@@ -325,7 +326,7 @@ export async function handleJoinHousehold(req, res) {
   try {
     await setUserHousehold(auth.user.id, household.id);
     const user = await findUserById(auth.user.id);
-    const state = await getHouseholdAppState(household.id);
+    const state = await getHouseholdAppState(household.id, auth.user.id);
 
     res.status(200).json({
       ...(await authPayload(user)),
@@ -439,7 +440,7 @@ export async function handleGetState(req, res) {
   if (!requireHouseholdSession(auth, res)) return;
 
   const householdId = getScopedHouseholdId(auth);
-  const state = await getHouseholdAppState(householdId);
+  const state = await getHouseholdAppState(householdId, auth.user.id);
   res.status(200).json(state);
 }
 
@@ -466,6 +467,7 @@ export async function handlePutState(req, res) {
       res.status(400).json({ error: 'settings must be an object' });
       return;
     }
+    await updateUserProfile(auth.user.id, sanitizeUserProfile(settings.user));
     partial.settings = sanitizeSettings(settings);
   }
   if (enabledModules !== undefined) {
@@ -512,7 +514,7 @@ export async function handlePutState(req, res) {
     partial.usageInsights = sanitizeUsageInsights(usageInsights);
   }
 
-  const state = await updateHouseholdAppState(householdId, partial);
+  const state = await updateHouseholdAppState(householdId, partial, auth.user.id);
   res.status(200).json(state);
 }
 
@@ -574,7 +576,7 @@ export async function handlePingShoppingList(req, res) {
     if (!requireHouseholdSession(auth, res)) return;
 
     const householdId = getScopedHouseholdId(auth);
-    const state = await getHouseholdAppState(householdId);
+    const state = await getHouseholdAppState(householdId, auth.user.id);
     const shoppingCount = (state.items ?? []).filter((item) => item?.status === 'out').length;
 
     const tokens = dedupeFcmTokens(await getHouseholdFcmTokens(householdId, auth.user.id));
@@ -597,7 +599,12 @@ export async function handlePingShoppingList(req, res) {
       return;
     }
 
-    const { title, body } = buildShoppingPingNotification(auth.user.email, shoppingCount);
+    const sender = await findUserById(auth.user.id);
+    const { title, body } = buildShoppingPingNotification(
+      sender?.email || auth.user.email,
+      shoppingCount,
+      sender?.displayName,
+    );
     const { successCount, invalidTokens } = await sendPushToTokens(tokens, {
       title,
       body,

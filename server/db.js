@@ -1,6 +1,6 @@
 import { MongoClient, ObjectId } from 'mongodb';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules, validateEnabledModules } from './enabledModules.js';
-import { sanitizeSettings } from './settingsSanitize.js';
+import { DEFAULT_SETTINGS, sanitizeHouseholdSettings, sanitizeUserProfile, settingsForViewer } from './settingsSanitize.js';
 import {
   ensureStoreCatalogueIndexes,
   STORE_CATALOGUES_COLLECTION,
@@ -18,10 +18,7 @@ const DB_NAME = 'whats-in-the-fridge';
 
 const globalForMongo = globalThis;
 
-export const DEFAULT_SETTINGS = {
-  theme: 'light',
-  user: { name: '', email: '' },
-};
+export { DEFAULT_SETTINGS };
 
 export function generateInviteCode() {
   const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -62,6 +59,8 @@ function mapUserDoc(doc) {
     household_id: doc.household_id ? doc.household_id.toString() : null,
     isVerified,
     verificationCode: doc.verificationCode ?? null,
+    displayName: String(doc.displayName ?? '').trim(),
+    profileEmail: String(doc.profileEmail ?? '').trim(),
   };
 }
 
@@ -358,6 +357,32 @@ export async function findUserById(userId) {
   return mapUserDoc(doc);
 }
 
+/**
+ * Display name and contact email for this account only — not household settings.
+ * @param {string} userId
+ * @param {{ name?: string, email?: string }} profile
+ */
+export async function updateUserProfile(userId, profile) {
+  const next = sanitizeUserProfile(profile);
+  const users = getDb().collection('users');
+  const result = await users.updateOne(
+    { _id: new ObjectId(userId) },
+    {
+      $set: {
+        displayName: next.name,
+        profileEmail: next.email,
+        updated_at: new Date(),
+      },
+    },
+  );
+  if (result.matchedCount === 0) {
+    const err = new Error('User not found.');
+    err.status = 404;
+    throw err;
+  }
+  return findUserById(userId);
+}
+
 /** Throttled heartbeat for admin "live users" (at most once per 5 minutes). */
 export async function touchUserLastActive(userId, now = new Date()) {
   const fiveMinAgo = new Date(now.getTime() - 5 * 60 * 1000);
@@ -471,6 +496,7 @@ export async function getHouseholdMembers(householdId) {
   return docs.map((doc) => ({
     id: doc._id.toString(),
     email: doc.email,
+    displayName: String(doc.displayName ?? '').trim(),
     isOwner: doc._id.toString() === ownerId,
     joinedAt: doc.created_at,
   }));
@@ -567,7 +593,7 @@ export async function createHousehold(ownerUserId) {
     invite_code,
     owner_id: new ObjectId(ownerUserId),
     created_at: new Date(),
-    settings: { ...DEFAULT_SETTINGS },
+    settings: sanitizeHouseholdSettings(DEFAULT_SETTINGS),
     enabledModules: { ...DEFAULT_ENABLED_MODULES },
     savedRecipeIds: [],
     recipeLibrary: [],
@@ -628,7 +654,13 @@ export async function getHouseholdMeta(householdId) {
   return {
     id: doc._id.toString(),
     invite_code: doc.invite_code,
-    settings: { ...DEFAULT_SETTINGS, ...doc.settings },
+    settings: {
+      ...sanitizeHouseholdSettings(DEFAULT_SETTINGS),
+      ...sanitizeHouseholdSettings(doc.settings),
+      ...(doc.settings && typeof doc.settings === 'object' && doc.settings.user
+        ? { user: doc.settings.user }
+        : {}),
+    },
     enabledModules: normalizeEnabledModules(doc.enabledModules),
     savedRecipeIds: doc.savedRecipeIds ?? [],
     recipeLibrary: Array.isArray(doc.recipeLibrary) ? doc.recipeLibrary : [],
@@ -652,7 +684,7 @@ export async function getInventoryForHousehold(householdId) {
   }));
 }
 
-export async function getHouseholdAppState(householdId) {
+export async function getHouseholdAppState(householdId, viewerUserId = null) {
   const scopedId = assertScopedHouseholdId(householdId);
   const meta = await getHouseholdMeta(scopedId);
   if (!meta) {
@@ -661,9 +693,11 @@ export async function getHouseholdAppState(householdId) {
     throw err;
   }
   const items = await getInventoryForHousehold(scopedId);
+  const viewer = viewerUserId ? await findUserById(viewerUserId) : null;
+  const settings = settingsForViewer(meta.settings, viewer);
   return {
     items,
-    settings: meta.settings,
+    settings,
     enabledModules: meta.enabledModules,
     savedRecipeIds: meta.savedRecipeIds,
     recipeLibrary: meta.recipeLibrary,
@@ -764,7 +798,7 @@ export async function applyInventoryDelta(householdId, delta = {}) {
   await inventory.bulkWrite(ops, { ordered: false });
 }
 
-export async function updateHouseholdAppState(householdId, partial) {
+export async function updateHouseholdAppState(householdId, partial, viewerUserId = null) {
   const scopedId = assertScopedHouseholdId(householdId);
   const households = getDb().collection('households');
   const householdOid = new ObjectId(scopedId);
@@ -776,7 +810,7 @@ export async function updateHouseholdAppState(householdId, partial) {
   }
 
   const householdUpdate = { updated_at: new Date() };
-  if (partial.settings !== undefined) householdUpdate.settings = sanitizeSettings(partial.settings);
+  if (partial.settings !== undefined) householdUpdate.settings = sanitizeHouseholdSettings(partial.settings);
   if (partial.enabledModules !== undefined) {
     householdUpdate.enabledModules = validateEnabledModules(partial.enabledModules);
   }
@@ -791,7 +825,7 @@ export async function updateHouseholdAppState(householdId, partial) {
     await households.updateOne({ _id: householdOid }, { $set: householdUpdate });
   }
 
-  return getHouseholdAppState(scopedId);
+  return getHouseholdAppState(scopedId, viewerUserId);
 }
 
 /**
@@ -799,8 +833,9 @@ export async function updateHouseholdAppState(householdId, partial) {
  * @param {string} householdId
  * @param {{ upserts?: Array<Record<string, unknown>>, deletedIds?: string[] }} delta
  * @param {number} expectedRevision
+ * @param {string|null} [viewerUserId]
  */
-export async function syncHouseholdInventory(householdId, delta = {}, expectedRevision = 0) {
+export async function syncHouseholdInventory(householdId, delta = {}, expectedRevision = 0, viewerUserId = null) {
   const scopedId = assertScopedHouseholdId(householdId);
   const upserts = Array.isArray(delta.upserts) ? delta.upserts : [];
   const deletedIds = Array.isArray(delta.deletedIds) ? delta.deletedIds : [];
@@ -809,7 +844,7 @@ export async function syncHouseholdInventory(householdId, delta = {}, expectedRe
     await claimInventoryRevision(scopedId, Number(expectedRevision) || 0);
     await applyInventoryDelta(scopedId, { upserts, deletedIds });
   }
-  return getHouseholdAppState(scopedId);
+  return getHouseholdAppState(scopedId, viewerUserId);
 }
 
 /**
@@ -1070,8 +1105,9 @@ export async function saveInventoryItems(householdId, items) {
 /**
  * Saves a 7-day restorable snapshot, then removes all inventory for the household.
  * @param {string} householdId
+ * @param {string|null} [viewerUserId]
  */
-export async function clearAllInventoryWithBackup(householdId) {
+export async function clearAllInventoryWithBackup(householdId, viewerUserId = null) {
   const scopedId = assertScopedHouseholdId(householdId);
   const households = getDb().collection('households');
   const householdOid = new ObjectId(scopedId);
@@ -1112,14 +1148,15 @@ export async function clearAllInventoryWithBackup(householdId) {
     await bumpInventoryRevision(scopedId);
   }
 
-  return getHouseholdAppState(scopedId);
+  return getHouseholdAppState(scopedId, viewerUserId);
 }
 
 /**
  * Restores inventory from the active clear backup, if one exists.
  * @param {string} householdId
+ * @param {string|null} [viewerUserId]
  */
-export async function restoreClearedInventory(householdId) {
+export async function restoreClearedInventory(householdId, viewerUserId = null) {
   const scopedId = assertScopedHouseholdId(householdId);
   const households = getDb().collection('households');
   const householdOid = new ObjectId(scopedId);
@@ -1160,7 +1197,7 @@ export async function restoreClearedInventory(householdId) {
     { $unset: { inventoryClearBackup: '' }, $set: { updated_at: new Date() } },
   );
 
-  return getHouseholdAppState(scopedId);
+  return getHouseholdAppState(scopedId, viewerUserId);
 }
 
 export async function deleteHouseholdData(householdId) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeSettings } from './settingsSanitize.js';
+import { sanitizeSettings, settingsForViewer } from './settingsSanitize.js';
 
 describe('sanitizeSettings', () => {
   it('keeps light/dark and trims profile fields', () => {
@@ -48,5 +48,58 @@ describe('sanitizeSettings', () => {
       'pescatarian',
     );
     expect(sanitizeSettings({ dietaryPreference: 'invalid' }).dietaryPreference).toBe('none');
+  });
+});
+
+describe('settingsForViewer', () => {
+  it('uses the signed-in user profile, not another household member', () => {
+    const household = {
+      theme: 'dark',
+      dietaryPreference: 'vegan',
+      user: { name: 'Partner', email: 'partner@example.com' },
+    };
+    expect(
+      settingsForViewer(household, {
+        email: 'me@example.com',
+        displayName: 'Alex',
+        profileEmail: 'alex@home.test',
+      }),
+    ).toEqual({
+      theme: 'dark',
+      dietaryPreference: 'vegan',
+      user: { name: 'Alex', email: 'alex@home.test' },
+    });
+  });
+
+  it('does not copy a partner household profile onto a member with no saved name', () => {
+    const household = {
+      theme: 'light',
+      user: { name: 'Partner', email: 'partner@example.com' },
+    };
+    expect(
+      settingsForViewer(household, {
+        email: 'me@example.com',
+        displayName: '',
+        profileEmail: '',
+      }),
+    ).toEqual({
+      theme: 'light',
+      dietaryPreference: 'none',
+      user: { name: '', email: 'me@example.com' },
+    });
+  });
+
+  it('reuses legacy household profile only when the email matches this user', () => {
+    const household = {
+      theme: 'light',
+      user: { name: 'Ada', email: 'ada@example.com' },
+    };
+    expect(
+      settingsForViewer(household, {
+        email: 'ada@example.com',
+        displayName: '',
+        profileEmail: '',
+      }).user,
+    ).toEqual({ name: 'Ada', email: 'ada@example.com' });
   });
 });

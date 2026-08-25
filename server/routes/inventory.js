@@ -85,11 +85,12 @@ inventoryRouter.post(
         req.user.household_id,
         delta,
         Number(body.inventoryRevision) || 0,
+        req.user.id,
       );
       res.status(200).json(state);
     } catch (err) {
       if (err?.status === 409) {
-        const state = await getHouseholdAppState(req.user.household_id);
+        const state = await getHouseholdAppState(req.user.household_id, req.user.id);
         res.status(409).json({
           error: err.message || 'Inventory was updated on another device.',
           conflict: true,
@@ -105,7 +106,7 @@ inventoryRouter.post(
 inventoryRouter.post(
   '/clear-all',
   asyncRoute(async (req, res) => {
-    const state = await clearAllInventoryWithBackup(req.user.household_id);
+    const state = await clearAllInventoryWithBackup(req.user.household_id, req.user.id);
     res.status(200).json(state);
   }, 'POST /api/inventory/clear-all', 'Could not clear inventory'),
 );
@@ -114,7 +115,7 @@ inventoryRouter.post(
   '/restore-cleared',
   asyncRoute(async (req, res) => {
     try {
-      const state = await restoreClearedInventory(req.user.household_id);
+      const state = await restoreClearedInventory(req.user.household_id, req.user.id);
       res.status(200).json(state);
     } catch (err) {
       if (err?.status === 410) {

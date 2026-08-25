@@ -215,7 +215,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       steps: [
         'Turn modules on or off: Food & Kitchen, Home Essentials, and Baby Care.',
         'Switch light or dark mode, and manage household members (owners can remove people).',
-        'Your account shows sign-in email, household role, and invite code. Display name is used for shopping pings.',
+        'Your account display name and profile email are yours only — they do not overwrite your partner. Display name is used for shopping pings.',
         'Reset your password from Your account — Firebase emails the same reset link as Forgot password. Open it, set a new password, then sign in with it.',
         'Use Show tips & color guide again under Data tools to bring welcome banners and the color guide back on Home.',
         'Clear all items only if you want to wipe inventory for everyone in the household. You can restore cleared items from Settings within 7 days.',
@@ -916,7 +916,7 @@ export function SettingsView({
               className="input-field"
             />
             <p className="text-muted mt-1 text-[11px] leading-relaxed">
-              Shown to your household for shopping pings and profile context.
+              Shown to your household for shopping pings. This name is yours — it does not change your partner&apos;s account.
             </p>
           </div>
           <div>
@@ -932,7 +932,7 @@ export function SettingsView({
               className="input-field"
             />
             <p className="text-muted mt-1 text-[11px] leading-relaxed">
-              Optional contact email saved on your household profile.
+              Optional contact email saved on your account only — not shared with household members.
             </p>
           </div>
           <div>
@@ -1040,7 +1040,12 @@ export function SettingsView({
                   className="flex items-center justify-between gap-3 rounded-xl border border-black/[0.08] bg-lm-inset px-3 py-2.5 dark:border-slate-600 dark:bg-dm-inset"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-heading truncate text-sm font-semibold">{member.email}</p>
+                    <p className="text-heading truncate text-sm font-semibold">
+                      {member.displayName || member.email}
+                    </p>
+                    {member.displayName ? (
+                      <p className="text-muted truncate text-xs">{member.email}</p>
+                    ) : null}
                     <div className="mt-0.5 flex flex-wrap gap-1.5">
                       {member.isCurrentUser && (
                         <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">

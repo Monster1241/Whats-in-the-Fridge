@@ -8,7 +8,9 @@ export { buildCombinedExpiryAlertMessage, buildExpiringSoonAlertMessage };
 /** @deprecated Use buildExpiringSoonAlertMessage */
 export const buildExpiryAlertMessage = buildExpiringSoonAlertMessage;
 
-function formatSenderLabel(email) {
+function formatSenderLabel(email, displayName) {
+  const named = String(displayName || '').trim();
+  if (named) return named;
   const local = String(email || '').split('@')[0]?.trim();
   if (!local) return 'Your household partner';
   return local.charAt(0).toUpperCase() + local.slice(1);
@@ -18,9 +20,10 @@ function formatSenderLabel(email) {
  * Push copy without shopping-list item names.
  * @param {string} senderEmail
  * @param {number} itemCount
+ * @param {string} [displayName]
  */
-export function buildShoppingPingNotification(senderEmail, itemCount) {
-  const sender = formatSenderLabel(senderEmail);
+export function buildShoppingPingNotification(senderEmail, itemCount, displayName) {
+  const sender = formatSenderLabel(senderEmail, displayName);
   const n = Number(itemCount) || 0;
   if (n <= 0) {
     return {

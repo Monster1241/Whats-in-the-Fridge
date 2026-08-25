@@ -38,6 +38,12 @@ describe('buildShoppingPingNotification', () => {
     expect(msg.body).toContain('2 items');
     expect(msg.body).not.toMatch(/milk|eggs/i);
   });
+
+  it('prefers display name over email local-part', () => {
+    const msg = buildShoppingPingNotification('partner@example.com', 1, 'Sam');
+    expect(msg.body).toContain('Sam');
+    expect(msg.body).not.toContain('Partner');
+  });
 });
 
 describe('buildSupportReplyNotification', () => {
