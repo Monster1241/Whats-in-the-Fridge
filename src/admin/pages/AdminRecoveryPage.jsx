@@ -260,9 +260,19 @@ export function AdminRecoveryPage() {
         userId,
         householdId: household.id,
       });
-      setSuccess(
-        `Verification code emailed to ${data.userEmail}. Ask them for the 6 digits (expires ~10 min).`,
-      );
+      if (data.emailMode === 'console' && data.devCode) {
+        setSuccess(
+          `Email not configured (RESEND_API_KEY). Dev code for ${data.userEmail}: ${data.devCode} — enter it below. Add RESEND_API_KEY to send real mail.`,
+        );
+      } else if (data.emailSent) {
+        setSuccess(
+          `Verification code emailed to ${data.userEmail}. Ask them for the 6 digits (expires ~10 min). Check spam if missing. If using Resend’s free onboarding@resend.dev sender, mail only delivers to your Resend account email until you verify a domain.`,
+        );
+      } else {
+        setSuccess(
+          `Code created for ${data.userEmail}, but email may not have been delivered. Check server logs / Resend dashboard.`,
+        );
+      }
     } catch (err) {
       setError(err.message || 'Could not send verification code.');
     } finally {

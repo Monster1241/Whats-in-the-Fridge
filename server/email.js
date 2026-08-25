@@ -63,8 +63,16 @@ export async function sendRecoveryVerificationEmail(to, code) {
   const apiKey = process.env.RESEND_API_KEY?.trim();
 
   if (!apiKey) {
+    if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+      const err = new Error(
+        'Email sending is not configured (RESEND_API_KEY missing). Add it in Vercel env vars and redeploy.',
+      );
+      err.status = 503;
+      err.code = 'EMAIL_NOT_CONFIGURED';
+      throw err;
+    }
     logDevOnlySensitive('[EMAIL RECOVERY]', to, `code ${code}`);
-    console.log('[EMAIL RECOVERY] Set RESEND_API_KEY in .env / Vercel to send real emails.');
+    console.log('[EMAIL RECOVERY] Set RESEND_API_KEY in .env to send real emails. Using console fallback.');
     return { sent: false, mode: 'console' };
   }
 
@@ -97,9 +105,10 @@ export async function sendRecoveryVerificationEmail(to, code) {
     logDevOnlySensitive('[EMAIL RECOVERY] fallback', to, `code ${code}`);
     const err = new Error(error.message || 'Could not send recovery email.');
     err.status = 502;
+    err.code = 'EMAIL_SEND_FAILED';
     throw err;
   }
 
   console.log(`[EMAIL RECOVERY] Sent to ${redactEmail(to)} (id: ${data?.id ?? 'ok'})`);
-  return { sent: true, mode: 'resend', id: data?.id };
+  return { sent: true, mode: 'resend', id: data?.id, from };
 }

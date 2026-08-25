@@ -99,7 +99,7 @@ export async function sendAdminRecoveryCode(input) {
   };
 
   const { insertedId } = await col.insertOne(doc);
-  await sendRecoveryVerificationEmail(user.email, code);
+  const emailResult = await sendRecoveryVerificationEmail(user.email, code);
 
   return {
     challengeId: insertedId.toString(),
@@ -107,6 +107,10 @@ export async function sendAdminRecoveryCode(input) {
     householdId,
     userEmail: user.email,
     expiresAt: doc.expiresAt.toISOString(),
+    emailSent: Boolean(emailResult?.sent),
+    emailMode: emailResult?.mode ?? 'unknown',
+    // Only expose plaintext code when no real email was sent (local console fallback).
+    ...(emailResult?.mode === 'console' ? { devCode: code } : {}),
   };
 }
 
