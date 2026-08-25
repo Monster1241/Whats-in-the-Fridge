@@ -65,6 +65,231 @@ function toApiMessages(messages) {
   return messages.map(({ role, content }) => ({ role, content }));
 }
 
+/**
+ * Lightweight, dependency-free Markdown-ish renderer for Fridge Scout replies.
+ * - Treats `***` / `---` lines as dividers
+ * - Renders `**bold**` and inline backtick `code`
+ * - Renders bullet lists (`- `, `* `, `• `) and ordered lists (`1. `)
+ * - Splits paragraphs by blank lines for better spacing
+ *
+ * This is intentionally conservative (no HTML) to keep the chat safe.
+ * @param {string} input
+ */
+function renderScoutMarkdown(input) {
+  const text = String(input ?? '').replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+
+  /** @type {Array<{ type: 'hr'|'heading'|'ul'|'ol'|'p', [key: string]: unknown }>} */
+  const blocks = [];
+
+  /** @type {string[]} */
+  let paragraph = [];
+
+  const flushParagraph = () => {
+    const p = paragraph.join('\n').trim();
+    if (p) blocks.push({ type: 'p', text: p });
+    paragraph = [];
+  };
+
+  const isHr = (line) => {
+    const t = line.trim();
+    return t === '***' || t === '---' || t === '___';
+  };
+
+  const parseInline = (raw) => {
+    const s = String(raw ?? '');
+    const nodes = [];
+    const tokenRe = /(\*\*([^*]+)\*\*)|(`([^`]+)`)/g;
+    let last = 0;
+    let m;
+    // eslint-disable-next-line no-cond-assign
+    while ((m = tokenRe.exec(s))) {
+      const start = m.index;
+      if (start > last) {
+        nodes.push({ type: 'text', text: s.slice(last, start) });
+      }
+
+      if (m[2]) {
+        nodes.push({ type: 'strong', text: m[2] });
+      } else if (m[4]) {
+        nodes.push({ type: 'code', text: m[4] });
+      }
+      last = start + m[0].length;
+    }
+    if (last < s.length) nodes.push({ type: 'text', text: s.slice(last) });
+
+    return nodes.map((n, idx) => {
+      if (n.type === 'strong') {
+        return (
+          <strong key={idx} className="font-extrabold">
+            {n.text}
+          </strong>
+        );
+      }
+      if (n.type === 'code') {
+        return (
+          <code
+            key={idx}
+            className="rounded-md bg-black/[0.06] px-1 py-0.5 font-mono text-[11px] dark:bg-white/10"
+          >
+            {n.text}
+          </code>
+        );
+      }
+      return (
+        <span key={idx}>
+          {n.text}
+        </span>
+      );
+    });
+  };
+
+  const renderParagraphText = (pText) => {
+    const parts = String(pText ?? '').split('\n');
+    return parts.map((line, idx) => (
+      <span key={idx}>
+        {parseInline(line)}
+        {idx < parts.length - 1 ? <br /> : null}
+      </span>
+    ));
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i] ?? '';
+    const trimmed = line.trim();
+
+    if (isHr(line)) {
+      flushParagraph();
+      blocks.push({ type: 'hr' });
+      continue;
+    }
+
+    if (!trimmed) {
+      flushParagraph();
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (headingMatch) {
+      flushParagraph();
+      const level = headingMatch[1].length;
+      blocks.push({ type: 'heading', level, text: headingMatch[2] });
+      continue;
+    }
+
+    const ulMatch = trimmed.match(/^([-*•])\s+(.+)$/);
+    if (ulMatch) {
+      flushParagraph();
+      const items = [ulMatch[2]];
+      while (i + 1 < lines.length && /^([-*•])\s+/.test(String(lines[i + 1]).trim())) {
+        const next = String(lines[i + 1]).trim();
+        const m2 = next.match(/^([-*•])\s+(.+)$/);
+        if (m2?.[2]) items.push(m2[2]);
+        i += 1;
+      }
+      blocks.push({ type: 'ul', items });
+      continue;
+    }
+
+    const olMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
+    if (olMatch) {
+      flushParagraph();
+      const items = [olMatch[2]];
+      while (i + 1 < lines.length && /^\d+\.\s+/.test(String(lines[i + 1]).trim())) {
+        const next = String(lines[i + 1]).trim();
+        const m2 = next.match(/^(\d+)\.\s+(.+)$/);
+        if (m2?.[2]) items.push(m2[2]);
+        i += 1;
+      }
+      blocks.push({ type: 'ol', items });
+      continue;
+    }
+
+    // Default: accumulate paragraph text (preserve original line breaks inside paragraphs).
+    paragraph.push(line);
+  }
+  flushParagraph();
+
+  return (
+    <div className="space-y-3">
+      {blocks.map((block, idx) => {
+        if (block.type === 'hr') {
+          return (
+            <hr
+              // eslint-disable-next-line react/no-array-index-key
+              key={idx}
+              className="my-1 border-black/[0.08] dark:border-white/10"
+            />
+          );
+        }
+        if (block.type === 'heading') {
+          const level = Number(block.level ?? 3);
+          const text = String(block.text ?? '');
+          const cls =
+            level === 1
+              ? 'text-base font-extrabold'
+              : level === 2
+                ? 'text-sm font-extrabold'
+                : 'text-sm font-bold';
+          return (
+            <div
+              // eslint-disable-next-line react/no-array-index-key
+              key={idx}
+              className={cls}
+            >
+              {parseInline(text)}
+            </div>
+          );
+        }
+        if (block.type === 'ul') {
+          const items = Array.isArray(block.items) ? block.items : [];
+          return (
+            <ul
+              // eslint-disable-next-line react/no-array-index-key
+              key={idx}
+              className="list-disc space-y-1 pl-5"
+            >
+              {items.map((it, j) => (
+                <li key={`${idx}-${j}`} className="leading-relaxed">
+                  {parseInline(String(it))}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        if (block.type === 'ol') {
+          const items = Array.isArray(block.items) ? block.items : [];
+          return (
+            <ol
+              // eslint-disable-next-line react/no-array-index-key
+              key={idx}
+              className="list-decimal space-y-1 pl-5"
+            >
+              {items.map((it, j) => (
+                <li key={`${idx}-${j}`} className="leading-relaxed">
+                  {parseInline(String(it))}
+                </li>
+              ))}
+            </ol>
+          );
+        }
+
+        // Paragraph (default)
+        const pText = String(block.text ?? '');
+        return (
+          <p
+            // eslint-disable-next-line react/no-array-index-key
+            key={idx}
+            className="text-sm leading-relaxed"
+          >
+            {renderParagraphText(pText)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
 function ScoutAvatar({ size = 'md' }) {
   return (
     <span className={`fridge-scout-messenger__avatar fridge-scout-messenger__avatar--${size}`} aria-hidden>
@@ -321,9 +546,9 @@ export const FridgeScoutChat = forwardRef(function FridgeScoutChat(
             >
               <ScoutAvatar />
               <div className="fridge-scout-messenger__card">
-                <p className="fridge-scout-messenger__card-text whitespace-pre-wrap">
-                  {message.content}
-                </p>
+                <div className="fridge-scout-messenger__card-text">
+                  {renderScoutMarkdown(message.content)}
+                </div>
                 <div className="fridge-scout-messenger__actions">
                   <button
                     type="button"
