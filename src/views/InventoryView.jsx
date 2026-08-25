@@ -37,11 +37,12 @@ import {
   resolveModuleKey,
 } from '../inventory/modules.js';
 import { BARCODE_LOOKUP_LOADING_TEXT } from '../inventory/barcodeLookup.js';
-import { guessExpiryForItem, toIsoDateOnly } from '../inventory/expiryGuess.js';
+import { guessExpiryForItem } from '../inventory/expiryGuess.js';
 import {
-  applyItemKnowledgeToIntake,
+  findItemKnowledgeByName,
   recordUserItemCorrection,
 } from '../inventory/itemKnowledge.js';
+import { resolveItemClassification } from '../inventory/resolveItemClassification.js';
 import { inferStorageLocation } from '../inventory/smartInventory.js';
 import {
   formatInventoryQuantityLabel,
@@ -936,6 +937,7 @@ export function InventoryView({
   const [stockingId, setStockingId] = useState(null);
   const [receiptFeedback, setReceiptFeedback] = useState(null);
   const [addItemBusy, setAddItemBusy] = useState(false);
+  const [shopItemBusy, setShopItemBusy] = useState(false);
   const scopeItemType = getItemTypeForModule(inventoryScope);
 
   const shoppingList = useMemo(
@@ -1073,10 +1075,7 @@ export function InventoryView({
       const trimmed = String(name || '').trim();
       if (!trimmed || trimmed === BARCODE_LOOKUP_LOADING_TEXT) return;
 
-      const knowledgeHit = applyItemKnowledgeToIntake(itemKnowledge, {
-        name: trimmed,
-        itemType: target === 'add' ? addItemType : shopItemType,
-      });
+      const knowledgeHit = findItemKnowledgeByName(itemKnowledge, trimmed, enabledModules);
       if (knowledgeHit) {
         if (target === 'add') {
           setAddItemType(knowledgeHit.itemType);
@@ -1098,35 +1097,41 @@ export function InventoryView({
       }
 
       if (target === 'add') {
-        setAddItemType(ITEM_TYPE.FOOD);
+        setAddItemType(hit.itemType ?? ITEM_TYPE.FOOD);
         setAddCategory(hit.category);
         setAddSubCategory(hit.subCategory);
       } else {
-        setShopItemType(ITEM_TYPE.FOOD);
+        setShopItemType(hit.itemType ?? ITEM_TYPE.FOOD);
         setShopCategory(hit.category);
       }
     },
-    [addCategory, addItemType, itemKnowledge, shopItemType],
+    [addCategory, addItemType, enabledModules, itemKnowledge, shopItemType],
+  );
+
+  const handleKnowledgeUpdate = useCallback(
+    (nextKnowledge, usageInsights) => {
+      updateItemKnowledge(nextKnowledge);
+      if (usageInsights) {
+        syncUsageInsights?.(usageInsights);
+      }
+    },
+    [updateItemKnowledge, syncUsageInsights],
   );
 
   const handleDraftChange = useCallback(
     (value) => {
       setDraft(value);
-      if (addItemType === ITEM_TYPE.FOOD) {
-        applySmartClassification(value, 'add');
-      }
+      applySmartClassification(value, 'add');
     },
-    [applySmartClassification, addItemType],
+    [applySmartClassification],
   );
 
   const handleShopDraftChange = useCallback(
     (value) => {
       setShopDraft(value);
-      if (shopItemType === ITEM_TYPE.FOOD) {
-        applySmartClassification(value, 'shop');
-      }
+      applySmartClassification(value, 'shop');
     },
-    [applySmartClassification, shopItemType],
+    [applySmartClassification],
   );
 
   const handleBarcodeResolved = (result) => {
@@ -1182,92 +1187,98 @@ export function InventoryView({
     const existing = findInventoryItem(items, name, addItemType);
     if (existing) return;
 
-    let nextType = addItemType;
-    let nextCategory = addCategory;
-    let nextSubCategory = addSubCategory;
-    let nextExpiry =
-      addItemType === ITEM_TYPE.FOOD && addExpiry && addExpiryDate ? addExpiryDate : null;
-    let nextConsumptionDuration = null;
-
-    const remembered = applyItemKnowledgeToIntake(itemKnowledge, { name, itemType: addItemType });
-    if (remembered) {
-      nextType = remembered.itemType;
-      nextCategory = remembered.category;
-      nextSubCategory = remembered.subCategory;
-      if (remembered.consumptionDurationDays) {
-        nextConsumptionDuration = remembered.consumptionDurationDays;
-      }
-    } else if (!classifyItem(name)) {
-      setAddItemBusy(true);
-      try {
-        const ai = await classifyInventoryItem(name, { itemType: addItemType, remember: true });
-        nextType = ai.itemType ?? nextType;
-        nextCategory = ai.category ?? nextCategory;
-        nextSubCategory = ai.subCategory ?? nextSubCategory;
-        if (Array.isArray(ai.itemKnowledge)) {
-          updateItemKnowledge(ai.itemKnowledge);
-        }
-        if (ai.usageInsights) {
-          syncUsageInsights?.(ai.usageInsights);
-        }
-        if (ai.consumptionDurationDays) {
-          nextConsumptionDuration = ai.consumptionDurationDays;
-        }
-        if (ai.expiryDays && nextType === ITEM_TYPE.FOOD && !nextExpiry) {
-          const expiry = new Date();
-          expiry.setDate(expiry.getDate() + ai.expiryDays);
-          nextExpiry = toIsoDateOnly(expiry);
-        }
-      } catch {
-        // Keep keyword/default classification when AI is unavailable.
-      } finally {
-        setAddItemBusy(false);
-      }
-    }
-
-    const consumption = {
-      ...buildConsumptionFields(
-        { name, itemType: nextType, category: nextCategory },
-        { restockHistory },
-      ),
-      ...(nextConsumptionDuration
-        ? { consumptionDuration: nextConsumptionDuration, consumptionLearned: true }
-        : {}),
-    };
-
-    updateItems((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
+    setAddItemBusy(true);
+    try {
+      const resolved = await resolveItemClassification({
         name,
-        itemType: nextType,
-        status: STATUS.FRESH,
-        category: nextCategory,
-        subCategory: nextSubCategory,
-        expiryDate: nextExpiry,
-        storageLocation: inferStorageLocation(nextCategory, null, null),
-        ...consumption,
-      },
-    ]);
-    recordUsageEvent?.('itemAdded');
-    resetAddForm();
-    if (!isShoppingPage) {
-      setActiveView(nextCategory);
-      const mod = MODULE_DEFINITIONS.find((m) => m.itemType === nextType);
-      if (mod) setInventoryScope(mod.key);
+        preferredItemType: addItemType,
+        itemKnowledge,
+        classifyFn: classifyInventoryItem,
+        remember: true,
+      });
+
+      if (resolved.itemKnowledge) {
+        updateItemKnowledge(resolved.itemKnowledge);
+      }
+      if (resolved.usageInsights) {
+        syncUsageInsights?.(resolved.usageInsights);
+      }
+
+      const nextType = resolved.itemType ?? addItemType;
+      const nextCategory = resolved.category ?? addCategory;
+      const nextSubCategory =
+        resolved.subCategory ?? resolveSubCategory(name, nextType, nextCategory);
+      let nextExpiry =
+        nextType === ITEM_TYPE.FOOD && addExpiry && addExpiryDate ? addExpiryDate : null;
+      if (!nextExpiry && resolved.expiryDate) {
+        nextExpiry = resolved.expiryDate;
+      }
+
+      const consumption = {
+        ...buildConsumptionFields(
+          { name, itemType: nextType, category: nextCategory },
+          { restockHistory },
+        ),
+        ...(resolved.consumptionDurationDays
+          ? {
+              consumptionDuration: resolved.consumptionDurationDays,
+              consumptionLearned: true,
+            }
+          : {}),
+      };
+
+      updateItems((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          name,
+          itemType: nextType,
+          status: STATUS.FRESH,
+          category: nextCategory,
+          subCategory: nextSubCategory,
+          expiryDate: nextExpiry,
+          storageLocation: inferStorageLocation(nextCategory, null, null),
+          ...consumption,
+        },
+      ]);
+      recordUsageEvent?.('itemAdded');
+      resetAddForm();
+      if (!isShoppingPage) {
+        setActiveView(nextCategory);
+        const mod = MODULE_DEFINITIONS.find((m) => m.itemType === nextType);
+        if (mod) setInventoryScope(mod.key);
+      }
+    } finally {
+      setAddItemBusy(false);
     }
   };
 
   const addShoppingItem = async (e) => {
     e.preventDefault();
     const name = shopDraft.trim();
-    if (!name) return;
+    if (!name || shopItemBusy) return;
     setShopFeedback(null);
+    setShopItemBusy(true);
     try {
+      const resolved = await resolveItemClassification({
+        name,
+        preferredItemType: shopItemType,
+        itemKnowledge,
+        classifyFn: classifyInventoryItem,
+        remember: true,
+      });
+
+      if (resolved.itemKnowledge) {
+        updateItemKnowledge(resolved.itemKnowledge);
+      }
+      if (resolved.usageInsights) {
+        syncUsageInsights?.(resolved.usageInsights);
+      }
+
       const result = await addShoppingListItemApi({
         name,
-        itemType: shopItemType,
-        category: shopCategory,
+        itemType: resolved.itemType ?? shopItemType,
+        category: resolved.category ?? shopCategory,
         quantity: 1,
       });
       replaceItemsFromServer(result.items, {
@@ -1285,6 +1296,8 @@ export function InventoryView({
         type: 'error',
         text: err.message || 'Could not add to shopping list.',
       });
+    } finally {
+      setShopItemBusy(false);
     }
   };
 
@@ -1635,7 +1648,10 @@ export function InventoryView({
                   value={shopDraft}
                   onChange={handleShopDraftChange}
                   onPick={(entry) => applySuggestion(entry, 'shop')}
+                  onKnowledgeUpdate={handleKnowledgeUpdate}
                   enabledModules={enabledModules}
+                  itemKnowledge={itemKnowledge}
+                  preferredItemType={shopItemType}
                   placeholder='What do you need? (e.g. "Milk")'
                   inputClassName={`input-field min-w-0 flex-1 ${SHOPPING_ACCENT.focus}${
                     shopListDuplicate ? ` ${DUPLICATE_INPUT_RING}` : ''
@@ -1645,11 +1661,15 @@ export function InventoryView({
               </Suspense>
               <button
                 type="submit"
-                disabled={Boolean(shopListDuplicate)}
+                disabled={Boolean(shopListDuplicate) || shopItemBusy}
                 className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-lg active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 ${SHOPPING_ACCENT.btn}`}
-                aria-label="Add to shopping list"
+                aria-label={shopItemBusy ? 'Smart sorting item' : 'Add to shopping list'}
               >
-                <Plus className="h-5 w-5" />
+                {shopItemBusy ? (
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                ) : (
+                  <Plus className="h-5 w-5" />
+                )}
               </button>
             </div>
             <DuplicateInventoryHint item={shopListDuplicate} context="shopping" />
@@ -1777,7 +1797,10 @@ export function InventoryView({
                     onChange={handleDraftChange}
                     onPick={(entry) => applySuggestion(entry, 'add')}
                     onBarcodeResolved={handleBarcodeResolved}
+                    onKnowledgeUpdate={handleKnowledgeUpdate}
                     enabledModules={enabledModules}
+                    itemKnowledge={itemKnowledge}
+                    preferredItemType={addItemType}
                     enableBarcodeScan
                     placeholder="Item name or scan barcode"
                     id="quick-add-input"

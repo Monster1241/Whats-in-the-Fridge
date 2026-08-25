@@ -1,5 +1,6 @@
 import { FOOD_CATEGORY, ITEM_TYPE } from './constants.js';
 import { normalizeName } from './itemUtils.js';
+import { isItemTypeEnabled } from './modules.js';
 import { resolveSubCategory } from './subcategories.js';
 import { STORAGE_LOCATION } from './smartInventory.js';
 
@@ -35,6 +36,22 @@ export function itemKnowledgeKey(item) {
 export function findItemKnowledge(knowledge, item) {
   const key = itemKnowledgeKey(item);
   return (knowledge ?? []).find((entry) => itemKnowledgeKey(entry) === key);
+}
+
+/**
+ * Find learned item by normalized name across enabled modules (any item type).
+ * @param {ItemKnowledgeEntry[]|null|undefined} knowledge
+ * @param {string} name
+ * @param {Record<string, boolean>|null|undefined} [enabledModules]
+ */
+export function findItemKnowledgeByName(knowledge, name, enabledModules) {
+  const needle = normalizeName(name);
+  if (!needle) return undefined;
+  return (knowledge ?? []).find((entry) => {
+    if (normalizeName(entry.name) !== needle) return false;
+    if (!enabledModules) return true;
+    return isItemTypeEnabled(enabledModules, entry.itemType);
+  });
 }
 
 /**
