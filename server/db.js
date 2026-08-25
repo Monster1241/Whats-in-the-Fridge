@@ -476,6 +476,14 @@ export async function leaveHousehold(userId) {
   const ownerId = await ensureHouseholdOwnerId(householdId);
   const isOwner = ownerId === userId;
 
+  const { recordHouseholdLeave, softDeleteHousehold } = await import(
+    './adminHouseholdRecovery.js'
+  );
+
+  await recordHouseholdLeave(userId, householdId, {
+    wasOwner: isOwner,
+    email: doc.email ?? null,
+  });
   await clearUserHousehold(userId);
 
   const remaining = await users
@@ -484,8 +492,12 @@ export async function leaveHousehold(userId) {
     .toArray();
 
   if (remaining.length === 0) {
-    await deleteHouseholdData(householdId);
-    return { householdDeleted: true };
+    const soft = await softDeleteHousehold(householdId, {
+      leftByUserId: userId,
+      leftByEmail: doc.email ?? null,
+      wasOwner: isOwner,
+    });
+    return { householdDeleted: false, householdSoftDeleted: true, ...soft };
   }
 
   if (isOwner) {
@@ -496,7 +508,7 @@ export async function leaveHousehold(userId) {
     );
   }
 
-  return { householdDeleted: false };
+  return { householdDeleted: false, householdSoftDeleted: false };
 }
 
 export async function removeHouseholdMember(requesterId, targetUserId) {
@@ -562,7 +574,10 @@ export async function createHousehold(ownerUserId) {
 export async function findHouseholdByInviteCode(inviteCode) {
   const households = getDb().collection('households');
   const normalized = normalizeInviteCode(inviteCode);
-  const doc = await households.findOne({ invite_code: normalized });
+  const doc = await households.findOne({
+    invite_code: normalized,
+    deletedAt: { $exists: false },
+  });
   if (!doc) return null;
   return {
     id: doc._id.toString(),

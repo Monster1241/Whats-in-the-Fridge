@@ -9,5 +9,6 @@ describe('getAdminPageFromPath', () => {
     expect(getAdminPageFromPath('/admin/support')).toBe('support');
     expect(getAdminPageFromPath('/admin/reports')).toBe('reports');
     expect(getAdminPageFromPath('/admin/feedback')).toBe('feedback');
+    expect(getAdminPageFromPath('/admin/recovery')).toBe('recovery');
   });
 });

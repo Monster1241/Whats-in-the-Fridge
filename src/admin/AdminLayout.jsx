@@ -2,6 +2,7 @@ import { AdminNavLink } from './AdminNavLink.jsx';
 import {
   Flame,
   Headphones,
+  Home,
   LayoutDashboard,
   MessageSquare,
   ShieldAlert,
@@ -11,6 +12,7 @@ const NAV = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/admin/deals', label: 'Deals', icon: Flame },
   { to: '/admin/support', label: 'Support chat', icon: Headphones },
+  { to: '/admin/recovery', label: 'Recovery', icon: Home },
   { to: '/admin/reports', label: 'Reports', icon: ShieldAlert },
   { to: '/admin/feedback', label: 'Feedback', icon: MessageSquare },
 ];

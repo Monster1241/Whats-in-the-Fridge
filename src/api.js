@@ -814,3 +814,28 @@ export async function updateAdminSupportChat(id, patch) {
 export async function closeAdminSupportChat(id) {
   return updateAdminSupportChat(id, { status: 'closed' });
 }
+
+export async function fetchAdminRecoveryUser(email) {
+  const res = await fetch(
+    apiUrl(`/admin/recovery/users?email=${encodeURIComponent(email)}`),
+    { headers: authHeaders() },
+  );
+  return parseJson(res);
+}
+
+export async function fetchAdminRecoveryHousehold(query) {
+  const res = await fetch(
+    apiUrl(`/admin/recovery/households?q=${encodeURIComponent(query)}`),
+    { headers: authHeaders() },
+  );
+  return parseJson(res);
+}
+
+export async function postAdminRecoveryRejoin({ userId, householdId, force = false }) {
+  const res = await fetch(apiUrl('/admin/recovery/rejoin'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ userId, householdId, force }),
+  });
+  return parseJson(res);
+}

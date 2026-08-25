@@ -35,6 +35,12 @@ import {
   markSupportThreadRead,
   updateSupportThread,
 } from './supportChat.js';
+import {
+  adminLookupHousehold,
+  adminLookupUserByEmail,
+  adminRejoinUserToHousehold,
+  writeAdminRecoveryAudit,
+} from './adminHouseholdRecovery.js';
 
 export async function handleAdminMe(req, res) {
   try {
@@ -399,5 +405,95 @@ export async function handleAdminUpdateSupportChat(req, res) {
     console.error('PATCH /api/admin/support-chats/:id', err);
     const friendly = toFriendlyError(err);
     res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
+  }
+}
+
+export async function handleAdminLookupUser(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const email = String(req.query?.email ?? '').trim();
+    if (!email) {
+      res.status(400).json({ error: 'Email is required.' });
+      return;
+    }
+
+    const result = await adminLookupUserByEmail(email);
+    await writeAdminRecoveryAudit({
+      action: 'user_lookup',
+      adminUserId: admin.user?.id ?? null,
+      adminEmail: admin.user?.email ?? null,
+      email: result.user.email,
+      userId: result.user.id,
+    }).catch(() => {});
+
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error('GET /api/admin/recovery/users', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
+  }
+}
+
+export async function handleAdminLookupHousehold(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const q = String(req.query?.q ?? req.query?.query ?? '').trim();
+    if (!q) {
+      res.status(400).json({ error: 'Household id or invite code is required.' });
+      return;
+    }
+
+    const household = await adminLookupHousehold(q);
+    await writeAdminRecoveryAudit({
+      action: 'household_lookup',
+      adminUserId: admin.user?.id ?? null,
+      adminEmail: admin.user?.email ?? null,
+      query: q.slice(0, 80),
+      householdId: household.id,
+      inviteCodeRevealed: Boolean(household.inviteCode),
+    }).catch(() => {});
+
+    res.status(200).json({ ok: true, household });
+  } catch (err) {
+    console.error('GET /api/admin/recovery/households', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
+  }
+}
+
+export async function handleAdminRejoinHousehold(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const userId = String(req.body?.userId ?? '').trim();
+    const householdId = String(req.body?.householdId ?? '').trim();
+    const force = Boolean(req.body?.force);
+
+    if (!userId || !householdId) {
+      res.status(400).json({ error: 'userId and householdId are required.' });
+      return;
+    }
+
+    const result = await adminRejoinUserToHousehold({
+      userId,
+      householdId,
+      force,
+      adminUserId: admin.user?.id ?? null,
+      adminEmail: admin.user?.email ?? null,
+    });
+
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error('POST /api/admin/recovery/rejoin', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({
+      error: err.message || friendly.message,
+      code: err.code || undefined,
+    });
   }
 }

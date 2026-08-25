@@ -123,6 +123,13 @@ export function AdminDashboardPage({ navigateAdmin }) {
           to="/admin/feedback"
           navigateAdmin={navigateAdmin}
         />
+        <StatCard
+          label="Household recovery"
+          value="→"
+          hint="Reconnect users who left by mistake"
+          to="/admin/recovery"
+          navigateAdmin={navigateAdmin}
+        />
       </div>
     </div>
   );

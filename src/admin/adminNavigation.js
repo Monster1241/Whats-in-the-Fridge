@@ -4,6 +4,7 @@ export function getAdminPageFromPath(pathname = window.location.pathname) {
   if (path === '/admin/support') return 'support';
   if (path === '/admin/reports') return 'reports';
   if (path === '/admin/feedback') return 'feedback';
+  if (path === '/admin/recovery') return 'recovery';
   return 'dashboard';
 }
 
@@ -17,6 +18,8 @@ export function adminPathForPage(page) {
       return '/admin/reports';
     case 'feedback':
       return '/admin/feedback';
+    case 'recovery':
+      return '/admin/recovery';
     default:
       return '/admin';
   }

@@ -5,7 +5,10 @@ import {
   handleAdminListFeedback,
   handleAdminListReports,
   handleAdminListSupportChats,
+  handleAdminLookupHousehold,
+  handleAdminLookupUser,
   handleAdminMe,
+  handleAdminRejoinHousehold,
   handleAdminReplySupportChat,
   handleAdminUpdateFeedback,
   handleAdminUpdateReport,
@@ -94,4 +97,20 @@ adminRouter.patch(
     'PATCH /api/admin/support-chats/:id',
     'Could not update support chat.',
   ),
+);
+adminRouter.get(
+  '/recovery/users',
+  asyncRoute(handleAdminLookupUser, 'GET /api/admin/recovery/users', 'Could not look up user.'),
+);
+adminRouter.get(
+  '/recovery/households',
+  asyncRoute(
+    handleAdminLookupHousehold,
+    'GET /api/admin/recovery/households',
+    'Could not look up household.',
+  ),
+);
+adminRouter.post(
+  '/recovery/rejoin',
+  asyncRoute(handleAdminRejoinHousehold, 'POST /api/admin/recovery/rejoin', 'Could not rejoin household.'),
 );
