@@ -40,6 +40,7 @@ describe('sanitizeSettings', () => {
 
   it('sanitizes dietary preference', () => {
     expect(sanitizeSettings({ dietaryPreference: 'vegan' }).dietaryPreference).toBe('vegan');
+    expect(sanitizeSettings({ dietaryPreference: 'no_beef' }).dietaryPreference).toBe('no_beef');
     expect(sanitizeSettings({ dietaryPreference: 'invalid' }).dietaryPreference).toBe('none');
   });
 });

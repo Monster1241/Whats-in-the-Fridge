@@ -1,5 +1,6 @@
 export const DIETARY_PREFERENCE = {
   NONE: 'none',
+  NO_BEEF: 'no_beef',
   VEGETARIAN: 'vegetarian',
   VEGAN: 'vegan',
 };
@@ -10,6 +11,12 @@ export const DIETARY_PREFERENCE_OPTIONS = [
     label: 'No restriction',
     shortLabel: 'No restriction',
     description: 'AI can suggest any ingredients that match your inventory.',
+  },
+  {
+    value: DIETARY_PREFERENCE.NO_BEEF,
+    label: 'No beef',
+    shortLabel: 'No beef',
+    description: 'No beef or veal. Chicken, pork, lamb, fish, and plant-based options are fine.',
   },
   {
     value: DIETARY_PREFERENCE.VEGETARIAN,
@@ -29,7 +36,11 @@ export const DIETARY_PREFERENCE_OPTIONS = [
 export function normalizeDietaryPreference(value) {
   const normalized = String(value ?? '')
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  if (normalized === DIETARY_PREFERENCE.NO_BEEF || normalized === 'nobeef') {
+    return DIETARY_PREFERENCE.NO_BEEF;
+  }
   if (normalized === DIETARY_PREFERENCE.VEGETARIAN) return DIETARY_PREFERENCE.VEGETARIAN;
   if (normalized === DIETARY_PREFERENCE.VEGAN) return DIETARY_PREFERENCE.VEGAN;
   return DIETARY_PREFERENCE.NONE;
@@ -52,6 +63,7 @@ export function getDietaryPreferenceLabel(preference) {
 /** @param {unknown} preference */
 export function getDietaryPreferenceModeLabel(preference) {
   const normalized = normalizeDietaryPreference(preference);
+  if (normalized === DIETARY_PREFERENCE.NO_BEEF) return 'No beef mode';
   if (normalized === DIETARY_PREFERENCE.VEGETARIAN) return 'Vegetarian mode';
   if (normalized === DIETARY_PREFERENCE.VEGAN) return 'Vegan mode';
   return '';
@@ -60,6 +72,14 @@ export function getDietaryPreferenceModeLabel(preference) {
 /** @param {unknown} preference */
 export function buildDietaryPromptInstructions(preference) {
   switch (normalizeDietaryPreference(preference)) {
+    case DIETARY_PREFERENCE.NO_BEEF:
+      return [
+        'Household dietary preference: NO BEEF.',
+        'Every recipe and suggestion must avoid beef and veal (including mince, steak, brisket, ox tongue, and beef stock/broth).',
+        'Chicken, turkey, pork, lamb, fish, seafood, eggs, dairy, and plant-based proteins are allowed.',
+        'If inventory includes beef, suggest a non-beef swap rather than using it.',
+        'Add "No Beef" to the tags array for each generated recipe.',
+      ].join(' ');
     case DIETARY_PREFERENCE.VEGETARIAN:
       return [
         'Household dietary preference: VEGETARIAN.',
@@ -91,6 +111,9 @@ export function getRemixModeInstruction(mode, preference) {
       }
       if (dietary === DIETARY_PREFERENCE.VEGETARIAN) {
         return 'Remix for HIGHER PROTEIN (vegetarian): increase protein with eggs, dairy, legumes, tofu, or tempeh while maintaining taste. Do not add meat, poultry, fish, or seafood. Update macros accordingly. Add "High Protein" and "Vegetarian" to tags.';
+      }
+      if (dietary === DIETARY_PREFERENCE.NO_BEEF) {
+        return 'Remix for HIGHER PROTEIN (no beef): increase protein with chicken, turkey, pork, lamb, fish, eggs, dairy, legumes, or tofu while maintaining taste. Do not use beef or veal. Update macros accordingly. Add "High Protein" and "No Beef" to tags.';
       }
       return 'Remix for HIGHER PROTEIN: increase protein by adjusting quantities or substituting ingredients (e.g. Greek yogurt, extra lean meat, legumes, tofu) while maintaining taste. Update macros accordingly. Add "High Protein" to tags.';
     case 'lower_calorie':
