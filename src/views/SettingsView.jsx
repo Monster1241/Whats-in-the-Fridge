@@ -20,6 +20,10 @@ import {
   normalizeDietaryPreference,
 } from '../recipes/dietaryPreferences.js';
 import {
+  themePreferenceLabel,
+  THEME_PREFERENCE,
+} from '../theme/themePreference.js';
+import {
   isValidAustralianPostcode,
   POSTCODE_CHANGE_EVENT,
   readStoredPostcode,
@@ -44,6 +48,7 @@ import {
   Leaf,
   Loader2,
   LogOut,
+  Monitor,
   Moon,
   Refrigerator,
   Settings,
@@ -769,13 +774,16 @@ export function SettingsView({
   if (infoScreen === 'appearance') {
     return (
       <SettingsInfoScreen title="Appearance" icon={Sun} onBack={() => setInfoScreen(null)}>
-        <p className="text-muted">Choose light or dark mode for the app.</p>
-        <div className="grid grid-cols-2 gap-2">
+        <p className="text-muted">
+          Choose light, dark, or follow your phone or computer system setting. System updates as soon
+          as the device theme changes.
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <button
             type="button"
-            onClick={() => setTheme('light')}
+            onClick={() => setTheme(THEME_PREFERENCE.LIGHT)}
             className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition active:scale-[0.98] ${
-              settings.theme === 'light'
+              settings.theme === THEME_PREFERENCE.LIGHT
                 ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                 : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
             }`}
@@ -785,15 +793,27 @@ export function SettingsView({
           </button>
           <button
             type="button"
-            onClick={() => setTheme('dark')}
+            onClick={() => setTheme(THEME_PREFERENCE.DARK)}
             className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition active:scale-[0.98] ${
-              settings.theme === 'dark'
+              settings.theme === THEME_PREFERENCE.DARK
                 ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                 : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
             }`}
           >
             <Moon className="h-5 w-5" />
             Dark
+          </button>
+          <button
+            type="button"
+            onClick={() => setTheme(THEME_PREFERENCE.SYSTEM)}
+            className={`flex items-center justify-center gap-2 rounded-xl border-2 py-3 text-sm font-semibold transition active:scale-[0.98] ${
+              settings.theme === THEME_PREFERENCE.SYSTEM
+                ? 'border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                : 'border-slate-200 text-slate-600 dark:border-slate-600 dark:text-slate-400'
+            }`}
+          >
+            <Monitor className="h-5 w-5" />
+            System
           </button>
         </div>
       </SettingsInfoScreen>
@@ -1252,7 +1272,7 @@ export function SettingsView({
           icon={Sun}
           iconClassName="bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
           title="Appearance"
-          subtitle={settings.theme === 'dark' ? 'Dark mode' : 'Light mode'}
+          subtitle={themePreferenceLabel(settings.theme)}
           onClick={() => setInfoScreen('appearance')}
         />
         <SettingsNavRow

@@ -334,11 +334,7 @@ export function SupportChatPanel({ onBack }) {
     typeof document !== 'undefined' && screen === 'chat'
       ? createPortal(
           <div
-            className="fixed inset-0 z-[180] flex flex-col bg-slate-50 dark:bg-zinc-950"
-            style={{
-              paddingTop: 'env(safe-area-inset-top, 0px)',
-              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-            }}
+            className="app-fullscreen bg-slate-50 dark:bg-zinc-950"
             role="dialog"
             aria-modal="true"
             aria-label="Support conversation"

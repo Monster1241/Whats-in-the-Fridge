@@ -1,7 +1,8 @@
 import { normalizeDietaryPreference } from '../src/recipes/dietaryPreferences.js';
+import { normalizeThemePreference } from '../src/theme/themePreference.js';
 
 export const DEFAULT_SETTINGS = {
-  theme: 'light',
+  theme: 'system',
   user: { name: '', email: '' },
   dietaryPreference: 'none',
 };
@@ -25,20 +26,21 @@ export function sanitizeUserProfile(raw) {
 /**
  * Household-shared settings only (theme / diet). Display name and profile email
  * belong on the user record so partners cannot overwrite each other.
+ * Theme may be light, dark, or system (follow the device).
  * @param {unknown} raw
- * @returns {{ theme: 'light'|'dark', dietaryPreference: string }}
+ * @returns {{ theme: 'light'|'dark'|'system', dietaryPreference: string }}
  */
 export function sanitizeHouseholdSettings(raw) {
   const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   return {
-    theme: source.theme === 'dark' ? 'dark' : 'light',
+    theme: normalizeThemePreference(source.theme),
     dietaryPreference: normalizeDietaryPreference(source.dietaryPreference),
   };
 }
 
 /**
  * @param {unknown} raw
- * @returns {{ theme: 'light'|'dark', user: { name: string, email: string }, dietaryPreference: string }}
+ * @returns {{ theme: 'light'|'dark'|'system', user: { name: string, email: string }, dietaryPreference: string }}
  */
 export function sanitizeSettings(raw) {
   const household = sanitizeHouseholdSettings(raw);

@@ -19,12 +19,61 @@
   --safe-area-right: env(safe-area-inset-right, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
+  /* Adaptive shell — phones, foldables, small tablets */
+  --app-pad-x: clamp(0.75rem, 3.8vw, 1.25rem);
+  --app-column-max: 32rem;
+  --app-nav-height: 4.25rem;
+  --app-shell-min-height: 100vh;
+  --app-shell-min-height: 100dvh;
+  --vv-height: var(--app-shell-min-height);
+  --vv-offset-top: 0px;
+  --vv-width: 100vw;
+  --app-main-pad-top: max(1rem, var(--safe-area-top));
+  --app-main-pad-bottom: calc(var(--app-nav-height) + var(--safe-area-bottom));
+  --touch-min: 44px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --app-column-max: 42rem;
+    --app-pad-x: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --app-column-max: 72rem;
+    --app-pad-x: 2rem;
+    --app-nav-rail: 15rem;
+    --app-main-pad-top: max(1.5rem, var(--safe-area-top));
+    --app-main-pad-bottom: max(1.5rem, var(--safe-area-bottom));
+  }
+}
+
+@media (min-width: 1280px) {
+  :root {
+    --app-column-max: 80rem;
+    --app-pad-x: 2.5rem;
+  }
+}
+
+@media (max-width: 359px) {
+  :root {
+    --app-pad-x: 0.625rem;
+    --app-nav-height: 4rem;
+  }
+}
+
+html {
+  height: 100%;
+  height: -webkit-fill-available;
 }
 
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
+  min-height: var(--app-shell-min-height);
 }
 
 body {
@@ -46,6 +95,17 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  overflow-x: clip;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  isolation: isolate;
 }
 
 /*
@@ -102,23 +162,61 @@ body {
 @layer components {
   .app-shell {
     @apply bg-lm-canvas text-zinc-900 dark:bg-dm-canvas dark:text-zinc-100;
+    width: 100%;
+    min-height: var(--app-shell-min-height);
     padding-left: var(--safe-area-left);
     padding-right: var(--safe-area-right);
+    overflow-x: clip;
+  }
+
+  .app-frame {
+    width: 100%;
+    max-width: var(--app-column-max);
+    min-height: var(--app-shell-min-height);
+    margin-inline: auto;
   }
 
   .app-main {
     /* Content inset under status bar / notch; bottom clears fixed tab bar */
-    padding-top: max(1.5rem, var(--safe-area-top));
-    padding-bottom: calc(4.5rem + var(--safe-area-bottom));
+    padding-top: var(--app-main-pad-top);
+    padding-bottom: var(--app-main-pad-bottom);
+    padding-left: var(--app-pad-x);
+    padding-right: var(--app-pad-x);
     background:
       radial-gradient(ellipse 90% 55% at 100% -5%, rgb(var(--brand-primary-rgb) / 0.07), transparent 52%),
       radial-gradient(ellipse 70% 45% at 0% 100%, rgb(var(--brand-secondary-rgb) / 0.06), transparent 48%),
       radial-gradient(ellipse 50% 40% at 80% 90%, rgb(var(--brand-accent-rgb) / 0.04), transparent 50%),
       var(--brand-bg);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
 
   .dark .app-main {
     background: #000000;
+  }
+
+  /* Full-screen overlays (support chat, scanners) — keyboard-aware on iOS/Android */
+  .app-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 180;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100vw;
+    height: var(--vv-height, var(--app-shell-min-height));
+    max-height: var(--vv-height, var(--app-shell-min-height));
+    transform: translateY(var(--vv-offset-top, 0px));
+    padding-top: var(--safe-area-top);
+    padding-right: var(--safe-area-right);
+    padding-bottom: var(--safe-area-bottom);
+    padding-left: var(--safe-area-left);
+    overflow: hidden;
+    background-color: #f8fafc;
+  }
+
+  .dark .app-fullscreen {
+    background-color: #09090b;
   }
 
   .page-header {
@@ -127,6 +225,7 @@ body {
 
   .page-header__title {
     @apply text-heading bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-600 bg-clip-text text-2xl font-extrabold text-transparent dark:from-emerald-300 dark:via-teal-300 dark:to-emerald-400;
+    font-size: clamp(1.35rem, 5.2vw, 1.5rem);
   }
 
   .page-header__subtitle {
@@ -136,6 +235,151 @@ body {
   .nav-bar {
     @apply border-t border-emerald-500/10 bg-lm-canvas/90 shadow-lm-nav backdrop-blur-xl dark:border-white/10 dark:bg-dm-canvas/90 dark:shadow-dm-nav;
     padding-bottom: var(--safe-area-bottom);
+  }
+
+  .nav-bar--responsive {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+  }
+
+  .nav-bar__inner {
+    width: 100%;
+    max-width: var(--app-column-max);
+    margin-inline: auto;
+    display: flex;
+    padding-inline: 0.25rem;
+  }
+
+  .nav-bar__brand {
+    display: none;
+  }
+
+  .nav-tab-btn {
+    min-height: var(--touch-min);
+  }
+
+  html[data-narrow='true'] .nav-tab-btn {
+    font-size: 9px;
+    letter-spacing: -0.01em;
+  }
+
+  /* Desktop / large tablet website layout — sidebar + wide content */
+  @media (min-width: 1024px) {
+    .app-desktop {
+      flex-direction: row;
+      max-width: var(--app-column-max);
+      margin-inline: auto;
+      min-height: var(--app-shell-min-height);
+      height: var(--app-shell-min-height);
+      overflow: hidden;
+      border-left: 1px solid rgb(5 150 105 / 0.08);
+      border-right: 1px solid rgb(5 150 105 / 0.08);
+      box-shadow:
+        0 0 0 1px rgb(15 23 42 / 0.02),
+        0 24px 64px -28px rgb(5 150 105 / 0.18);
+    }
+
+    .dark .app-desktop {
+      border-color: rgb(255 255 255 / 0.06);
+      box-shadow: 0 24px 64px -28px rgb(0 0 0 / 0.65);
+    }
+
+    .app-main--desktop {
+      order: 2;
+      min-width: 0;
+      height: 100%;
+    }
+
+    .nav-bar--responsive {
+      position: sticky;
+      top: 0;
+      bottom: auto;
+      left: auto;
+      right: auto;
+      order: 1;
+      width: var(--app-nav-rail);
+      height: 100%;
+      flex-shrink: 0;
+      border-top: 0;
+      border-right: 1px solid rgb(5 150 105 / 0.12);
+      padding-top: max(1rem, var(--safe-area-top));
+      padding-bottom: max(1rem, var(--safe-area-bottom));
+      box-shadow: none;
+    }
+
+    .dark .nav-bar--responsive {
+      border-right-color: rgb(255 255 255 / 0.08);
+    }
+
+    .nav-bar__inner {
+      max-width: none;
+      height: 100%;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 0.75rem;
+    }
+
+    .nav-bar__brand {
+      display: block;
+      margin: 0 0 0.75rem;
+      padding: 0.35rem 0.75rem 0.85rem;
+      font-family: Nunito, 'Plus Jakarta Sans', system-ui, sans-serif;
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: rgb(6 95 70);
+      border-bottom: 1px solid rgb(5 150 105 / 0.12);
+    }
+
+    .dark .nav-bar__brand {
+      color: rgb(110 231 183);
+      border-bottom-color: rgb(255 255 255 / 0.08);
+    }
+
+    .nav-tab-btn {
+      flex: 0 0 auto;
+      width: 100%;
+      min-height: 2.75rem;
+      flex-direction: row;
+      justify-content: flex-start;
+      gap: 0.75rem;
+      padding: 0.55rem 0.75rem;
+      font-size: 0.875rem;
+      border-radius: 0.9rem;
+    }
+
+    .nav-tab-btn .nav-tab-icon {
+      height: 2.25rem;
+      width: 2.25rem;
+    }
+
+    .nav-tab-btn__bar {
+      left: 0;
+      top: 50%;
+      width: 0.25rem;
+      height: 1.5rem;
+      transform: translateY(-50%);
+    }
+
+    .nav-tab-btn--active {
+      background: rgb(236 253 245 / 0.9);
+    }
+
+    .dark .nav-tab-btn--active {
+      background: rgb(6 78 59 / 0.35);
+    }
+
+    .app-fullscreen {
+      left: 50%;
+      right: auto;
+      width: min(100vw, var(--app-column-max));
+      max-width: var(--app-column-max);
+      transform: translate(-50%, var(--vv-offset-top, 0px));
+      border-left: 1px solid rgb(15 23 42 / 0.06);
+      border-right: 1px solid rgb(15 23 42 / 0.06);
+    }
   }
 
   .input-field {
@@ -290,10 +534,15 @@ body {
   }
 
   .fridge-scout-page {
-    @apply -mx-4 flex min-h-0 flex-col sm:-mx-5;
-    height: calc(100dvh - 1.5rem - 4.25rem - env(safe-area-inset-bottom, 0px));
-    max-height: calc(100dvh - 1.5rem - 4.25rem - env(safe-area-inset-bottom, 0px));
-    /* main top padding + bottom nav; header/tabs shrink inside via flex */
+    @apply flex min-h-0 flex-col;
+    margin-left: calc(var(--app-pad-x) * -1);
+    margin-right: calc(var(--app-pad-x) * -1);
+    height: calc(
+      var(--vv-height, var(--app-shell-min-height)) - var(--app-main-pad-top) - var(--app-main-pad-bottom)
+    );
+    max-height: calc(
+      var(--vv-height, var(--app-shell-min-height)) - var(--app-main-pad-top) - var(--app-main-pad-bottom)
+    );
   }
 
   .fridge-scout-messenger--fullscreen {
@@ -1769,7 +2018,8 @@ body {
 .auth-screen {
   position: relative;
   min-height: 100%;
-  overflow-x: hidden;
+  min-height: var(--app-shell-min-height);
+  overflow-x: clip;
   background:
     radial-gradient(ellipse 85% 50% at 50% -18%, rgb(var(--brand-primary-rgb) / 0.1), transparent 52%),
     var(--brand-bg);
@@ -1835,16 +2085,22 @@ body {
   z-index: 1;
   display: flex;
   min-height: 100%;
-  max-width: 28rem;
+  min-height: var(--vv-height, var(--app-shell-min-height));
+  max-width: min(28rem, 100%);
+  width: 100%;
   flex-direction: column;
   justify-content: center;
   margin: 0 auto;
-  padding: max(1.5rem, env(safe-area-inset-top)) 1.25rem max(2rem, env(safe-area-inset-bottom));
+  padding:
+    max(1.25rem, var(--safe-area-top))
+    var(--app-pad-x)
+    max(1.5rem, var(--safe-area-bottom));
+  box-sizing: border-box;
 }
 
 .auth-screen__inner--compact {
   justify-content: flex-start;
-  padding-top: max(2.5rem, env(safe-area-inset-top));
+  padding-top: max(2rem, var(--safe-area-top));
 }
 
 .auth-screen__hero {

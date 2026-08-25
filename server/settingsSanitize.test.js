@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeSettings, settingsForViewer } from './settingsSanitize.js';
 
 describe('sanitizeSettings', () => {
-  it('keeps light/dark and trims profile fields', () => {
+  it('keeps light/dark/system and trims profile fields', () => {
     expect(
       sanitizeSettings({
         theme: 'dark',
@@ -14,16 +14,18 @@ describe('sanitizeSettings', () => {
       user: { name: 'Ada', email: 'ada@example.com' },
       dietaryPreference: 'none',
     });
+    expect(sanitizeSettings({ theme: 'system' }).theme).toBe('system');
+    expect(sanitizeSettings({ theme: 'auto' }).theme).toBe('system');
   });
 
-  it('falls back to defaults for junk input', () => {
+  it('falls back to system for junk theme input', () => {
     expect(sanitizeSettings(null)).toEqual({
-      theme: 'light',
+      theme: 'system',
       user: { name: '', email: '' },
       dietaryPreference: 'none',
     });
     expect(sanitizeSettings({ theme: 'neon', user: 'nope' })).toEqual({
-      theme: 'light',
+      theme: 'system',
       user: { name: '', email: '' },
       dietaryPreference: 'none',
     });

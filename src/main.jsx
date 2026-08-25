@@ -4,7 +4,15 @@ import App from './App.jsx';
 import { AdminApp } from './admin/AdminApp.jsx';
 import { PrivacyPolicy } from './pages/PrivacyPolicy.jsx';
 import { TermsOfService } from './pages/TermsOfService.jsx';
+import { installAdaptiveViewport } from './adaptive/viewport.js';
+import {
+  applyThemePreference,
+  readStoredThemePreference,
+} from './theme/themePreference.js';
 import './index.css';
+
+installAdaptiveViewport();
+applyThemePreference(readStoredThemePreference() ?? 'system');
 
 function Root() {
   const path = window.location.pathname.replace(/\/$/, '') || '/';

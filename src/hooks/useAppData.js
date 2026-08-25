@@ -17,12 +17,28 @@ import {
   diffInventoryItems,
   toApiStateSnapshot,
 } from '../utils/diffAppState.js';
+import {
+  applyThemePreference,
+  normalizeThemePreference,
+  readStoredThemePreference,
+  subscribeSystemColorScheme,
+  writeStoredThemePreference,
+} from '../theme/themePreference.js';
 
 export const DEFAULT_SETTINGS = {
-  theme: 'light',
+  theme: 'system',
   user: { name: '', email: '' },
   dietaryPreference: 'none',
 };
+
+function mergeSettingsWithDeviceTheme(settings) {
+  const merged = { ...DEFAULT_SETTINGS, ...settings };
+  const stored = readStoredThemePreference();
+  return {
+    ...merged,
+    theme: stored ?? normalizeThemePreference(merged.theme),
+  };
+}
 
 const SAVE_DELAY_MS = 400;
 
@@ -43,7 +59,7 @@ export function useAppData(enabled) {
   const [saveError, setSaveError] = useState(null);
   const [offlineMode, setOfflineMode] = useState(false);
   const [items, setItems] = useState([]);
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState(() => mergeSettingsWithDeviceTheme(DEFAULT_SETTINGS));
   const [enabledModules, setEnabledModules] = useState({ ...DEFAULT_ENABLED_MODULES });
   const [savedIds, setSavedIds] = useState([]);
   const [recipeLibrary, setRecipeLibrary] = useState([]);
@@ -98,7 +114,7 @@ export function useAppData(enabled) {
     const revision = Number(state.inventoryRevision ?? 0);
     inventoryRevisionRef.current = revision;
     setItems(migrated);
-    setSettings({ ...DEFAULT_SETTINGS, ...state.settings });
+    setSettings(mergeSettingsWithDeviceTheme(state.settings));
     setEnabledModules(normalizeEnabledModules(state.enabledModules));
     setSavedIds(Array.isArray(state.savedRecipeIds) ? state.savedRecipeIds : []);
     setRecipeLibrary(Array.isArray(state.recipeLibrary) ? state.recipeLibrary : []);
@@ -112,7 +128,7 @@ export function useAppData(enabled) {
     setInventoryClearBackup(toInventoryClearBackupSummary(state.inventoryClearBackup) ?? null);
     lastSyncedRef.current = toApiStateSnapshot({
       items: needsPersist ? (state.items ?? []) : migrated,
-      settings: { ...DEFAULT_SETTINGS, ...state.settings },
+      settings: mergeSettingsWithDeviceTheme(state.settings),
       savedIds: Array.isArray(state.savedRecipeIds) ? state.savedRecipeIds : [],
       recipeLibrary: Array.isArray(state.recipeLibrary) ? state.recipeLibrary : [],
       onboarding: state.onboarding?.dismissed ? state.onboarding : { dismissed: [] },
@@ -124,7 +140,7 @@ export function useAppData(enabled) {
     latestRef.current = {
       ...latestRef.current,
       items: migrated,
-      settings: { ...DEFAULT_SETTINGS, ...state.settings },
+      settings: mergeSettingsWithDeviceTheme(state.settings),
       savedIds: Array.isArray(state.savedRecipeIds) ? state.savedRecipeIds : [],
       recipeLibrary: Array.isArray(state.recipeLibrary) ? state.recipeLibrary : [],
       onboarding: state.onboarding?.dismissed ? state.onboarding : { dismissed: [] },
@@ -200,7 +216,9 @@ export function useAppData(enabled) {
 
         const nextLocal = {
           items: mergedItems,
-          settings: metaDiff.settings ?? { ...DEFAULT_SETTINGS, ...serverState.settings },
+          settings: mergeSettingsWithDeviceTheme(
+            metaDiff.settings ?? { ...DEFAULT_SETTINGS, ...serverState.settings },
+          ),
           savedIds: metaDiff.savedRecipeIds ?? serverState.savedRecipeIds ?? [],
           recipeLibrary: metaDiff.recipeLibrary ?? serverState.recipeLibrary ?? [],
           onboarding: metaDiff.onboarding ?? serverState.onboarding ?? { dismissed: [] },
@@ -345,7 +363,10 @@ export function useAppData(enabled) {
   }, [enabled, persistLatest]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', settings.theme === 'dark');
+    applyThemePreference(settings.theme);
+    return subscribeSystemColorScheme(settings.theme, () => {
+      applyThemePreference(settings.theme);
+    });
   }, [settings.theme]);
 
   const updateItems = useCallback((updater) => {
@@ -444,7 +465,13 @@ export function useAppData(enabled) {
   );
 
   const updateSettings = useCallback((updater) => {
-    setSettings((prev) => (typeof updater === 'function' ? updater(prev) : updater));
+    setSettings((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      const theme = normalizeThemePreference(next?.theme);
+      writeStoredThemePreference(theme);
+      applyThemePreference(theme);
+      return { ...next, theme };
+    });
   }, []);
 
   const updateEnabledModules = useCallback(

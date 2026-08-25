@@ -17,11 +17,13 @@
     ]
   },
   "android": {
-    "allowMixedContent": false
+    "allowMixedContent": false,
+    "adjustMarginsForEdgeToEdge": "auto"
   },
   "ios": {
     "contentInset": "automatic",
-    "preferredContentMode": "mobile"
+    "preferredContentMode": "mobile",
+    "scrollEnabled": true
   },
   "plugins": {
     "SplashScreen": {

@@ -52,7 +52,7 @@ export function VerifyScreen({ email, error, setError, onVerify, onLogout }) {
   };
 
   return (
-    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col justify-center px-5 py-8">
+    <div className="app-shell app-frame flex flex-col justify-center px-[var(--app-pad-x)] py-8">
       <header className="mb-8 text-center">
         <Refrigerator className="mx-auto mb-3 h-12 w-12 text-emerald-600" aria-hidden />
         <h1 className="text-heading text-2xl font-extrabold">Verify your account</h1>

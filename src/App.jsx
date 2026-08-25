@@ -94,7 +94,7 @@ function LoadingScreen({ message }) {
     <div className="auth-screen">
       <div className="auth-screen__mesh" aria-hidden />
       <div className="auth-screen__orb auth-screen__orb--a" aria-hidden />
-      <div className="mx-auto flex min-h-full max-w-lg flex-col items-center justify-center px-6">
+      <div className="mx-auto flex min-h-full w-full max-w-[var(--app-column-max)] flex-col items-center justify-center px-[var(--app-pad-x)]">
         <UnloadingLoader size="sm" className="mb-5" />
         <p className="text-heading animate-fade-in text-center text-sm font-semibold">{message}</p>
       </div>
@@ -104,7 +104,7 @@ function LoadingScreen({ message }) {
 
 function ErrorScreen({ error, onRetry }) {
   return (
-    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col px-6 py-10">
+    <div className="app-shell app-frame flex flex-col px-[var(--app-pad-x)] py-10">
       <div className="surface-card border-rose-200 p-5 dark:border-rose-800">
         <h1 className="text-heading mb-2 text-lg font-bold">Cannot connect to database</h1>
         <p className="text-muted mb-4 text-sm leading-relaxed">{error}</p>
@@ -309,8 +309,8 @@ export default function App() {
   return (
     <PushNotificationProvider enabled={auth.canUseApp}>
     <ExpiryNotificationSync items={items} enabled={!loading} />
-    <div className="app-shell mx-auto flex min-h-full max-w-lg flex-col">
-      <main className="app-main flex-1 overflow-y-auto px-4 sm:px-5">
+    <div className="app-shell app-frame app-desktop flex min-h-[var(--app-shell-min-height)] flex-col">
+      <main className="app-main app-main--desktop flex-1 overflow-y-auto overflow-x-hidden">
         <div key={activeTab} className={flowEnterClass(tabFlowDir, 'animate-page')}>
         {saveError && (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
@@ -376,8 +376,11 @@ export default function App() {
         </div>
       </main>
 
-      <nav className="nav-bar fixed bottom-0 left-0 right-0 z-40">
-        <div className="mx-auto flex max-w-lg px-1">
+      <nav className="nav-bar nav-bar--responsive z-40" aria-label="Main">
+        <div className="nav-bar__inner">
+          <p className="nav-bar__brand" aria-hidden>
+            Fridge
+          </p>
           {navTabs.map(({ id, label, icon: Icon, accent, badge }) => {
             const active = activeTab === id;
             const accentStyles =
@@ -406,13 +409,13 @@ export default function App() {
                   setTabFlowDir(getStepDirection(MAIN_TAB_ORDER, activeTab, id));
                   setActiveTab(id);
                 }}
-                className={`nav-tab-btn relative flex min-h-[64px] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-bold transition-[color,transform] duration-200 active:scale-[0.96] sm:text-xs ${
+                className={`nav-tab-btn relative flex min-h-[64px] flex-1 flex-col items-center justify-center gap-0.5 px-0.5 py-1.5 text-[10px] font-bold transition-[color,transform] duration-200 active:scale-[0.96] sm:px-1 sm:text-xs ${
                   active ? `nav-tab-btn--active ${accentStyles.text}` : 'text-slate-500 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300'
                 }`}
               >
                 {active && (
                   <span
-                    className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full transition-all duration-300 ${accentStyles.bar}`}
+                    className={`nav-tab-btn__bar absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full transition-all duration-300 ${accentStyles.bar}`}
                     aria-hidden
                   />
                 )}
