@@ -162,8 +162,11 @@ export function AdminApp() {
 
   if (auth.booting) {
     return (
-      <div className="flex min-h-full items-center justify-center p-8">
-        <p className="text-muted text-sm">Checking session…</p>
+      <div className="admin-shell flex min-h-full items-center justify-center p-8">
+        <div className="admin-surface max-w-sm p-6 text-center">
+          <div className="admin-skeleton mx-auto mb-3 h-3 w-24 rounded-full" />
+          <p className="text-muted text-sm">Checking session…</p>
+        </div>
       </div>
     );
   }
@@ -198,21 +201,28 @@ export function AdminApp() {
 
   if (auth.needsHousehold) {
     return (
-      <div className="mx-auto flex min-h-full max-w-md flex-col justify-center px-6 py-12">
-        <h1 className="text-heading text-lg font-bold">Household required</h1>
-        <p className="text-muted mt-2 text-sm leading-relaxed">
-          Finish household setup in the main app first, then return to{' '}
-          <a href="/admin" className="font-semibold text-sky-600 underline">
-            /admin
+      <div className="admin-shell flex min-h-full items-center justify-center px-6 py-12">
+        <div className="admin-surface w-full max-w-md p-6 sm:p-8">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-400">
+            Fridge Admin
+          </p>
+          <h1 className="text-heading mt-2 text-xl font-extrabold tracking-tight">
+            Household required
+          </h1>
+          <p className="text-muted mt-2 text-sm leading-relaxed">
+            Finish household setup in the main app first, then return to{' '}
+            <a href="/admin" className="font-semibold text-teal-700 underline dark:text-teal-300">
+              /admin
+            </a>
+            .
+          </p>
+          <a
+            href="/"
+            className="mt-6 inline-flex w-full justify-center rounded-xl bg-slate-800 py-3 text-sm font-bold text-white transition hover:bg-slate-700 dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            Open main app
           </a>
-          .
-        </p>
-        <a
-          href="/"
-          className="mt-6 inline-flex justify-center rounded-xl bg-slate-800 py-3 text-sm font-bold text-white"
-        >
-          Open main app
-        </a>
+        </div>
       </div>
     );
   }
@@ -237,8 +247,11 @@ export function AdminApp() {
 
   if (!adminCheck.resolved) {
     return (
-      <div className="flex min-h-full items-center justify-center p-8">
-        <p className="text-muted text-sm">Checking admin access…</p>
+      <div className="admin-shell flex min-h-full items-center justify-center p-8">
+        <div className="admin-surface max-w-sm p-6 text-center">
+          <div className="admin-skeleton mx-auto mb-3 h-3 w-28 rounded-full" />
+          <p className="text-muted text-sm">Checking admin access…</p>
+        </div>
       </div>
     );
   }
@@ -250,27 +263,34 @@ export function AdminApp() {
   };
 
   return (
-    <div className="mx-auto flex min-h-full max-w-md flex-col justify-center px-6 py-12">
-      <h1 className="text-heading text-lg font-bold">Admin access denied</h1>
-      <p className="text-muted mt-2 text-sm leading-relaxed">
-        Signed in as <strong>{adminCheck.email}</strong>. Add this email to{' '}
-        <code className="text-xs">ADMIN_EMAILS</code> on the server, then try again — or go back
-        to log in with a different account.
-      </p>
-      <div className="mt-6 flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={handleGoBackToAdminLogin}
-          className="inline-flex justify-center rounded-xl bg-sky-600 py-3 text-sm font-bold text-white hover:bg-sky-500 active:scale-[0.98]"
-        >
-          Go back
-        </button>
-        <a
-          href="/"
-          className="inline-flex justify-center rounded-xl bg-slate-800 py-3 text-sm font-bold text-white dark:bg-slate-200 dark:text-slate-900"
-        >
-          Back to app
-        </a>
+    <div className="admin-shell flex min-h-full items-center justify-center px-6 py-12">
+      <div className="admin-surface w-full max-w-md p-6 sm:p-8">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-rose-600 dark:text-rose-400">
+          Access denied
+        </p>
+        <h1 className="text-heading mt-2 text-xl font-extrabold tracking-tight">
+          Not an admin account
+        </h1>
+        <p className="text-muted mt-2 text-sm leading-relaxed">
+          Signed in as <strong className="text-heading">{adminCheck.email}</strong>. Add this email
+          to <code className="rounded bg-slate-100 px-1 text-xs dark:bg-zinc-800">ADMIN_EMAILS</code>{' '}
+          on the server, then try again — or go back to log in with a different account.
+        </p>
+        <div className="mt-6 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={handleGoBackToAdminLogin}
+            className="inline-flex justify-center rounded-xl bg-sky-600 py-3 text-sm font-bold text-white transition hover:bg-sky-500 active:scale-[0.98]"
+          >
+            Go back
+          </button>
+          <a
+            href="/"
+            className="inline-flex justify-center rounded-xl bg-slate-800 py-3 text-sm font-bold text-white transition hover:bg-slate-700 dark:bg-zinc-100 dark:text-zinc-900"
+          >
+            Back to app
+          </a>
+        </div>
       </div>
     </div>
   );

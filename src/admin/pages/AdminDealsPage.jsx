@@ -10,6 +10,19 @@ import {
 } from '../../api.js';
 import { AdminDealEditorModal, DEAL_STORES } from '../AdminDealEditorModal.jsx';
 import { getDealPriceCheckLinks } from '../dealPriceCheck.js';
+import {
+  AdminAlert,
+  AdminButton,
+  AdminEmptyState,
+  AdminFilterChips,
+  AdminLoading,
+  AdminPageHeader,
+  AdminTable,
+  AdminTableHead,
+  AdminTd,
+  AdminTh,
+  AdminTr,
+} from '../components/index.js';
 
 function confirmAction(message) {
   return window.confirm(message);
@@ -173,222 +186,191 @@ export function AdminDealsPage() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-heading mb-1 text-xl font-extrabold">Deal curation</h1>
-          <p className="text-muted text-sm">
-            Add, edit, or remove deals. Use Check price to search the store site or open the
-            catalogue, then verify when prices match.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setEditorError('');
-            setEditor({ mode: 'create' });
-          }}
-          className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-500"
-        >
-          <Plus className="h-4 w-4" aria-hidden />
-          Add deal
-        </button>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setViewVerified(false)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!viewVerified ? 'bg-slate-800 text-white' : 'bg-white ring-1 ring-slate-200 dark:bg-zinc-950 dark:ring-slate-700'}`}
-        >
-          Unverified
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewVerified(true)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-bold ${viewVerified ? 'bg-slate-800 text-white' : 'bg-white ring-1 ring-slate-200 dark:bg-zinc-950 dark:ring-slate-700'}`}
-        >
-          Verified
-        </button>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setStoreFilter('')}
-          className={`rounded-lg px-3 py-1.5 text-xs font-bold ${!storeFilter ? 'bg-slate-800 text-white' : 'bg-white ring-1 ring-slate-200 dark:bg-zinc-950 dark:ring-slate-700'}`}
-        >
-          All stores
-        </button>
-        {DEAL_STORES.map((store) => (
-          <button
-            key={store}
-            type="button"
-            onClick={() => setStoreFilter(store)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-bold capitalize ${storeFilter === store ? 'bg-slate-800 text-white' : 'bg-white ring-1 ring-slate-200 dark:bg-zinc-950 dark:ring-slate-700'}`}
+      <AdminPageHeader
+        title="Deal curation"
+        description="Add, edit, or remove deals. Use Check price to search the store site or open the catalogue, then verify when prices match."
+        actions={
+          <AdminButton
+            onClick={() => {
+              setEditorError('');
+              setEditor({ mode: 'create' });
+            }}
           >
-            {store}
-          </button>
-        ))}
-      </div>
+            <Plus className="h-4 w-4" aria-hidden />
+            Add deal
+          </AdminButton>
+        }
+      />
+
+      <AdminFilterChips
+        value={viewVerified ? 'verified' : 'unverified'}
+        onChange={(id) => setViewVerified(id === 'verified')}
+        options={[
+          { id: 'unverified', label: 'Unverified' },
+          { id: 'verified', label: 'Verified' },
+        ]}
+      />
+
+      <AdminFilterChips
+        value={storeFilter}
+        onChange={setStoreFilter}
+        options={[
+          { id: '', label: 'All stores' },
+          ...DEAL_STORES.map((store) => ({
+            id: store,
+            label: store.charAt(0).toUpperCase() + store.slice(1),
+          })),
+        ]}
+      />
 
       <div className="mb-2 flex flex-wrap gap-2">
         {DEAL_STORES.map((store) => (
-          <button
+          <AdminButton
             key={`verify-${store}`}
-            type="button"
+            variant="success"
+            size="sm"
             disabled={busyId != null}
             onClick={() => verifyStore(store)}
-            className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
           >
             Verify all {store}
-          </button>
+          </AdminButton>
         ))}
       </div>
       <div className="mb-4 flex flex-wrap gap-2">
         {DEAL_STORES.map((store) => (
-          <button
+          <AdminButton
             key={`unverify-${store}`}
-            type="button"
+            variant="warning"
+            size="sm"
             disabled={busyId != null}
             onClick={() => unverifyStore(store)}
-            className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-500 disabled:opacity-50"
           >
             Unverify all {store}
-          </button>
+          </AdminButton>
         ))}
       </div>
 
-      {message && (
-        <p className="mb-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-          {message}
-        </p>
-      )}
-      {error && (
-        <p className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 dark:bg-rose-950/40 dark:text-rose-300">
-          {error}
-        </p>
-      )}
+      <AdminAlert variant="success">{message}</AdminAlert>
+      <AdminAlert variant="error">{error}</AdminAlert>
 
       {loading ? (
-        <p className="text-muted text-sm">Loading…</p>
+        <AdminLoading label="Loading deals…" className="admin-surface p-5" />
       ) : deals.length === 0 ? (
-        <p className="text-muted rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm dark:border-slate-700">
-          No {viewVerified ? 'verified' : 'unverified'} deals for this filter.
-        </p>
+        <AdminEmptyState
+          title={`No ${viewVerified ? 'verified' : 'unverified'} deals`}
+          description="Try another store filter or add a new deal."
+        />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-zinc-950">
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-zinc-900">
-              <tr>
-                <th className="px-4 py-3">Product</th>
-                <th className="px-4 py-3">Store</th>
-                <th className="px-4 py-3">Prices</th>
-                <th className="px-4 py-3">Check price</th>
-                {viewVerified && <th className="px-4 py-3">Verified</th>}
-                <th className="px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deals.map((deal) => {
-                const links = getDealPriceCheckLinks(deal);
-                return (
-                  <tr key={deal.id} className="border-b border-slate-100 dark:border-slate-800">
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{deal.name}</p>
-                      <p className="text-muted text-xs">
-                        {deal.dealType}
-                        {deal.category ? ` · ${deal.category}` : ''}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 capitalize">{deal.store}</td>
-                    <td className="px-4 py-3 tabular-nums">
-                      ${Number(deal.dealPrice).toFixed(2)}
-                      {deal.originalPrice != null && (
-                        <span className="text-muted ml-1 line-through">
-                          ${Number(deal.originalPrice).toFixed(2)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          title="Search this product on the store website"
-                          onClick={() => openExternal(links.searchUrl)}
-                          disabled={!links.searchUrl}
-                          className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-40"
-                        >
-                          <Search className="h-3.5 w-3.5" aria-hidden />
-                          Search
-                        </button>
-                        <button
-                          type="button"
-                          title="Open the store catalogue"
-                          onClick={() => openExternal(links.catalogueUrl)}
-                          disabled={!links.catalogueUrl}
-                          className="inline-flex items-center gap-1 rounded-lg bg-slate-700 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-slate-600 disabled:opacity-40"
-                        >
-                          <BookOpen className="h-3.5 w-3.5" aria-hidden />
-                          Catalogue
-                        </button>
-                      </div>
-                    </td>
-                    {viewVerified && (
-                      <td className="text-muted px-4 py-3 text-xs">
-                        {deal.priceVerifiedBy ?? '—'}
-                      </td>
+        <AdminTable>
+          <AdminTableHead>
+            <tr>
+              <AdminTh>Product</AdminTh>
+              <AdminTh>Store</AdminTh>
+              <AdminTh>Prices</AdminTh>
+              <AdminTh>Check price</AdminTh>
+              {viewVerified && <AdminTh>Verified</AdminTh>}
+              <AdminTh>Actions</AdminTh>
+            </tr>
+          </AdminTableHead>
+          <tbody>
+            {deals.map((deal) => {
+              const links = getDealPriceCheckLinks(deal);
+              return (
+                <AdminTr key={deal.id}>
+                  <AdminTd>
+                    <p className="font-semibold text-slate-900 dark:text-zinc-100">{deal.name}</p>
+                    <p className="text-muted text-xs">
+                      {deal.dealType}
+                      {deal.category ? ` · ${deal.category}` : ''}
+                    </p>
+                  </AdminTd>
+                  <AdminTd className="capitalize">{deal.store}</AdminTd>
+                  <AdminTd className="tabular-nums">
+                    ${Number(deal.dealPrice).toFixed(2)}
+                    {deal.originalPrice != null && (
+                      <span className="text-muted ml-1 line-through">
+                        ${Number(deal.originalPrice).toFixed(2)}
+                      </span>
                     )}
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
+                  </AdminTd>
+                  <AdminTd>
+                    <div className="flex flex-wrap gap-1.5">
+                      <AdminButton
+                        size="sm"
+                        variant="secondary"
+                        title="Search this product on the store website"
+                        onClick={() => openExternal(links.searchUrl)}
+                        disabled={!links.searchUrl}
+                        className="!bg-violet-600 !text-white hover:!bg-violet-500 dark:!bg-violet-600"
+                      >
+                        <Search className="h-3.5 w-3.5" aria-hidden />
+                        Search
+                      </AdminButton>
+                      <AdminButton
+                        size="sm"
+                        variant="dark"
+                        title="Open the store catalogue"
+                        onClick={() => openExternal(links.catalogueUrl)}
+                        disabled={!links.catalogueUrl}
+                      >
+                        <BookOpen className="h-3.5 w-3.5" aria-hidden />
+                        Catalogue
+                      </AdminButton>
+                    </div>
+                  </AdminTd>
+                  {viewVerified && (
+                    <AdminTd className="text-muted text-xs">{deal.priceVerifiedBy ?? '—'}</AdminTd>
+                  )}
+                  <AdminTd>
+                    <div className="flex flex-wrap gap-1.5">
+                      <AdminButton
+                        size="sm"
+                        variant="secondary"
+                        disabled={busyId != null}
+                        onClick={() => {
+                          setEditorError('');
+                          setEditor({ mode: 'edit', deal });
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden />
+                        Edit
+                      </AdminButton>
+                      <AdminButton
+                        size="sm"
+                        variant="danger"
+                        disabled={busyId != null}
+                        onClick={() => removeDeal(deal)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                        Delete
+                      </AdminButton>
+                      {viewVerified ? (
+                        <AdminButton
+                          size="sm"
+                          variant="warning"
                           disabled={busyId != null}
-                          onClick={() => {
-                            setEditorError('');
-                            setEditor({ mode: 'edit', deal });
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg bg-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-800 hover:bg-slate-300 disabled:opacity-50 dark:bg-slate-800 dark:text-slate-100"
+                          onClick={() => unverifyOne(deal)}
                         >
-                          <Pencil className="h-3.5 w-3.5" aria-hidden />
-                          Edit
-                        </button>
-                        <button
-                          type="button"
+                          {busyId === deal.id ? '…' : 'Unverify'}
+                        </AdminButton>
+                      ) : (
+                        <AdminButton
+                          size="sm"
+                          variant="success"
                           disabled={busyId != null}
-                          onClick={() => removeDeal(deal)}
-                          className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50"
+                          onClick={() => verifyOne(deal)}
                         >
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                          Delete
-                        </button>
-                        {viewVerified ? (
-                          <button
-                            type="button"
-                            disabled={busyId != null}
-                            onClick={() => unverifyOne(deal)}
-                            className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-amber-500 disabled:opacity-50"
-                          >
-                            {busyId === deal.id ? '…' : 'Unverify'}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={busyId != null}
-                            onClick={() => verifyOne(deal)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                            {busyId === deal.id ? '…' : 'Verify'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                          {busyId === deal.id ? '…' : 'Verify'}
+                        </AdminButton>
+                      )}
+                    </div>
+                  </AdminTd>
+                </AdminTr>
+              );
+            })}
+          </tbody>
+        </AdminTable>
       )}
 
       {editor ? (

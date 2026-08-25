@@ -260,6 +260,53 @@ body {
     @apply rounded-xl border border-emerald-500/10 bg-lm-inset dark:border-white/[0.06] dark:bg-dm-inset;
   }
 
+  /* Admin console (scoped — does not affect consumer app chrome) */
+  .admin-shell {
+    --admin-sidebar: #0f172a;
+    --admin-sidebar-muted: #94a3b8;
+    --admin-accent: #0d9488;
+    --admin-canvas-from: #eef2f7;
+    --admin-canvas-to: #e8eef5;
+    min-height: 100%;
+    min-height: 100dvh;
+    background:
+      radial-gradient(ellipse 80% 50% at 100% -10%, rgb(13 148 136 / 0.08), transparent),
+      linear-gradient(160deg, var(--admin-canvas-from), var(--admin-canvas-to));
+  }
+
+  .dark .admin-shell {
+    --admin-sidebar: #09090b;
+    --admin-canvas-from: #09090b;
+    --admin-canvas-to: #0c1017;
+    background:
+      radial-gradient(ellipse 70% 40% at 100% 0%, rgb(13 148 136 / 0.12), transparent),
+      linear-gradient(160deg, var(--admin-canvas-from), var(--admin-canvas-to));
+  }
+
+  .admin-surface {
+    @apply rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm shadow-slate-900/[0.03] backdrop-blur-sm dark:border-white/[0.08] dark:bg-zinc-950/80 dark:shadow-black/20;
+  }
+
+  .admin-modal-panel {
+    @apply rounded-2xl border border-slate-200/80 bg-white dark:border-white/10 dark:bg-zinc-950;
+    animation: admin-modal-in 160ms ease-out;
+  }
+
+  .admin-skeleton {
+    @apply animate-pulse bg-slate-200/90 dark:bg-zinc-800;
+  }
+
+  @keyframes admin-modal-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
   /* Recipe view tab bar */
   .recipe-tab {
     @apply relative flex min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border-2 px-1 py-2.5 transition active:scale-[0.98] sm:px-1.5;

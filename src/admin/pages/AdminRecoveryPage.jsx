@@ -4,51 +4,51 @@ import {
   fetchAdminRecoveryUser,
   postAdminRecoveryRejoin,
 } from '../../api.js';
+import { formatWhen } from '../adminFormat.js';
+import {
+  AdminAlert,
+  AdminBadge,
+  AdminButton,
+  AdminPageHeader,
+  AdminSurface,
+} from '../components/index.js';
 
-function formatWhen(iso) {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return String(iso);
-  }
-}
+const fieldClass =
+  'min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-white/10 dark:bg-zinc-900';
 
 function HouseholdCard({ household, userId, onRejoin, rejoiningId }) {
   if (!household) return null;
   const busy = rejoiningId === household.id;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-zinc-950">
+    <AdminSurface>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-heading text-sm font-extrabold">
-            Household {household.id.slice(-6)}
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-heading text-sm font-extrabold">
+              Household {household.id.slice(-6)}
+            </p>
             {household.softDeleted ? (
-              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                Soft-deleted
-              </span>
+              <AdminBadge tone="amber">Soft-deleted</AdminBadge>
             ) : (
-              <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
-                Active
-              </span>
+              <AdminBadge tone="emerald">Active</AdminBadge>
             )}
-          </p>
+          </div>
           <p className="text-muted mt-1 font-mono text-xs break-all">{household.id}</p>
         </div>
         {userId ? (
-          <button
-            type="button"
+          <AdminButton
+            size="sm"
+            variant="dark"
             disabled={busy}
             onClick={() => onRejoin(household)}
-            className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50 dark:bg-slate-200 dark:text-slate-900"
           >
             {busy ? 'Rejoining…' : household.softDeleted ? 'Restore & rejoin' : 'Rejoin user'}
-          </button>
+          </AdminButton>
         ) : null}
       </div>
 
-      <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+      <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
         <div>
           <dt className="text-muted font-semibold uppercase tracking-wide">Invite code</dt>
           <dd className="text-heading mt-0.5 font-mono text-sm font-bold tracking-wider">
@@ -93,9 +93,11 @@ function HouseholdCard({ household, userId, onRejoin, rejoiningId }) {
       </dl>
 
       {Array.isArray(household.members) && household.members.length > 0 ? (
-        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-          <p className="text-muted text-[10px] font-semibold uppercase tracking-wide">Current members</p>
-          <ul className="mt-1 space-y-1 text-xs">
+        <div className="mt-4 border-t border-slate-100 pt-3 dark:border-white/[0.06]">
+          <p className="text-muted text-[10px] font-semibold uppercase tracking-wide">
+            Current members
+          </p>
+          <ul className="mt-1.5 space-y-1 text-xs">
             {household.members.map((m) => (
               <li key={m.id || m.email} className="font-mono">
                 {m.email || m.id}
@@ -106,9 +108,11 @@ function HouseholdCard({ household, userId, onRejoin, rejoiningId }) {
       ) : null}
 
       {Array.isArray(household.membershipHistory) && household.membershipHistory.length > 0 ? (
-        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-          <p className="text-muted text-[10px] font-semibold uppercase tracking-wide">Leave history</p>
-          <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto text-xs">
+        <div className="mt-4 border-t border-slate-100 pt-3 dark:border-white/[0.06]">
+          <p className="text-muted text-[10px] font-semibold uppercase tracking-wide">
+            Leave history
+          </p>
+          <ul className="mt-1.5 max-h-40 space-y-1 overflow-y-auto text-xs">
             {[...household.membershipHistory].reverse().map((entry, idx) => (
               <li key={`${entry.userId}-${entry.leftAt}-${idx}`}>
                 {entry.email || entry.userId || 'unknown'} · {entry.event || 'left'} ·{' '}
@@ -119,7 +123,7 @@ function HouseholdCard({ household, userId, onRejoin, rejoiningId }) {
           </ul>
         </div>
       ) : null}
-    </div>
+    </AdminSurface>
   );
 }
 
@@ -200,7 +204,11 @@ export function AdminRecoveryPage() {
       setUserResult(refreshed);
       setHouseholdResult(data.household);
     } catch (err) {
-      if (err.code === 'OWNERSHIP_UNVERIFIED' || err.body?.code === 'OWNERSHIP_UNVERIFIED' || /former member/i.test(err.message || '')) {
+      if (
+        err.code === 'OWNERSHIP_UNVERIFIED' ||
+        err.body?.code === 'OWNERSHIP_UNVERIFIED' ||
+        /former member/i.test(err.message || '')
+      ) {
         const forceOk = window.confirm(
           `${err.message}\n\nForce rejoin only after verifying identity with the user (and ideally their partner). Continue?`,
         );
@@ -222,28 +230,16 @@ export function AdminRecoveryPage() {
 
   return (
     <div>
-      <h1 className="text-heading mb-1 text-xl font-extrabold">Household recovery</h1>
-      <p className="text-muted mb-6 text-sm">
-        Look up a user by email or a household by id / invite code. Soft-deleted households are kept for 30
-        days after the last member leaves.
-      </p>
+      <AdminPageHeader
+        title="Household recovery"
+        description="Look up a user by email or a household by id / invite code. Soft-deleted households are kept for 30 days after the last member leaves."
+      />
 
-      {error ? (
-        <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
-          {error}
-        </div>
-      ) : null}
-      {success ? (
-        <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
-          {success}
-        </div>
-      ) : null}
+      <AdminAlert variant="error">{error}</AdminAlert>
+      <AdminAlert variant="success">{success}</AdminAlert>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <form
-          onSubmit={lookupUser}
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-zinc-950"
-        >
+        <AdminSurface as="form" onSubmit={lookupUser}>
           <label className="text-heading block text-sm font-bold" htmlFor="recovery-email">
             User email
           </label>
@@ -255,27 +251,22 @@ export function AdminRecoveryPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-zinc-900"
+              className={fieldClass}
               placeholder="user@example.com"
             />
-            <button
-              type="submit"
-              disabled={loadingUser}
-              className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
-            >
+            <AdminButton type="submit" disabled={loadingUser} size="sm">
               {loadingUser ? '…' : 'Look up'}
-            </button>
+            </AdminButton>
           </div>
-        </form>
+        </AdminSurface>
 
-        <form
-          onSubmit={lookupHousehold}
-          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-zinc-950"
-        >
+        <AdminSurface as="form" onSubmit={lookupHousehold}>
           <label className="text-heading block text-sm font-bold" htmlFor="recovery-household">
             Household id or invite code
           </label>
-          <p className="text-muted mt-1 text-xs">Reveals invite code for support after verification.</p>
+          <p className="text-muted mt-1 text-xs">
+            Reveals invite code for support after verification.
+          </p>
           <div className="mt-3 flex gap-2">
             <input
               id="recovery-household"
@@ -283,24 +274,20 @@ export function AdminRecoveryPage() {
               value={householdQuery}
               onChange={(e) => setHouseholdQuery(e.target.value)}
               required
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono dark:border-slate-700 dark:bg-zinc-900"
+              className={`${fieldClass} font-mono`}
               placeholder="ObjectId or invite code"
             />
-            <button
-              type="submit"
-              disabled={loadingHousehold}
-              className="rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
-            >
+            <AdminButton type="submit" disabled={loadingHousehold} size="sm">
               {loadingHousehold ? '…' : 'Look up'}
-            </button>
+            </AdminButton>
           </div>
-        </form>
+        </AdminSurface>
       </div>
 
       {userResult?.user ? (
-        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-zinc-950">
+        <AdminSurface className="mb-6">
           <p className="text-heading text-sm font-extrabold">{userResult.user.email}</p>
-          <dl className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+          <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
             <div>
               <dt className="text-muted font-semibold uppercase tracking-wide">User id</dt>
               <dd className="mt-0.5 font-mono break-all">{userResult.user.id}</dd>
@@ -310,25 +297,33 @@ export function AdminRecoveryPage() {
               <dd className="mt-0.5">{userResult.user.isVerified ? 'Yes' : 'No'}</dd>
             </div>
             <div>
-              <dt className="text-muted font-semibold uppercase tracking-wide">Current household</dt>
-              <dd className="mt-0.5 font-mono break-all">{userResult.user.householdId || 'None'}</dd>
+              <dt className="text-muted font-semibold uppercase tracking-wide">
+                Current household
+              </dt>
+              <dd className="mt-0.5 font-mono break-all">
+                {userResult.user.householdId || 'None'}
+              </dd>
             </div>
             <div>
               <dt className="text-muted font-semibold uppercase tracking-wide">Last household</dt>
-              <dd className="mt-0.5 font-mono break-all">{userResult.user.lastHouseholdId || '—'}</dd>
+              <dd className="mt-0.5 font-mono break-all">
+                {userResult.user.lastHouseholdId || '—'}
+              </dd>
             </div>
             <div className="sm:col-span-2">
               <dt className="text-muted font-semibold uppercase tracking-wide">Left at</dt>
               <dd className="mt-0.5">{formatWhen(userResult.user.leftHouseholdAt)}</dd>
             </div>
           </dl>
-        </div>
+        </AdminSurface>
       ) : null}
 
       <div className="space-y-4">
         {current ? (
           <div>
-            <h2 className="text-heading mb-2 text-sm font-bold uppercase tracking-wide">Current household</h2>
+            <h2 className="text-muted mb-2 text-[11px] font-bold uppercase tracking-wider">
+              Current household
+            </h2>
             <HouseholdCard
               household={current}
               userId={userResult?.user?.id}
@@ -339,7 +334,9 @@ export function AdminRecoveryPage() {
         ) : null}
         {last ? (
           <div>
-            <h2 className="text-heading mb-2 text-sm font-bold uppercase tracking-wide">Last household</h2>
+            <h2 className="text-muted mb-2 text-[11px] font-bold uppercase tracking-wider">
+              Last household
+            </h2>
             <HouseholdCard
               household={last}
               userId={userResult?.user?.id}
@@ -350,7 +347,9 @@ export function AdminRecoveryPage() {
         ) : null}
         {related.length > 0 ? (
           <div>
-            <h2 className="text-heading mb-2 text-sm font-bold uppercase tracking-wide">Related households</h2>
+            <h2 className="text-muted mb-2 text-[11px] font-bold uppercase tracking-wider">
+              Related households
+            </h2>
             <div className="space-y-3">
               {related.map((h) => (
                 <HouseholdCard
@@ -366,7 +365,9 @@ export function AdminRecoveryPage() {
         ) : null}
         {householdResult ? (
           <div>
-            <h2 className="text-heading mb-2 text-sm font-bold uppercase tracking-wide">Household lookup</h2>
+            <h2 className="text-muted mb-2 text-[11px] font-bold uppercase tracking-wider">
+              Household lookup
+            </h2>
             <HouseholdCard
               household={householdResult}
               userId={userResult?.user?.id}
