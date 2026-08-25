@@ -810,3 +810,7 @@ export async function updateAdminSupportChat(id, patch) {
   });
   return parseJson(res);
 }
+
+export async function closeAdminSupportChat(id) {
+  return updateAdminSupportChat(id, { status: 'closed' });
+}

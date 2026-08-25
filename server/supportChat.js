@@ -8,7 +8,17 @@ export const SUPPORT_THREAD_STATUSES = /** @type {const} */ ([
   'waiting_admin',
   'in_progress',
   'resolved',
+  'closed',
 ]);
+
+export const ACTIVE_SUPPORT_THREAD_STATUSES = /** @type {const} */ ([
+  'open',
+  'waiting_admin',
+  'in_progress',
+  'resolved',
+]);
+
+export const SUPPORT_LIVE_IDLE_MS = 10 * 60 * 1000;
 
 export const SUPPORT_CATEGORIES = /** @type {const} */ ([
   'account',
@@ -32,7 +42,13 @@ function getDb() {
 
 export async function ensureSupportChatIndexes() {
   const threads = getDb().collection(SUPPORT_THREADS_COLLECTION);
-  await threads.createIndex({ userId: 1 }, { unique: true });
+  // Allow multiple threads per user so closed chats can be archived and a new one started.
+  try {
+    await threads.dropIndex('userId_1');
+  } catch {
+    // Index may not exist yet or already replaced.
+  }
+  await threads.createIndex({ userId: 1, status: 1, lastMessageAt: -1 });
   await threads.createIndex({ status: 1, lastMessageAt: -1 });
   await threads.createIndex({ unreadForAdmin: 1, lastMessageAt: -1 });
 }
@@ -87,6 +103,10 @@ export function mapSupportThread(doc, { includeMessages = true } = {}) {
       doc.lastMessageAt instanceof Date
         ? doc.lastMessageAt.toISOString()
         : doc.lastMessageAt ?? null,
+    closedAt:
+      doc.closedAt instanceof Date
+        ? doc.closedAt.toISOString()
+        : doc.closedAt ?? null,
     createdAt:
       doc.createdAt instanceof Date ? doc.createdAt.toISOString() : doc.createdAt ?? null,
     updatedAt:
@@ -113,7 +133,13 @@ export function mapSupportThread(doc, { includeMessages = true } = {}) {
 export async function getOrCreateSupportThread(user) {
   const threads = getDb().collection(SUPPORT_THREADS_COLLECTION);
   const userId = String(user.userId);
-  let doc = await threads.findOne({ userId });
+  let doc = await threads.findOne(
+    {
+      userId,
+      status: { $in: [...ACTIVE_SUPPORT_THREAD_STATUSES] },
+    },
+    { sort: { lastMessageAt: -1 } },
+  );
 
   if (!doc) {
     const now = new Date();
@@ -133,6 +159,7 @@ export async function getOrCreateSupportThread(user) {
       unreadForUser: 0,
       messages: [welcome],
       lastMessageAt: now,
+      closedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -161,7 +188,13 @@ export async function getOrCreateSupportThread(user) {
 export async function getSupportThreadForUser(userId) {
   const doc = await getDb()
     .collection(SUPPORT_THREADS_COLLECTION)
-    .findOne({ userId: String(userId) });
+    .findOne(
+      {
+        userId: String(userId),
+        status: { $in: [...ACTIVE_SUPPORT_THREAD_STATUSES] },
+      },
+      { sort: { lastMessageAt: -1 } },
+    );
   return mapSupportThread(doc);
 }
 
@@ -193,6 +226,20 @@ export async function appendSupportMessage(threadId, input) {
   if (!ObjectId.isValid(threadId)) {
     const err = new Error('Invalid thread id.');
     err.status = 400;
+    throw err;
+  }
+
+  const existing = await getDb()
+    .collection(SUPPORT_THREADS_COLLECTION)
+    .findOne({ _id: new ObjectId(threadId) });
+  if (!existing) {
+    const err = new Error('Support chat not found.');
+    err.status = 404;
+    throw err;
+  }
+  if (existing.status === 'closed') {
+    const err = new Error('This conversation was closed. Start a new support chat.');
+    err.status = 409;
     throw err;
   }
 
@@ -277,7 +324,15 @@ export async function updateSupportThread(threadId, patch) {
 
   /** @type {Record<string, unknown>} */
   const $set = { updatedAt: new Date() };
-  if (patch.status != null) $set.status = sanitizeStatus(patch.status);
+  if (patch.status != null) {
+    const status = sanitizeStatus(patch.status);
+    $set.status = status;
+    if (status === 'closed') {
+      $set.closedAt = new Date();
+      $set.unreadForAdmin = 0;
+      $set.unreadForUser = 0;
+    }
+  }
   if (patch.category != null) $set.category = sanitizeCategory(patch.category);
   if (patch.severity != null) $set.severity = sanitizeSeverity(patch.severity);
 
@@ -292,6 +347,14 @@ export async function updateSupportThread(threadId, patch) {
   }
 
   return mapSupportThread(result);
+}
+
+/**
+ * Close a conversation so the user starts a fresh chat next time.
+ * @param {string} threadId
+ */
+export async function closeSupportThread(threadId) {
+  return updateSupportThread(threadId, { status: 'closed' });
 }
 
 /**

@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Loader2, Send, User } from 'lucide-react';
 import { fetchSupportChat, sendSupportChatMessage } from '../api.js';
+import { supportThreadFingerprint, usePolling } from '../hooks/usePolling.js';
+import {
+  isSupportLivePollingActive,
+  msUntilSupportLiveIdle,
+} from '../support/supportChatLive.js';
+
+const POLL_MS = 2500;
 
 function formatWhen(iso) {
   if (!iso) return '';
@@ -23,24 +30,60 @@ export function SupportChatPanel() {
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState(null);
+  const [liveActive, setLiveActive] = useState(true);
   const bottomRef = useRef(null);
+  const fingerprintRef = useRef('');
+  const sendingRef = useRef(false);
+  const openedAtRef = useRef(Date.now());
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchSupportChat();
-      setThread(data.thread ?? null);
-    } catch (err) {
-      setError(err.message || 'Could not load support chat.');
-    } finally {
-      setLoading(false);
-    }
+  const applyThread = useCallback((next) => {
+    const fingerprint = supportThreadFingerprint(next);
+    if (fingerprint === fingerprintRef.current) return false;
+    fingerprintRef.current = fingerprint;
+    setThread(next);
+    return true;
   }, []);
 
+  const refresh = useCallback(async ({ silent = true } = {}) => {
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
+    try {
+      const data = await fetchSupportChat();
+      applyThread(data.thread ?? null);
+    } catch (err) {
+      if (!silent) {
+        setError(err.message || 'Could not load support chat.');
+      }
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, [applyThread]);
+
   useEffect(() => {
-    load();
-  }, [load]);
+    openedAtRef.current = Date.now();
+    void refresh({ silent: false });
+  }, [refresh]);
+
+  useEffect(() => {
+    const updateLive = () => {
+      setLiveActive(isSupportLivePollingActive(thread, openedAtRef.current));
+    };
+    updateLive();
+    const wait = msUntilSupportLiveIdle(thread, openedAtRef.current);
+    if (wait <= 0) return undefined;
+    const timer = window.setTimeout(updateLive, wait + 50);
+    return () => window.clearTimeout(timer);
+  }, [thread]);
+
+  usePolling(
+    () => {
+      if (sendingRef.current) return;
+      return refresh({ silent: true });
+    },
+    { enabled: !loading && liveActive, intervalMs: POLL_MS },
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -51,16 +94,19 @@ export function SupportChatPanel() {
     const message = draft.trim();
     if (!message || sending) return;
     setSending(true);
+    sendingRef.current = true;
     setError(null);
     setDraft('');
     try {
       const data = await sendSupportChatMessage(message);
-      setThread(data.thread ?? null);
+      applyThread(data.thread ?? null);
+      setLiveActive(true);
     } catch (err) {
       setDraft(message);
       setError(err.message || 'Could not send message.');
     } finally {
       setSending(false);
+      sendingRef.current = false;
     }
   };
 
@@ -81,6 +127,13 @@ export function SupportChatPanel() {
         We&apos;re here to help. Send a message below — the team will reply in this chat when
         available.
       </p>
+
+      {!liveActive ? (
+        <p className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-zinc-900 dark:text-slate-300">
+          Live updates paused after 10 minutes of inactivity. Send a message to resume, or pull to
+          refresh by leaving and reopening this screen.
+        </p>
+      ) : null}
 
       {error ? (
         <p className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
