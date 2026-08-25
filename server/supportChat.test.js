@@ -32,4 +32,22 @@ describe('mapSupportThread', () => {
     expect(mapped.messages).toHaveLength(1);
     expect(mapped.messages[0].body).toBe('I lost my items');
   });
+
+  it('can omit messages for conversation history lists', () => {
+    const mapped = mapSupportThread(
+      {
+        _id: { toString: () => 'thread1' },
+        userId: 'user1',
+        status: 'closed',
+        lastMessageAt: new Date('2026-08-25T02:00:00.000Z'),
+        messages: [{ id: 'm1', role: 'user', body: 'Help please', createdAt: new Date() }],
+      },
+      { includeMessages: false },
+    );
+
+    expect(mapped.messages).toBeUndefined();
+    expect(mapped.messageCount).toBe(1);
+    expect(mapped.preview).toBe('Help please');
+    expect(mapped.status).toBe('closed');
+  });
 });

@@ -219,7 +219,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'Reset your password from Your account — Firebase emails the same reset link as Forgot password. Open it, set a new password, then sign in with it.',
         'Use Show tips & color guide again under Data tools to bring welcome banners and the color guide back on Home.',
         'Clear all items only if you want to wipe inventory for everyone in the household. You can restore cleared items from Settings within 7 days.',
-        'Support chat in Settings lets you message the team directly, and replies can arrive as push notifications on enabled devices.',
+        'Support chat in Settings is saved to your account so you can reopen past conversations. Replies can also arrive as push notifications on enabled devices.',
       ],
     },
   ];
@@ -1283,7 +1283,7 @@ export function SettingsView({
           icon={Headphones}
           iconClassName="bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
           title="Support chat"
-          subtitle="Get help from the team in this chat"
+          subtitle="Saved chats and help from the team"
           onClick={() => setInfoScreen('support')}
         />
         <SettingsNavRow

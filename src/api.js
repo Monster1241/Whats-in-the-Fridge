@@ -821,8 +821,9 @@ export async function updateAdminFeedback(id, patch) {
   return parseJson(res);
 }
 
-export async function fetchSupportChat() {
-  const res = await fetch(apiUrl('/support/chat'), { headers: authHeaders() });
+export async function fetchSupportChat(threadId) {
+  const params = threadId ? `?threadId=${encodeURIComponent(threadId)}` : '';
+  const res = await fetch(apiUrl(`/support/chat${params}`), { headers: authHeaders() });
   return parseJson(res);
 }
 

@@ -184,6 +184,43 @@ export async function getOrCreateSupportThread(user) {
 
 /**
  * @param {string} userId
+ * @param {{ limit?: number }} [options]
+ */
+export async function listSupportThreadsForUser(userId, options = {}) {
+  const limit = Math.min(Math.max(Number(options.limit) || 50, 1), 100);
+  const docs = await getDb()
+    .collection(SUPPORT_THREADS_COLLECTION)
+    .find({ userId: String(userId) })
+    .sort({ lastMessageAt: -1 })
+    .limit(limit)
+    .toArray();
+
+  return docs.map((doc) => mapSupportThread(doc, { includeMessages: false }));
+}
+
+/**
+ * @param {string} userId
+ * @param {string} threadId
+ */
+export async function getSupportThreadForUserById(userId, threadId) {
+  if (!ObjectId.isValid(threadId)) {
+    const err = new Error('Invalid thread id.');
+    err.status = 400;
+    throw err;
+  }
+  const doc = await getDb()
+    .collection(SUPPORT_THREADS_COLLECTION)
+    .findOne({ _id: new ObjectId(threadId), userId: String(userId) });
+  if (!doc) {
+    const err = new Error('Support chat not found.');
+    err.status = 404;
+    throw err;
+  }
+  return mapSupportThread(doc);
+}
+
+/**
+ * @param {string} userId
  */
 export async function getSupportThreadForUser(userId) {
   const doc = await getDb()

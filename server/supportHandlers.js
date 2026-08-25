@@ -6,6 +6,9 @@ import { createUserFeedback, createUserReport } from './supportInbox.js';
 import {
   appendSupportMessage,
   getOrCreateSupportThread,
+  getSupportThreadForUser,
+  getSupportThreadForUserById,
+  listSupportThreadsForUser,
   markSupportThreadRead,
 } from './supportChat.js';
 
@@ -83,17 +86,28 @@ export async function handleGetSupportChat(req, res) {
     const auth = await requireVerifiedUser(req, res);
     if (!auth) return;
 
-    const thread = await getOrCreateSupportThread({
-      userId: auth.user.id,
-      userEmail: auth.user.email,
-      householdId: auth.user.household_id,
-    });
-    const marked = await markSupportThreadRead(thread.id, 'user');
-    res.status(200).json({ ok: true, thread: marked });
+    const threads = await listSupportThreadsForUser(auth.user.id);
+    const requestedId = String(req.query?.threadId ?? '').trim();
+
+    let thread = null;
+    if (requestedId) {
+      thread = await getSupportThreadForUserById(auth.user.id, requestedId);
+    } else {
+      thread = await getSupportThreadForUser(auth.user.id);
+      if (!thread && threads.length) {
+        thread = await getSupportThreadForUserById(auth.user.id, threads[0].id);
+      }
+    }
+
+    if (thread && thread.status !== 'closed') {
+      thread = await markSupportThreadRead(thread.id, 'user');
+    }
+
+    res.status(200).json({ ok: true, thread, threads });
   } catch (err) {
     console.error('GET /api/support/chat', err);
     const friendly = toFriendlyError(err);
-    res.status(friendly.status || 500).json({ error: friendly.message });
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
   }
 }
 
