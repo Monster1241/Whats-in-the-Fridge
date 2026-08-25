@@ -710,6 +710,32 @@ export async function unverifyAdminDeal(payload) {
   return parseJson(res);
 }
 
+export async function createAdminDeal(payload) {
+  const res = await fetch(apiUrl('/admin/deals'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function updateAdminDeal(id, payload) {
+  const res = await fetch(apiUrl(`/admin/deals/${encodeURIComponent(id)}`), {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function deleteAdminDeal(id) {
+  const res = await fetch(apiUrl(`/admin/deals/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
 export async function fetchAdminReports(status) {
   const params = status ? `?status=${encodeURIComponent(status)}` : '';
   const res = await fetch(apiUrl(`/admin/reports${params}`), { headers: authHeaders() });

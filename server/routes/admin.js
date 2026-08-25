@@ -6,9 +6,12 @@ import {
   handleAdminMe,
   handleAdminUpdateFeedback,
   handleAdminUpdateReport,
+  handleCreateAdminDeal,
+  handleDeleteAdminDeal,
   handleListAdminDeals,
   handleListUnverifiedDeals,
   handleUnverifyWeeklyDeals,
+  handleUpdateAdminDeal,
   handleVerifyWeeklyDeals,
 } from '../adminHandlers.js';
 import { asyncRoute } from '../routeUtils.js';
@@ -35,6 +38,18 @@ adminRouter.post(
 adminRouter.post(
   '/deals/unverify',
   asyncRoute(handleUnverifyWeeklyDeals, 'POST /api/admin/deals/unverify', 'Could not unverify deals.'),
+);
+adminRouter.post(
+  '/deals',
+  asyncRoute(handleCreateAdminDeal, 'POST /api/admin/deals', 'Could not create deal.'),
+);
+adminRouter.patch(
+  '/deals/:id',
+  asyncRoute(handleUpdateAdminDeal, 'PATCH /api/admin/deals/:id', 'Could not update deal.'),
+);
+adminRouter.delete(
+  '/deals/:id',
+  asyncRoute(handleDeleteAdminDeal, 'DELETE /api/admin/deals/:id', 'Could not delete deal.'),
 );
 adminRouter.get(
   '/reports',

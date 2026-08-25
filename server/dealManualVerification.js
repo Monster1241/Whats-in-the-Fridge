@@ -3,6 +3,8 @@
  * An operator checks the retailer flyer, then marks deals verified (optionally correcting prices).
  */
 
+import { mapAdminDealRow } from './adminDealCrud.js';
+
 /**
  * @param {Record<string, unknown>} deal
  * @param {Date} [now]
@@ -269,26 +271,16 @@ export async function listAdminStoreDeals(collection, options = {}) {
       store: 1,
       dealPrice: 1,
       originalPrice: 1,
+      dealType: 1,
+      savingsText: 1,
+      category: 1,
       storeCycleStart: 1,
       priceVerifiedAt: 1,
       priceVerifiedBy: 1,
     })
     .toArray();
 
-  return docs.map((doc) => ({
-    id: doc._id.toString(),
-    name: doc.name,
-    store: doc.store,
-    dealPrice: doc.dealPrice,
-    originalPrice: doc.originalPrice ?? null,
-    storeCycleStart: doc.storeCycleStart ?? null,
-    priceVerified: Boolean(doc.priceVerifiedAt),
-    priceVerifiedAt:
-      doc.priceVerifiedAt instanceof Date
-        ? doc.priceVerifiedAt.toISOString()
-        : doc.priceVerifiedAt ?? null,
-    priceVerifiedBy: doc.priceVerifiedBy ?? null,
-  }));
+  return docs.map((doc) => mapAdminDealRow(doc));
 }
 
 /**

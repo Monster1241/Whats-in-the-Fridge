@@ -23,6 +23,11 @@ import { findUserById } from './db.js';
 import { getBearerUser } from './auth.js';
 import { isAdminEmail } from './adminAuth.js';
 import { normalizeDealStore, WEEKLY_DEALS_COLLECTION } from './weeklyDeals.js';
+import {
+  createAdminDeal,
+  deleteAdminDeal,
+  updateAdminDeal,
+} from './adminDealCrud.js';
 
 export async function handleAdminMe(req, res) {
   try {
@@ -192,6 +197,56 @@ export async function handleUnverifyWeeklyDeals(req, res) {
     console.error('POST /api/admin/deals/unverify', err);
     const friendly = toFriendlyError(err);
     res.status(friendly.status || 500).json({ error: friendly.message });
+  }
+}
+
+export async function handleCreateAdminDeal(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    await ensureDb();
+    const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
+    const deal = await createAdminDeal(collection, req.body ?? {});
+    res.status(201).json({ ok: true, deal });
+  } catch (err) {
+    console.error('POST /api/admin/deals', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
+  }
+}
+
+export async function handleUpdateAdminDeal(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    await ensureDb();
+    const dealId = String(req.params?.id ?? '').trim();
+    const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
+    const deal = await updateAdminDeal(collection, dealId, req.body ?? {});
+    res.status(200).json({ ok: true, deal });
+  } catch (err) {
+    console.error('PATCH /api/admin/deals/:id', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
+  }
+}
+
+export async function handleDeleteAdminDeal(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    await ensureDb();
+    const dealId = String(req.params?.id ?? '').trim();
+    const collection = globalThis._mongo.db.collection(WEEKLY_DEALS_COLLECTION);
+    const deal = await deleteAdminDeal(collection, dealId);
+    res.status(200).json({ ok: true, deal });
+  } catch (err) {
+    console.error('DELETE /api/admin/deals/:id', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({ error: err.message || friendly.message });
   }
 }
 
