@@ -19,7 +19,7 @@
   --safe-area-right: env(safe-area-inset-right, 0px);
   --safe-area-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-left: env(safe-area-inset-left, 0px);
-  /* Adaptive shell — phones, foldables, small tablets */
+  /* Adaptive shell — phone web app / Capacitor (not a desktop website layout) */
   --app-pad-x: clamp(0.75rem, 3.8vw, 1.25rem);
   --app-column-max: 32rem;
   --app-nav-height: 4.25rem;
@@ -33,30 +33,6 @@
   --touch-min: 44px;
 }
 
-@media (min-width: 768px) {
-  :root {
-    --app-column-max: 42rem;
-    --app-pad-x: 1.5rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  :root {
-    --app-column-max: 72rem;
-    --app-pad-x: 2rem;
-    --app-nav-rail: 15rem;
-    --app-main-pad-top: max(1.5rem, var(--safe-area-top));
-    --app-main-pad-bottom: max(1.5rem, var(--safe-area-bottom));
-  }
-}
-
-@media (min-width: 1280px) {
-  :root {
-    --app-column-max: 80rem;
-    --app-pad-x: 2.5rem;
-  }
-}
-
 @media (max-width: 359px) {
   :root {
     --app-pad-x: 0.625rem;
@@ -66,7 +42,6 @@
 
 html {
   height: 100%;
-  height: -webkit-fill-available;
 }
 
 html,
@@ -96,14 +71,11 @@ body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   overflow-x: clip;
-  overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 
 #root {
-  display: flex;
-  flex-direction: column;
   width: 100%;
   isolation: isolate;
 }
@@ -166,7 +138,6 @@ body {
     min-height: var(--app-shell-min-height);
     padding-left: var(--safe-area-left);
     padding-right: var(--safe-area-right);
-    overflow-x: clip;
   }
 
   .app-frame {
@@ -188,7 +159,6 @@ body {
       radial-gradient(ellipse 50% 40% at 80% 90%, rgb(var(--brand-accent-rgb) / 0.04), transparent 50%),
       var(--brand-bg);
     -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
   }
 
   .dark .app-main {
@@ -237,25 +207,6 @@ body {
     padding-bottom: var(--safe-area-bottom);
   }
 
-  .nav-bar--responsive {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-  }
-
-  .nav-bar__inner {
-    width: 100%;
-    max-width: var(--app-column-max);
-    margin-inline: auto;
-    display: flex;
-    padding-inline: 0.25rem;
-  }
-
-  .nav-bar__brand {
-    display: none;
-  }
-
   .nav-tab-btn {
     min-height: var(--touch-min);
   }
@@ -263,123 +214,6 @@ body {
   html[data-narrow='true'] .nav-tab-btn {
     font-size: 9px;
     letter-spacing: -0.01em;
-  }
-
-  /* Desktop / large tablet website layout — sidebar + wide content */
-  @media (min-width: 1024px) {
-    .app-desktop {
-      flex-direction: row;
-      max-width: var(--app-column-max);
-      margin-inline: auto;
-      min-height: var(--app-shell-min-height);
-      height: var(--app-shell-min-height);
-      overflow: hidden;
-      border-left: 1px solid rgb(5 150 105 / 0.08);
-      border-right: 1px solid rgb(5 150 105 / 0.08);
-      box-shadow:
-        0 0 0 1px rgb(15 23 42 / 0.02),
-        0 24px 64px -28px rgb(5 150 105 / 0.18);
-    }
-
-    .dark .app-desktop {
-      border-color: rgb(255 255 255 / 0.06);
-      box-shadow: 0 24px 64px -28px rgb(0 0 0 / 0.65);
-    }
-
-    .app-main--desktop {
-      order: 2;
-      min-width: 0;
-      height: 100%;
-    }
-
-    .nav-bar--responsive {
-      position: sticky;
-      top: 0;
-      bottom: auto;
-      left: auto;
-      right: auto;
-      order: 1;
-      width: var(--app-nav-rail);
-      height: 100%;
-      flex-shrink: 0;
-      border-top: 0;
-      border-right: 1px solid rgb(5 150 105 / 0.12);
-      padding-top: max(1rem, var(--safe-area-top));
-      padding-bottom: max(1rem, var(--safe-area-bottom));
-      box-shadow: none;
-    }
-
-    .dark .nav-bar--responsive {
-      border-right-color: rgb(255 255 255 / 0.08);
-    }
-
-    .nav-bar__inner {
-      max-width: none;
-      height: 100%;
-      flex-direction: column;
-      gap: 0.35rem;
-      padding: 0.75rem;
-    }
-
-    .nav-bar__brand {
-      display: block;
-      margin: 0 0 0.75rem;
-      padding: 0.35rem 0.75rem 0.85rem;
-      font-family: Nunito, 'Plus Jakarta Sans', system-ui, sans-serif;
-      font-size: 1.15rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      color: rgb(6 95 70);
-      border-bottom: 1px solid rgb(5 150 105 / 0.12);
-    }
-
-    .dark .nav-bar__brand {
-      color: rgb(110 231 183);
-      border-bottom-color: rgb(255 255 255 / 0.08);
-    }
-
-    .nav-tab-btn {
-      flex: 0 0 auto;
-      width: 100%;
-      min-height: 2.75rem;
-      flex-direction: row;
-      justify-content: flex-start;
-      gap: 0.75rem;
-      padding: 0.55rem 0.75rem;
-      font-size: 0.875rem;
-      border-radius: 0.9rem;
-    }
-
-    .nav-tab-btn .nav-tab-icon {
-      height: 2.25rem;
-      width: 2.25rem;
-    }
-
-    .nav-tab-btn__bar {
-      left: 0;
-      top: 50%;
-      width: 0.25rem;
-      height: 1.5rem;
-      transform: translateY(-50%);
-    }
-
-    .nav-tab-btn--active {
-      background: rgb(236 253 245 / 0.9);
-    }
-
-    .dark .nav-tab-btn--active {
-      background: rgb(6 78 59 / 0.35);
-    }
-
-    .app-fullscreen {
-      left: 50%;
-      right: auto;
-      width: min(100vw, var(--app-column-max));
-      max-width: var(--app-column-max);
-      transform: translate(-50%, var(--vv-offset-top, 0px));
-      border-left: 1px solid rgb(15 23 42 / 0.06);
-      border-right: 1px solid rgb(15 23 42 / 0.06);
-    }
   }
 
   .input-field {

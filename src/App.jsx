@@ -309,8 +309,8 @@ export default function App() {
   return (
     <PushNotificationProvider enabled={auth.canUseApp}>
     <ExpiryNotificationSync items={items} enabled={!loading} />
-    <div className="app-shell app-frame app-desktop flex min-h-[var(--app-shell-min-height)] flex-col">
-      <main className="app-main app-main--desktop flex-1 overflow-y-auto overflow-x-hidden">
+    <div className="app-shell app-frame flex min-h-full flex-col">
+      <main className="app-main flex-1">
         <div key={activeTab} className={flowEnterClass(tabFlowDir, 'animate-page')}>
         {saveError && (
           <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
@@ -376,11 +376,8 @@ export default function App() {
         </div>
       </main>
 
-      <nav className="nav-bar nav-bar--responsive z-40" aria-label="Main">
-        <div className="nav-bar__inner">
-          <p className="nav-bar__brand" aria-hidden>
-            Fridge
-          </p>
+      <nav className="nav-bar fixed bottom-0 left-0 right-0 z-40" aria-label="Main">
+        <div className="mx-auto flex max-w-lg px-1">
           {navTabs.map(({ id, label, icon: Icon, accent, badge }) => {
             const active = activeTab === id;
             const accentStyles =
@@ -415,7 +412,7 @@ export default function App() {
               >
                 {active && (
                   <span
-                    className={`nav-tab-btn__bar absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full transition-all duration-300 ${accentStyles.bar}`}
+                    className={`absolute left-1/2 top-0 h-0.5 w-8 -translate-x-1/2 rounded-full transition-all duration-300 ${accentStyles.bar}`}
                     aria-hidden
                   />
                 )}
