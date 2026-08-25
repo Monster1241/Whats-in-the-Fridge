@@ -35,6 +35,7 @@ import {
   markSupportThreadRead,
   updateSupportThread,
 } from './supportChat.js';
+import { notifyUserOfSupportReply } from './supportPush.js';
 import {
   adminLookupHousehold,
   adminLookupUserByEmail,
@@ -381,6 +382,14 @@ export async function handleAdminReplySupportChat(req, res) {
       status: 'in_progress',
       bumpUnreadFor: 'user',
     });
+
+    // Fire-and-forget push so a slow FCM call does not delay the admin UI.
+    void notifyUserOfSupportReply({
+      userId: thread.userId,
+      threadId: thread.id,
+      messageBody: body,
+    });
+
     res.status(201).json({ ok: true, thread });
   } catch (err) {
     console.error('POST /api/admin/support-chats/:id/messages', err);

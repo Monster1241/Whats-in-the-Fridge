@@ -33,3 +33,20 @@ export function buildShoppingPingNotification(senderEmail, itemCount) {
     body: `${sender} asked you to check the household shopping list (${n} item${n === 1 ? '' : 's'}).`,
   };
 }
+
+/**
+ * Push copy when support/admin replies in the in-app support chat.
+ * @param {string} [messageBody]
+ */
+export function buildSupportReplyNotification(messageBody = '') {
+  const preview = String(messageBody ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 140);
+  return {
+    title: 'Support replied',
+    body: preview
+      ? preview
+      : 'You have a new message from Fridge support. Open Settings → Support chat to reply.',
+  };
+}

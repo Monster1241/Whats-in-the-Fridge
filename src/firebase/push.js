@@ -115,7 +115,7 @@ export async function registerPushNotifications(options = {}) {
         await PushNotifications.createChannel({
           id: 'fridge_alerts',
           name: 'Fridge alerts',
-          description: 'Expiry and household shopping reminders',
+          description: 'Expiry, shopping, and support chat alerts',
           importance: 5,
           visibility: 1,
           sound: 'default',

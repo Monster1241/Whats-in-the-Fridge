@@ -300,6 +300,21 @@ export async function removeInvalidFcmTokens(tokens) {
 }
 
 /**
+ * FCM tokens for a single user (all their registered devices).
+ * @param {string} userId
+ * @returns {Promise<string[]>}
+ */
+export async function getUserFcmTokens(userId) {
+  if (!userId || !ObjectId.isValid(userId)) return [];
+  const users = getDb().collection('users');
+  const doc = await users.findOne(
+    { _id: new ObjectId(userId) },
+    { projection: { fcmTokens: 1 } },
+  );
+  return dedupeFcmTokens(doc?.fcmTokens);
+}
+
+/**
  * Saves one FCM token per user ($addToSet) and compacts legacy duplicate entries.
  * @param {string} userId
  * @param {string} token

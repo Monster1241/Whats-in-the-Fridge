@@ -3,6 +3,7 @@ import {
   buildCombinedExpiryAlertMessage,
   buildExpiryAlertMessage,
   buildShoppingPingNotification,
+  buildSupportReplyNotification,
 } from './pushCopy.js';
 
 describe('buildExpiryAlertMessage', () => {
@@ -35,5 +36,18 @@ describe('buildShoppingPingNotification', () => {
     expect(msg.body).toContain('Partner');
     expect(msg.body).toContain('2 items');
     expect(msg.body).not.toMatch(/milk|eggs/i);
+  });
+});
+
+describe('buildSupportReplyNotification', () => {
+  it('uses a short preview of the admin message', () => {
+    const msg = buildSupportReplyNotification('  Thanks — we restored your household.  ');
+    expect(msg.title).toBe('Support replied');
+    expect(msg.body).toBe('Thanks — we restored your household.');
+  });
+
+  it('falls back when body is empty', () => {
+    const msg = buildSupportReplyNotification('');
+    expect(msg.body).toMatch(/Support chat/i);
   });
 });

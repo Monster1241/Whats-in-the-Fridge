@@ -453,6 +453,18 @@ export function SettingsView({
     [enabledModules],
   );
 
+  useEffect(() => {
+    const openFromHash = () => {
+      const hash = String(window.location.hash || '').replace(/^#/, '');
+      if (hash === 'support' || hash === 'support-chat') {
+        setInfoScreen('support');
+      }
+    };
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+  }, []);
+
   const loadMembers = useCallback(async () => {
     setMembersLoading(true);
     setMembersError('');

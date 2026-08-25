@@ -230,6 +230,18 @@ export default function App() {
     }
   }, [activeTab, enabledModules]);
 
+  useEffect(() => {
+    const openSupportFromHash = () => {
+      const hash = String(window.location.hash || '').replace(/^#/, '');
+      if (hash === 'support' || hash === 'support-chat') {
+        setActiveTab('settings');
+      }
+    };
+    openSupportFromHash();
+    window.addEventListener('hashchange', openSupportFromHash);
+    return () => window.removeEventListener('hashchange', openSupportFromHash);
+  }, []);
+
   if (splashPhase !== 'done') {
     return (
       <AppSplashScreen
