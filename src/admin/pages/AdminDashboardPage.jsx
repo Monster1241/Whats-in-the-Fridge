@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { fetchAdminDashboard } from '../../api.js';
 
-function StatCard({ label, value, hint, href }) {
+function StatCard({ label, value, hint, to, navigateAdmin }) {
   const className =
     'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition dark:border-slate-800 dark:bg-zinc-950' +
-    (href
+    (to
       ? ' block hover:border-sky-300 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:hover:border-sky-700'
       : '');
 
@@ -16,9 +16,17 @@ function StatCard({ label, value, hint, href }) {
     </>
   );
 
-  if (href) {
+  if (to) {
     return (
-      <a href={href} className={className} aria-label={`Open ${label}`}>
+      <a
+        href={to}
+        onClick={(event) => {
+          event.preventDefault();
+          navigateAdmin?.(to);
+        }}
+        className={className}
+        aria-label={`Open ${label}`}
+      >
         {content}
       </a>
     );
@@ -27,7 +35,7 @@ function StatCard({ label, value, hint, href }) {
   return <div className={className}>{content}</div>;
 }
 
-export function AdminDashboardPage() {
+export function AdminDashboardPage({ navigateAdmin }) {
   const [counts, setCounts] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -87,19 +95,22 @@ export function AdminDashboardPage() {
           label="Unverified deals"
           value={counts?.unverifiedDeals ?? 0}
           hint="Optional — verify to show the verified badge"
-          href="/admin/deals"
+          to="/admin/deals"
+          navigateAdmin={navigateAdmin}
         />
         <StatCard
           label="Open reports"
           value={counts?.openReports ?? 0}
           hint="Wrong prices, missing deals, bugs"
-          href="/admin/reports"
+          to="/admin/reports"
+          navigateAdmin={navigateAdmin}
         />
         <StatCard
           label="Open feedback"
           value={counts?.openFeedback ?? 0}
           hint="Ideas and general messages"
-          href="/admin/feedback"
+          to="/admin/feedback"
+          navigateAdmin={navigateAdmin}
         />
       </div>
     </div>

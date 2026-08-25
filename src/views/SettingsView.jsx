@@ -15,6 +15,7 @@ import {
 import { EXPIRING_SOON_DAYS } from '../inventory/expiryDisplay.js';
 import {
   DIETARY_PREFERENCE_OPTIONS,
+  getDietaryPreferenceLabel,
   normalizeDietaryPreference,
 } from '../recipes/dietaryPreferences.js';
 import {
@@ -24,6 +25,7 @@ import {
   writeStoredPostcode,
 } from '../inventory/postcodeStorage.js';
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Bell,
@@ -35,7 +37,6 @@ import {
   Copy,
   Database,
   Flame,
-  FlaskConical,
   Info,
   KeyRound,
   Leaf,
@@ -44,6 +45,7 @@ import {
   Moon,
   Refrigerator,
   Settings,
+  RotateCcw,
   Share2,
   ShoppingCart,
   MessageSquare,
@@ -55,6 +57,11 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import {
+  INVENTORY_CLEAR_BACKUP_DAYS,
+  formatClearBackupSubtitle,
+  isInventoryClearBackupActive,
+} from '../inventory/clearBackup.js';
 import { MetaIcon } from '../components/MetaIcon.jsx';
 
 /** Viewport-centered confirm dialog (portaled so it is not trapped in the settings tab). */
@@ -102,6 +109,29 @@ function SettingsInfoScreen({ title, icon: Icon, onBack, children }) {
       </header>
       <div className="surface-card space-y-4 p-4 text-sm leading-relaxed">{children}</div>
     </div>
+  );
+}
+
+function SettingsNavRow({ icon: Icon, iconClassName, title, subtitle, onClick, trailing }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition hover:bg-slate-50 active:scale-[0.99] dark:hover:bg-zinc-900/60"
+    >
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconClassName}`}
+      >
+        <Icon className="h-5 w-5" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="text-heading block text-sm font-bold">{title}</span>
+        {subtitle ? (
+          <span className="text-muted mt-0.5 block truncate text-xs leading-relaxed">{subtitle}</span>
+        ) : null}
+      </span>
+      {trailing ?? <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />}
+    </button>
   );
 }
 
@@ -183,7 +213,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'Your account shows sign-in email, household role, and invite code. Display name is used for shopping pings.',
         'Reset your password from Your account — Firebase emails the same reset link as Forgot password. Open it, set a new password, then sign in with it.',
         'Use Show tips & color guide again under Data tools to bring welcome banners and the color guide back on Home.',
-        'Clear all items only if you want to wipe inventory for everyone in the household.',
+        'Clear all items only if you want to wipe inventory for everyone in the household. You can restore cleared items from Settings within 7 days.',
       ],
     },
   ];
@@ -316,21 +346,14 @@ function PushNotificationsSettings() {
   } else if (!vapidConfigured) statusLabel = 'Web Push key not configured';
 
   return (
-    <section className="surface-card mb-5 p-4">
-      <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
-        <Bell className="h-4 w-4 text-emerald-600" aria-hidden />
-        Push notifications
-      </h2>
-      <p className="text-muted mb-3 text-sm">
-        Get notified when food in your fridge is expiring soon or has expired. Alerts never include
-        item names. Works when the app is open (banner) or in the background (system notification).
-      </p>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            Enable Push Notifications
-          </p>
-          <p className="text-muted text-xs">
+    <div className="px-4 py-3.5">
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+          <Bell className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-heading text-sm font-bold">Push notifications</p>
+          <p className="text-muted mt-0.5 text-xs">
             Status:{' '}
             <span className="font-semibold text-slate-700 dark:text-slate-300">{statusLabel}</span>
           </p>
@@ -354,7 +377,7 @@ function PushNotificationsSettings() {
         </button>
       </div>
       {error && (
-        <p className="mb-3 text-xs text-rose-600 dark:text-rose-400" role="alert">
+        <p className="mt-2 text-xs text-rose-600 dark:text-rose-400" role="alert">
           {error}
         </p>
       )}
@@ -363,19 +386,21 @@ function PushNotificationsSettings() {
           type="button"
           onClick={runEnable}
           disabled={busy || status === 'loading'}
-          className="w-full rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-700 transition active:scale-[0.98] disabled:opacity-50 dark:border-slate-600 dark:text-slate-200"
+          className="mt-2 w-full rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-700 transition active:scale-[0.98] disabled:opacity-50 dark:border-slate-600 dark:text-slate-200"
         >
           Refresh push registration
         </button>
       ) : null}
-    </section>
+    </div>
   );
 }
 
 export function SettingsView({
   settings,
   updateSettings,
-  updateItems,
+  inventoryClearBackup,
+  onClearAllItems,
+  onRestoreClearedItems,
   onboarding,
   householdCode,
   enabledModules,
@@ -392,7 +417,12 @@ export function SettingsView({
   const [postcodeError, setPostcodeError] = useState('');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [clearBusy, setClearBusy] = useState(false);
+  const [clearError, setClearError] = useState('');
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreError, setRestoreError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -409,7 +439,6 @@ export function SettingsView({
   const [memberActionError, setMemberActionError] = useState('');
   const [modulesBusy, setModulesBusy] = useState(false);
   const [modulesError, setModulesError] = useState('');
-  const [customizeOpen, setCustomizeOpen] = useState(false);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetFeedback, setResetFeedback] = useState(null);
   const [infoScreen, setInfoScreen] = useState(null);
@@ -544,13 +573,33 @@ export function SettingsView({
     copyInviteCode();
   };
 
-  const clearAll = () => {
-    if (!confirmClear) {
-      setConfirmClear(true);
-      return;
+  const canRestoreClearedItems = isInventoryClearBackupActive(inventoryClearBackup);
+  const restoreSubtitle = formatClearBackupSubtitle(inventoryClearBackup);
+
+  const handleClearAllItems = async () => {
+    setClearBusy(true);
+    setClearError('');
+    try {
+      await onClearAllItems();
+      setShowClearConfirm(false);
+    } catch (err) {
+      setClearError(err.message || 'Could not clear inventory.');
+    } finally {
+      setClearBusy(false);
     }
-    updateItems([]);
-    setConfirmClear(false);
+  };
+
+  const handleRestoreClearedItems = async () => {
+    setRestoreBusy(true);
+    setRestoreError('');
+    try {
+      await onRestoreClearedItems();
+      setShowRestoreConfirm(false);
+    } catch (err) {
+      setRestoreError(err.message || 'Could not restore inventory.');
+    } finally {
+      setRestoreBusy(false);
+    }
   };
 
   const signInEmail = String(accountEmail || '').trim();
@@ -691,24 +740,10 @@ export function SettingsView({
     );
   }
 
-  return (
-    <div className="pb-28">
-      <header className="mb-5">
-        <h1 className="text-heading flex items-center gap-2.5 text-2xl font-extrabold">
-          <Settings className="h-7 w-7 text-emerald-600" aria-hidden />
-          Settings
-        </h1>
-        <p className="text-muted mt-1.5 text-sm">Appearance, account, and household</p>
-      </header>
-
-      <AppGuideSection
-        enabledModules={enabledModules}
-        onShowTipsAgain={resetOnboarding}
-      />
-
-      <section className="surface-card mb-5 p-4">
-        <h2 className="text-heading mb-1 text-sm font-bold uppercase tracking-wide">Appearance</h2>
-        <p className="text-muted mb-3 text-sm">Choose light or dark mode for the app.</p>
+  if (infoScreen === 'appearance') {
+    return (
+      <SettingsInfoScreen title="Appearance" icon={Sun} onBack={() => setInfoScreen(null)}>
+        <p className="text-muted">Choose light or dark mode for the app.</p>
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -735,18 +770,28 @@ export function SettingsView({
             Dark
           </button>
         </div>
-      </section>
+      </SettingsInfoScreen>
+    );
+  }
 
-      <PushNotificationsSettings />
-
-      <section className="surface-card mb-5 p-4">
-        <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
-          <Leaf className="h-4 w-4 text-emerald-600" aria-hidden />
-          Dietary preferences
-        </h2>
-        <p className="text-muted mb-3 text-sm">
-          Applies to AI recipes and Fridge Scout for everyone in your household.
-        </p>
+  if (infoScreen === 'dietary') {
+    return (
+      <SettingsInfoScreen title="Dietary preferences" icon={Leaf} onBack={() => setInfoScreen(null)}>
+        {activeDietaryPreference !== 'none' && (
+          <div
+            className="flex gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-800 dark:bg-amber-950/40"
+            role="note"
+          >
+            <AlertTriangle
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+              aria-hidden
+            />
+            <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-100">
+              Scout tries to follow your diet, but always double-check ingredients — especially for
+              allergies or hidden animal products (e.g. fish sauce, gelatin, stock).
+            </p>
+          </div>
+        )}
         <div className="space-y-2">
           {DIETARY_PREFERENCE_OPTIONS.map((option) => {
             const selected = activeDietaryPreference === option.value;
@@ -768,95 +813,65 @@ export function SettingsView({
             );
           })}
         </div>
-        {activeDietaryPreference !== 'none' && (
-          <p className="text-muted mt-3 text-[11px] leading-relaxed">
-            Scout tries to follow your diet, but always double-check ingredients — especially for
-            allergies or hidden animal products.
+      </SettingsInfoScreen>
+    );
+  }
+
+  if (infoScreen === 'dashboard') {
+    return (
+      <SettingsInfoScreen title="Customize Dashboard" icon={Settings} onBack={() => setInfoScreen(null)}>
+        <p className="text-muted">
+          Choose what your household tracks. Changes sync for everyone when the app refreshes.
+        </p>
+        <div className="space-y-2">
+          {MODULE_DEFINITIONS.map((mod) => {
+            const checked = normalizeEnabledModules(enabledModules)[mod.key];
+            const onlyOneLeft = checked && countEnabledModules(enabledModules) === 1;
+            return (
+              <label
+                key={mod.key}
+                className={`surface-inset flex cursor-pointer items-start gap-3 rounded-xl p-3 transition ${
+                  modulesBusy ? 'pointer-events-none opacity-60' : ''
+                } ${checked ? 'ring-1 ring-emerald-400/60 dark:ring-emerald-600/50' : ''}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={modulesBusy || onlyOneLeft}
+                  onChange={(e) => handleModuleToggle(mod.key, e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-black/15 bg-lm-raised text-emerald-600 focus:ring-emerald-500 dark:border-white/20 dark:bg-dm-raised"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-heading flex items-center gap-1.5 text-sm font-semibold">
+                    <MetaIcon name={mod.key} className="h-4 w-4" />
+                    {mod.label}
+                  </p>
+                  <p className="text-muted mt-0.5 text-xs leading-relaxed">{mod.description}</p>
+                  {onlyOneLeft && (
+                    <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                      At least one module must stay on
+                    </p>
+                  )}
+                </div>
+              </label>
+            );
+          })}
+        </div>
+        {modulesBusy && (
+          <p className="text-muted text-xs font-medium">Saving for your household…</p>
+        )}
+        {modulesError && (
+          <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+            {modulesError}
           </p>
         )}
-      </section>
+      </SettingsInfoScreen>
+    );
+  }
 
-      <section className="surface-card mb-5 overflow-hidden p-4">
-        <button
-          type="button"
-          onClick={() => setCustomizeOpen((open) => !open)}
-          className="flex w-full items-center justify-between gap-3 text-left active:scale-[0.99]"
-          aria-expanded={customizeOpen}
-        >
-          <div className="min-w-0 flex-1">
-            <h2 className="text-heading text-sm font-bold uppercase tracking-wide">
-              Customize Dashboard
-            </h2>
-            {!customizeOpen && (
-              <p className="text-muted mt-1 truncate text-xs leading-relaxed">
-                {enabledModulesSummary || 'Choose modules'}
-              </p>
-            )}
-          </div>
-          {customizeOpen ? (
-            <ChevronUp className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
-          ) : (
-            <ChevronDown className="h-5 w-5 shrink-0 text-slate-500" aria-hidden />
-          )}
-        </button>
-
-        {customizeOpen && (
-          <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-600">
-            <p className="text-muted mb-4 text-sm">
-              Choose what your household tracks. Changes sync for everyone when the app refreshes.
-            </p>
-            <div className="space-y-2">
-              {MODULE_DEFINITIONS.map((mod) => {
-                const checked = normalizeEnabledModules(enabledModules)[mod.key];
-                const onlyOneLeft = checked && countEnabledModules(enabledModules) === 1;
-                return (
-                  <label
-                    key={mod.key}
-                    className={`surface-inset flex cursor-pointer items-start gap-3 rounded-xl p-3 transition ${
-                      modulesBusy ? 'pointer-events-none opacity-60' : ''
-                    } ${checked ? 'ring-1 ring-emerald-400/60 dark:ring-emerald-600/50' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={modulesBusy || onlyOneLeft}
-                      onChange={(e) => handleModuleToggle(mod.key, e.target.checked)}
-                      className="mt-1 h-4 w-4 rounded border-black/15 bg-lm-raised text-emerald-600 focus:ring-emerald-500 dark:border-white/20 dark:bg-dm-raised"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-heading flex items-center gap-1.5 text-sm font-semibold">
-                        <MetaIcon name={mod.key} className="h-4 w-4" />
-                        {mod.label}
-                      </p>
-                      <p className="text-muted mt-0.5 text-xs leading-relaxed">{mod.description}</p>
-                      {onlyOneLeft && (
-                        <p className="mt-1 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-                          At least one module must stay on
-                        </p>
-                      )}
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-            {modulesBusy && (
-              <p className="text-muted mt-3 text-xs font-medium">Saving for your household…</p>
-            )}
-            {modulesError && (
-              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
-                {modulesError}
-              </p>
-            )}
-          </div>
-        )}
-      </section>
-
-      <section className="surface-card mb-5 p-4">
-        <h2 className="text-heading mb-4 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
-          <User className="h-4 w-4 text-emerald-600" />
-          Your account
-        </h2>
-
+  if (infoScreen === 'account') {
+    return (
+      <SettingsInfoScreen title="Your account" icon={User} onBack={() => setInfoScreen(null)}>
         <div className="space-y-3">
           <div>
             <label htmlFor="settings-name" className="text-muted mb-1 block text-xs font-semibold uppercase">
@@ -935,7 +950,7 @@ export function SettingsView({
           </button>
         </div>
 
-        <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-600">
+        <div className="border-t border-slate-200 pt-4 dark:border-slate-600">
           <button
             type="button"
             onClick={handlePasswordReset}
@@ -962,271 +977,129 @@ export function SettingsView({
             </p>
           )}
         </div>
-      </section>
+      </SettingsInfoScreen>
+    );
+  }
 
-      <section className="surface-card mb-5 p-4">
-        <h2 className="text-heading mb-1 flex items-center gap-2 text-sm font-bold uppercase tracking-wide">
-          <Users className="h-4 w-4 text-violet-600" />
-          Who&apos;s in your household
-        </h2>
-        <p className="text-muted mb-3 text-sm">
-          Everyone here shares the same fridge inventory and settings.
-        </p>
+  if (infoScreen === 'household') {
+    return (
+      <>
+        <SettingsInfoScreen title={"Who's in your household"} icon={Users} onBack={() => setInfoScreen(null)}>
+          <p className="text-muted">
+            Everyone here shares the same fridge inventory and settings.
+          </p>
 
-        {membersLoading ? (
-          <p className="text-muted py-2 text-sm">Loading members…</p>
-        ) : membersError ? (
-          <div className="space-y-2">
-            <p className="text-sm text-rose-600 dark:text-rose-400">{membersError}</p>
-            <button
-              type="button"
-              onClick={loadMembers}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
-            >
-              Try again
-            </button>
-          </div>
-        ) : (
-          <ul className="mb-4 space-y-2">
-            {members.map((member) => (
-              <li
-                key={member.id}
-                className="flex items-center justify-between gap-3 rounded-xl border border-black/[0.08] bg-lm-inset px-3 py-2.5 dark:border-slate-600 dark:bg-dm-inset"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-heading truncate text-sm font-semibold">{member.email}</p>
-                  <div className="mt-0.5 flex flex-wrap gap-1.5">
-                    {member.isCurrentUser && (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                        You
-                      </span>
-                    )}
-                    {member.isOwner && (
-                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:bg-violet-950 dark:text-violet-300">
-                        Owner
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {currentUserIsOwner && !member.isCurrentUser && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMemberActionError('');
-                      setConfirmRemoveMember({ id: member.id, email: member.email });
-                    }}
-                    className="shrink-0 rounded-lg border border-rose-300 px-2.5 py-1.5 text-xs font-semibold text-rose-700 active:scale-[0.98] dark:border-rose-800 dark:text-rose-400"
-                  >
-                    Remove
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setShowAddPerson((prev) => !prev)}
-          className="mb-3 flex items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 active:scale-[0.98] dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200"
-        >
-          <UserPlus className="h-4 w-4" />
-          {showAddPerson ? 'Hide invite code' : 'Add another person'}
-        </button>
-
-        {showAddPerson && (
-          <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50/80 p-3 dark:border-violet-800 dark:bg-violet-950/30">
-            <p className="text-muted mb-1 text-xs font-semibold uppercase">Invite code</p>
-            <p className="text-heading mb-3 font-mono text-2xl font-bold tracking-widest">
-              {householdCode || '—'}
-            </p>
-            <div className="flex flex-col gap-2">
+          {membersLoading ? (
+            <p className="text-muted py-2 text-sm">Loading members…</p>
+          ) : membersError ? (
+            <div className="space-y-2">
+              <p className="text-sm text-rose-600 dark:text-rose-400">{membersError}</p>
               <button
                 type="button"
-                onClick={copyInviteCode}
-                className="flex items-center justify-center gap-2 rounded-xl border border-black/[0.08] bg-lm-raised py-2.5 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-white/10 dark:bg-dm-raised dark:text-zinc-200"
+                onClick={loadMembers}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
               >
-                <Copy className="h-4 w-4" />
-                {copied ? 'Copied!' : 'Copy code'}
-              </button>
-              <button
-                type="button"
-                onClick={shareInvite}
-                className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-2.5 text-sm font-bold text-white active:scale-[0.98]"
-              >
-                <Share2 className="h-4 w-4" />
-                Share code
+                Try again
               </button>
             </div>
-            <p className="text-muted mt-3 text-xs leading-relaxed">{inviteMessage}</p>
-          </div>
-        )}
+          ) : (
+            <ul className="space-y-2">
+              {members.map((member) => (
+                <li
+                  key={member.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-black/[0.08] bg-lm-inset px-3 py-2.5 dark:border-slate-600 dark:bg-dm-inset"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-heading truncate text-sm font-semibold">{member.email}</p>
+                    <div className="mt-0.5 flex flex-wrap gap-1.5">
+                      {member.isCurrentUser && (
+                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                          You
+                        </span>
+                      )}
+                      {member.isOwner && (
+                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800 dark:bg-violet-950 dark:text-violet-300">
+                          Owner
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {currentUserIsOwner && !member.isCurrentUser && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMemberActionError('');
+                        setConfirmRemoveMember({ id: member.id, email: member.email });
+                      }}
+                      className="shrink-0 rounded-lg border border-rose-300 px-2.5 py-1.5 text-xs font-semibold text-rose-700 active:scale-[0.98] dark:border-rose-800 dark:text-rose-400"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
 
-        <button
-          type="button"
-          onClick={() => {
-            setMemberActionError('');
-            setShowLeaveConfirm(true);
-          }}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 active:scale-[0.98] dark:border-slate-600 dark:text-slate-300"
-        >
-          <LogOut className="h-4 w-4" />
-          Leave household
-        </button>
-
-        {memberActionError && (
-          <p className="text-muted mt-3 text-xs text-rose-600 dark:text-rose-400">{memberActionError}</p>
-        )}
-      </section>
-
-      <section className="surface-inset p-4">
-        <h2 className="text-heading mb-2 flex items-center gap-2 text-sm font-bold">
-          <FlaskConical className="h-4 w-4 text-amber-600" />
-          Data tools
-        </h2>
-        <p className="text-muted mb-3 text-xs">Manage help tips and inventory.</p>
-        <div className="flex flex-col gap-2">
           <button
             type="button"
-            onClick={resetOnboarding}
-            className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:text-slate-200"
+            onClick={() => setShowAddPerson((prev) => !prev)}
+            className="flex items-center gap-2 rounded-xl border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 active:scale-[0.98] dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200"
           >
-            Show tips &amp; color guide again
+            <UserPlus className="h-4 w-4" />
+            {showAddPerson ? 'Hide invite code' : 'Add another person'}
           </button>
-          <button
-            type="button"
-            onClick={clearAll}
-            className="rounded-xl border border-rose-300 py-3 text-sm font-semibold text-rose-700 active:scale-[0.98] dark:border-rose-800 dark:text-rose-400"
-          >
-            {confirmClear ? 'Tap again to confirm clear all' : 'Clear all items'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowLogoutConfirm(true)}
-            className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-slate-600 dark:text-slate-200"
-          >
-            Log out
-          </button>
+
+          {showAddPerson && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50/80 p-3 dark:border-violet-800 dark:bg-violet-950/30">
+              <p className="text-muted mb-1 text-xs font-semibold uppercase">Invite code</p>
+              <p className="text-heading mb-3 font-mono text-2xl font-bold tracking-widest">
+                {householdCode || '—'}
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={copyInviteCode}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-black/[0.08] bg-lm-raised py-2.5 text-sm font-semibold text-slate-800 active:scale-[0.98] dark:border-white/10 dark:bg-dm-raised dark:text-zinc-200"
+                >
+                  <Copy className="h-4 w-4" />
+                  {copied ? 'Copied!' : 'Copy code'}
+                </button>
+                <button
+                  type="button"
+                  onClick={shareInvite}
+                  className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 py-2.5 text-sm font-bold text-white active:scale-[0.98]"
+                >
+                  <Share2 className="h-4 w-4" />
+                  Share code
+                </button>
+              </div>
+              <p className="text-muted mt-3 text-xs leading-relaxed">{inviteMessage}</p>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => {
-              setDeleteError('');
-              setShowDeleteConfirm(true);
+              setMemberActionError('');
+              setShowLeaveConfirm(true);
             }}
-            className="rounded-xl border border-rose-400 py-3 text-sm font-semibold text-rose-700 active:scale-[0.98] dark:border-rose-700 dark:text-rose-400"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 py-3 text-sm font-semibold text-slate-700 active:scale-[0.98] dark:border-slate-600 dark:text-slate-300"
           >
-            Delete account
+            <LogOut className="h-4 w-4" />
+            Leave household
           </button>
-        </div>
-      </section>
 
-      {showLogoutConfirm && (
-        <SettingsModal
-          titleId="logout-title"
-          onClose={() => setShowLogoutConfirm(false)}
-        >
+          {memberActionError && (
+            <p className="text-muted text-xs text-rose-600 dark:text-rose-400">{memberActionError}</p>
+          )}
+        </SettingsInfoScreen>
 
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h3 id="logout-title" className="text-heading text-lg font-bold">
-                  Log out?
-                </h3>
-                <p className="text-muted mt-2 text-sm leading-relaxed">
-                  You&apos;ll need to sign in again to access your household fridge.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowLogoutConfirm(false)}
-                className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLogoutConfirm(false);
-                  onLogout();
-                }}
-                className="rounded-xl bg-slate-800 py-3 text-sm font-semibold text-white active:scale-[0.98] dark:bg-slate-200 dark:text-slate-900"
-              >
-                Yes, log out
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowLogoutConfirm(false)}
-                className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
-              >
-                Cancel
-              </button>
-            </div>
-          
-        </SettingsModal>
-      )}
-
-      {showDeleteConfirm && (
-        <SettingsModal
-          titleId="delete-account-title"
-          onClose={() => !deleteBusy && setShowDeleteConfirm(false)}
-        >
-
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h3 id="delete-account-title" className="text-heading text-lg font-bold">
-                  Delete your account?
-                </h3>
-                <p className="text-muted mt-2 text-sm leading-relaxed">
-                  This permanently removes your login and profile. If you are the only person in
-                  your household, all fridge inventory and settings for that household are deleted
-                  too. This cannot be undone.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={deleteBusy}
-                className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            {deleteError && (
-              <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
-                {deleteError}
-              </p>
-            )}
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={deleteBusy}
-                onClick={handleDeleteAccount}
-                className="rounded-xl bg-rose-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
-              >
-                {deleteBusy ? 'Deleting…' : 'Yes, delete my account'}
-              </button>
-              <button
-                type="button"
-                disabled={deleteBusy}
-                onClick={() => setShowDeleteConfirm(false)}
-                className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
-              >
-                Cancel
-              </button>
-            </div>
-          
-        </SettingsModal>
-      )}
-
-      {confirmRemoveMember && (
-        <SettingsModal
-          titleId="remove-member-title"
-          onClose={() => !removeBusy && setConfirmRemoveMember(null)}
-        >
-
+        {confirmRemoveMember && (
+          <SettingsModal
+            titleId="remove-member-title"
+            onClose={() => !removeBusy && setConfirmRemoveMember(null)}
+          >
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 id="remove-member-title" className="text-heading text-lg font-bold">
@@ -1268,16 +1141,14 @@ export function SettingsView({
                 Cancel
               </button>
             </div>
-          
-        </SettingsModal>
-      )}
+          </SettingsModal>
+        )}
 
-      {showLeaveConfirm && (
-        <SettingsModal
-          titleId="leave-household-title"
-          onClose={() => !leaveBusy && setShowLeaveConfirm(false)}
-        >
-
+        {showLeaveConfirm && (
+          <SettingsModal
+            titleId="leave-household-title"
+            onClose={() => !leaveBusy && setShowLeaveConfirm(false)}
+          >
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 id="leave-household-title" className="text-heading text-lg font-bold">
@@ -1316,60 +1187,338 @@ export function SettingsView({
                 Cancel
               </button>
             </div>
-          
+          </SettingsModal>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <div className="pb-28">
+      <header className="mb-5">
+        <h1 className="text-heading flex items-center gap-2.5 text-2xl font-extrabold">
+          <Settings className="h-7 w-7 text-emerald-600" aria-hidden />
+          Settings
+        </h1>
+        <p className="text-muted mt-1.5 text-sm">Appearance, account, and household</p>
+      </header>
+
+      <AppGuideSection
+        enabledModules={enabledModules}
+        onShowTipsAgain={resetOnboarding}
+      />
+
+      <section className="surface-card mb-5 divide-y divide-slate-200 overflow-hidden dark:divide-slate-700">
+        <SettingsNavRow
+          icon={User}
+          iconClassName="bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+          title="Your account"
+          subtitle={name.trim() || accountEmail || 'Name, email, postcode'}
+          onClick={() => setInfoScreen('account')}
+        />
+        <PushNotificationsSettings />
+        <SettingsNavRow
+          icon={Sun}
+          iconClassName="bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+          title="Appearance"
+          subtitle={settings.theme === 'dark' ? 'Dark mode' : 'Light mode'}
+          onClick={() => setInfoScreen('appearance')}
+        />
+        <SettingsNavRow
+          icon={Leaf}
+          iconClassName="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+          title="Dietary preferences"
+          subtitle={getDietaryPreferenceLabel(activeDietaryPreference)}
+          onClick={() => setInfoScreen('dietary')}
+        />
+        <SettingsNavRow
+          icon={Settings}
+          iconClassName="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          title="Customize Dashboard"
+          subtitle={enabledModulesSummary || 'Choose modules'}
+          onClick={() => setInfoScreen('dashboard')}
+        />
+        <SettingsNavRow
+          icon={Users}
+          iconClassName="bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
+          title="Household"
+          subtitle={
+            membersLoading
+              ? 'Loading…'
+              : `${members.length} member${members.length === 1 ? '' : 's'}`
+          }
+          onClick={() => setInfoScreen('household')}
+        />
+        <SettingsNavRow
+          icon={MessageSquare}
+          iconClassName="bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
+          title="Send feedback"
+          subtitle="Bugs, ideas, and help improving deals"
+          onClick={() => setInfoScreen('feedback')}
+        />
+        <SettingsNavRow
+          icon={Shield}
+          iconClassName="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+          title="Your privacy"
+          subtitle="How we handle household data and learning"
+          onClick={() => setInfoScreen('privacy')}
+        />
+        <SettingsNavRow
+          icon={Database}
+          iconClassName="bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+          title="Data sources"
+          subtitle="Open Food Facts and product lookup details"
+          onClick={() => setInfoScreen('dataSources')}
+        />
+        <SettingsNavRow
+          icon={BookOpen}
+          iconClassName="bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
+          title="Show tips & color guide again"
+          subtitle="Replay onboarding help on Home"
+          onClick={resetOnboarding}
+          trailing={null}
+        />
+        {canRestoreClearedItems ? (
+          <SettingsNavRow
+            icon={RotateCcw}
+            iconClassName="bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+            title="Restore cleared items"
+            subtitle={restoreSubtitle}
+            onClick={() => {
+              setRestoreError('');
+              setShowRestoreConfirm(true);
+            }}
+            trailing={null}
+          />
+        ) : null}
+        <SettingsNavRow
+          icon={Trash2}
+          iconClassName="bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+          title="Clear all items"
+          subtitle="Remove every item from your fridge"
+          onClick={() => {
+            setClearError('');
+            setShowClearConfirm(true);
+          }}
+          trailing={null}
+        />
+        <SettingsNavRow
+          icon={LogOut}
+          iconClassName="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+          title="Log out"
+          subtitle="Sign out on this device"
+          onClick={() => setShowLogoutConfirm(true)}
+          trailing={null}
+        />
+        <SettingsNavRow
+          icon={Trash2}
+          iconClassName="bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
+          title="Delete account"
+          subtitle="Permanently remove your login"
+          onClick={() => {
+            setDeleteError('');
+            setShowDeleteConfirm(true);
+          }}
+          trailing={null}
+        />
+      </section>
+
+      {showClearConfirm && (
+        <SettingsModal
+          titleId="clear-items-title"
+          onClose={() => setShowClearConfirm(false)}
+        >
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 id="clear-items-title" className="text-heading text-lg font-bold">
+                Clear all items?
+              </h3>
+              <p className="text-muted mt-2 text-sm leading-relaxed">
+                This removes every item from your household fridge and shopping list. You can restore
+                them from Settings within {INVENTORY_CLEAR_BACKUP_DAYS} days — after that they are
+                deleted permanently.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(false)}
+              className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+              aria-label="Close"
+              disabled={clearBusy}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          {clearError ? (
+            <p className="mb-3 text-sm text-rose-600 dark:text-rose-400">{clearError}</p>
+          ) : null}
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleClearAllItems}
+              disabled={clearBusy}
+              className="rounded-xl bg-rose-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+            >
+              {clearBusy ? 'Clearing…' : 'Yes, clear everything'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(false)}
+              disabled={clearBusy}
+              className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
         </SettingsModal>
       )}
 
-      <div className="mb-5 space-y-2">
-        <button
-          type="button"
-          onClick={() => setInfoScreen('feedback')}
-          className="surface-card flex w-full items-center gap-3 p-4 text-left transition active:scale-[0.99]"
+      {showRestoreConfirm && (
+        <SettingsModal
+          titleId="restore-items-title"
+          onClose={() => !restoreBusy && setShowRestoreConfirm(false)}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
-            <MessageSquare className="h-5 w-5" aria-hidden />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="text-heading block text-sm font-bold">Send feedback</span>
-            <span className="text-muted mt-0.5 block text-xs leading-relaxed">
-              Bugs, ideas, and help improving deals
-            </span>
-          </span>
-          <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-        </button>
-        <button
-          type="button"
-          onClick={() => setInfoScreen('privacy')}
-          className="surface-card flex w-full items-center gap-3 p-4 text-left transition active:scale-[0.99]"
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 id="restore-items-title" className="text-heading text-lg font-bold">
+                Restore cleared items?
+              </h3>
+              <p className="text-muted mt-2 text-sm leading-relaxed">
+                This brings back {inventoryClearBackup?.itemCount ?? 0}{' '}
+                {(inventoryClearBackup?.itemCount ?? 0) === 1 ? 'item' : 'items'} from before you
+                cleared the fridge. Any items added since then will be replaced.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowRestoreConfirm(false)}
+              className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+              aria-label="Close"
+              disabled={restoreBusy}
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          {restoreError ? (
+            <p className="mb-3 text-sm text-rose-600 dark:text-rose-400">{restoreError}</p>
+          ) : null}
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={handleRestoreClearedItems}
+              disabled={restoreBusy}
+              className="rounded-xl bg-amber-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+            >
+              {restoreBusy ? 'Restoring…' : 'Yes, restore items'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowRestoreConfirm(false)}
+              disabled={restoreBusy}
+              className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </SettingsModal>
+      )}
+
+      {showLogoutConfirm && (
+        <SettingsModal
+          titleId="logout-title"
+          onClose={() => setShowLogoutConfirm(false)}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-            <Shield className="h-5 w-5" aria-hidden />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="text-heading block text-sm font-bold">Your privacy</span>
-            <span className="text-muted mt-0.5 block text-xs leading-relaxed">
-              How we handle household data and learning
-            </span>
-          </span>
-          <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-        </button>
-        <button
-          type="button"
-          onClick={() => setInfoScreen('dataSources')}
-          className="surface-card flex w-full items-center gap-3 p-4 text-left transition active:scale-[0.99]"
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 id="logout-title" className="text-heading text-lg font-bold">
+                Log out?
+              </h3>
+              <p className="text-muted mt-2 text-sm leading-relaxed">
+                You&apos;ll need to sign in again to access your household fridge.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(false)}
+              className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowLogoutConfirm(false);
+                onLogout();
+              }}
+              className="rounded-xl bg-slate-800 py-3 text-sm font-semibold text-white active:scale-[0.98] dark:bg-slate-200 dark:text-slate-900"
+            >
+              Yes, log out
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowLogoutConfirm(false)}
+              className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
+            >
+              Cancel
+            </button>
+          </div>
+        </SettingsModal>
+      )}
+
+      {showDeleteConfirm && (
+        <SettingsModal
+          titleId="delete-account-title"
+          onClose={() => !deleteBusy && setShowDeleteConfirm(false)}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
-            <Database className="h-5 w-5" aria-hidden />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="text-heading block text-sm font-bold">Data sources</span>
-            <span className="text-muted mt-0.5 block text-xs leading-relaxed">
-              Open Food Facts and product lookup details
-            </span>
-          </span>
-          <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-        </button>
-      </div>
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 id="delete-account-title" className="text-heading text-lg font-bold">
+                Delete your account?
+              </h3>
+              <p className="text-muted mt-2 text-sm leading-relaxed">
+                This permanently removes your login and profile. If you are the only person in
+                your household, all fridge inventory and settings for that household are deleted
+                too. This cannot be undone.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleteBusy}
+              className="rounded-lg p-1 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          {deleteError && (
+            <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300">
+              {deleteError}
+            </p>
+          )}
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={deleteBusy}
+              onClick={handleDeleteAccount}
+              className="rounded-xl bg-rose-600 py-3 text-sm font-semibold text-white active:scale-[0.98] disabled:opacity-50"
+            >
+              {deleteBusy ? 'Deleting…' : 'Yes, delete my account'}
+            </button>
+            <button
+              type="button"
+              disabled={deleteBusy}
+              onClick={() => setShowDeleteConfirm(false)}
+              className="rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-200"
+            >
+              Cancel
+            </button>
+          </div>
+        </SettingsModal>
+      )}
 
       <footer className="border-t border-slate-200 pt-6 dark:border-slate-700">
         <LegalFooterLinks />

@@ -304,6 +304,24 @@ export async function syncInventory(payload) {
   return parseJson(res);
 }
 
+/** POST /api/inventory/clear-all — wipe inventory and keep a 7-day restore snapshot. */
+export async function clearAllInventory() {
+  const res = await fetch(apiUrl(`/inventory/clear-all`), {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
+/** POST /api/inventory/restore-cleared — restore inventory from the active snapshot. */
+export async function restoreClearedInventory() {
+  const res = await fetch(apiUrl(`/inventory/restore-cleared`), {
+    method: 'POST',
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
 export async function searchExternalRecipes(query) {
   const res = await fetch(
     apiUrl(`/recipes/search?q=${encodeURIComponent(query)}`),

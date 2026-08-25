@@ -13,14 +13,17 @@ const NAV = [
   { to: '/admin/feedback', label: 'Feedback', icon: MessageSquare },
 ];
 
-export function AdminLayout({ children, email, onLogout }) {
+export function AdminLayout({ children, email, onLogout, navigateAdmin, verifyingAccess = false }) {
   return (
     <div className="min-h-full bg-slate-100 dark:bg-black">
       <header className="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-zinc-950">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div>
             <p className="text-heading text-sm font-extrabold tracking-tight">Fridge Admin</p>
-            <p className="text-muted text-xs">{email}</p>
+            <p className="text-muted text-xs">
+              {email}
+              {verifyingAccess ? ' · verifying access…' : ''}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <a
@@ -43,7 +46,7 @@ export function AdminLayout({ children, email, onLogout }) {
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:flex-row sm:px-6">
         <nav className="flex shrink-0 gap-2 overflow-x-auto sm:w-44 sm:flex-col sm:overflow-visible">
           {NAV.map(({ to, label, icon: Icon, end }) => (
-            <AdminNavLink key={to} to={to} end={end}>
+            <AdminNavLink key={to} to={to} end={end} navigateAdmin={navigateAdmin}>
               <Icon className="h-4 w-4 shrink-0" aria-hidden />
               {label}
             </AdminNavLink>

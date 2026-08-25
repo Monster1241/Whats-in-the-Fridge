@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchAppState, saveAppState, syncInventory } from '../api.js';
+import { clearAllInventory, fetchAppState, restoreClearedInventory, saveAppState, syncInventory } from '../api.js';
+import { toInventoryClearBackupSummary } from '../inventory/clearBackup.js';
 import { migrateItems, inventoryChangedByMigration, normalizeName } from '../inventory/itemUtils.js';
 import { DEFAULT_ENABLED_MODULES, normalizeEnabledModules } from '../inventory/modules.js';
 import {
@@ -49,6 +50,7 @@ export function useAppData(enabled) {
   const [itemKnowledge, setItemKnowledge] = useState([]);
   const [usageInsights, setUsageInsights] = useState(() => normalizeUsageInsights(null));
   const [householdCode, setHouseholdCode] = useState('');
+  const [inventoryClearBackup, setInventoryClearBackup] = useState(null);
 
   const skipSaveRef = useRef(true);
   const saveTimerRef = useRef(null);
@@ -99,6 +101,7 @@ export function useAppData(enabled) {
     setItemKnowledge(Array.isArray(state.itemKnowledge) ? state.itemKnowledge : []);
     setUsageInsights(normalizeUsageInsights(state.usageInsights));
     setHouseholdCode(state.householdCode || state.inviteCode || '');
+    setInventoryClearBackup(toInventoryClearBackupSummary(state.inventoryClearBackup) ?? null);
     lastSyncedRef.current = toApiStateSnapshot({
       items: needsPersist ? (state.items ?? []) : migrated,
       settings: { ...DEFAULT_SETTINGS, ...state.settings },
@@ -493,6 +496,9 @@ export function useAppData(enabled) {
       inventoryRevisionRef.current = options.inventoryRevision;
       patch.inventoryRevision = options.inventoryRevision;
     }
+    if (options.inventoryClearBackup !== undefined) {
+      setInventoryClearBackup(toInventoryClearBackupSummary(options.inventoryClearBackup) ?? null);
+    }
     latestRef.current = { ...latestRef.current, items: migrated, ...patch };
     if (patch.restockHistory) setRestockHistory(patch.restockHistory);
     if (patch.itemKnowledge) setItemKnowledge(patch.itemKnowledge);
@@ -500,6 +506,26 @@ export function useAppData(enabled) {
     lastSyncedRef.current = toApiStateSnapshot(latestRef.current);
     return migrated;
   }, []);
+
+  const clearAllItems = useCallback(async () => {
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+    const state = await clearAllInventory();
+    skipSaveRef.current = true;
+    hasUnsyncedEditsRef.current = false;
+    applyState(state);
+    return state;
+  }, [applyState]);
+
+  const restoreClearedItems = useCallback(async () => {
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = null;
+    const state = await restoreClearedInventory();
+    skipSaveRef.current = true;
+    hasUnsyncedEditsRef.current = false;
+    applyState(state);
+    return state;
+  }, [applyState]);
 
   return {
     loading,
@@ -523,6 +549,9 @@ export function useAppData(enabled) {
     enabledModules,
     updateEnabledModules,
     householdCode,
+    inventoryClearBackup,
+    clearAllItems,
+    restoreClearedItems,
     savedRecipes: { savedIds, isSaved, toggleSave, recipeLibrary, rememberRecipe, mergeRecipeLibrary },
     onboarding: { isDismissed, dismiss: dismissOnboarding, resetOnboarding },
   };

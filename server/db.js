@@ -7,6 +7,12 @@ import {
 } from './storeCatalogues.js';
 import { ensureWeeklyDealIndexes, WEEKLY_DEALS_COLLECTION } from './weeklyDeals.js';
 import { ensureSupportInboxIndexes } from './supportInbox.js';
+import { sanitizeInventoryItems } from './inventorySanitize.js';
+import {
+  INVENTORY_CLEAR_BACKUP_MS,
+  isInventoryClearBackupActive,
+  toInventoryClearBackupSummary,
+} from '../src/inventory/clearBackup.js';
 
 const DB_NAME = 'whats-in-the-fridge';
 
@@ -565,11 +571,30 @@ export async function findHouseholdByInviteCode(inviteCode) {
   };
 }
 
+async function resolveInventoryClearBackup(householdOid, raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (isInventoryClearBackupActive(raw)) {
+    return toInventoryClearBackupSummary(raw);
+  }
+  await getDb()
+    .collection('households')
+    .updateOne(
+      { _id: householdOid },
+      { $unset: { inventoryClearBackup: '' }, $set: { updated_at: new Date() } },
+    );
+  return null;
+}
+
 export async function getHouseholdMeta(householdId) {
   const scopedId = assertScopedHouseholdId(householdId);
   const households = getDb().collection('households');
-  const doc = await households.findOne({ _id: new ObjectId(scopedId) });
+  const householdOid = new ObjectId(scopedId);
+  const doc = await households.findOne({ _id: householdOid });
   if (!doc) return null;
+  const inventoryClearBackup = await resolveInventoryClearBackup(
+    householdOid,
+    doc.inventoryClearBackup,
+  );
   return {
     id: doc._id.toString(),
     invite_code: doc.invite_code,
@@ -583,6 +608,7 @@ export async function getHouseholdMeta(householdId) {
     usageInsights:
       doc.usageInsights && typeof doc.usageInsights === 'object' ? doc.usageInsights : {},
     inventoryRevision: Number(doc.inventoryRevision ?? 0),
+    inventoryClearBackup,
   };
 }
 
@@ -616,6 +642,7 @@ export async function getHouseholdAppState(householdId) {
     itemKnowledge: meta.itemKnowledge,
     usageInsights: meta.usageInsights,
     inventoryRevision: meta.inventoryRevision ?? 0,
+    inventoryClearBackup: meta.inventoryClearBackup ?? null,
     householdCode: meta.invite_code,
     inviteCode: meta.invite_code,
   };
@@ -1008,6 +1035,102 @@ export async function deleteInventoryItem(householdId, itemId) {
 export async function saveInventoryItems(householdId, items) {
   await replaceInventoryForHousehold(householdId, items);
   return getInventoryForHousehold(householdId);
+}
+
+/**
+ * Saves a 7-day restorable snapshot, then removes all inventory for the household.
+ * @param {string} householdId
+ */
+export async function clearAllInventoryWithBackup(householdId) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const households = getDb().collection('households');
+  const householdOid = new ObjectId(scopedId);
+  const inventory = getDb().collection('inventory');
+  const existing = await households.findOne({ _id: householdOid });
+  if (!existing) {
+    const err = new Error('Household not found.');
+    err.status = 404;
+    throw err;
+  }
+
+  const items = await getInventoryForHousehold(scopedId);
+  const now = new Date();
+  const clearedAt = now.toISOString();
+  const expiresAt = new Date(now.getTime() + INVENTORY_CLEAR_BACKUP_MS).toISOString();
+
+  if (items.length > 0) {
+    const sanitized = sanitizeInventoryItems(items);
+    await households.updateOne(
+      { _id: householdOid },
+      {
+        $set: {
+          inventoryClearBackup: {
+            items: sanitized,
+            clearedAt,
+            expiresAt,
+            itemCount: sanitized.length,
+          },
+          updated_at: now,
+        },
+      },
+    );
+  }
+
+  const existingCount = await inventory.countDocuments({ household_id: scopedId });
+  if (existingCount > 0) {
+    await inventory.deleteMany({ household_id: scopedId });
+    await bumpInventoryRevision(scopedId);
+  }
+
+  return getHouseholdAppState(scopedId);
+}
+
+/**
+ * Restores inventory from the active clear backup, if one exists.
+ * @param {string} householdId
+ */
+export async function restoreClearedInventory(householdId) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const households = getDb().collection('households');
+  const householdOid = new ObjectId(scopedId);
+  const doc = await households.findOne({ _id: householdOid });
+  if (!doc) {
+    const err = new Error('Household not found.');
+    err.status = 404;
+    throw err;
+  }
+
+  const raw = doc.inventoryClearBackup;
+  if (!raw || !isInventoryClearBackupActive(raw)) {
+    if (raw) {
+      await households.updateOne(
+        { _id: householdOid },
+        { $unset: { inventoryClearBackup: '' }, $set: { updated_at: new Date() } },
+      );
+    }
+    const err = new Error('Restore window expired or no backup is available.');
+    err.status = 410;
+    throw err;
+  }
+
+  const items = sanitizeInventoryItems(Array.isArray(raw.items) ? raw.items : []);
+  if (!items.length) {
+    await households.updateOne(
+      { _id: householdOid },
+      { $unset: { inventoryClearBackup: '' }, $set: { updated_at: new Date() } },
+    );
+    const err = new Error('Nothing to restore.');
+    err.status = 410;
+    throw err;
+  }
+
+  await replaceInventoryForHousehold(scopedId, items);
+  await households.updateOne(
+    { _id: householdOid },
+    { $unset: { inventoryClearBackup: '' }, $set: { updated_at: new Date() } },
+  );
+
+  return getHouseholdAppState(scopedId);
 }
 
 export async function deleteHouseholdData(householdId) {

@@ -12,10 +12,12 @@ import {
   handleScanReceipt,
 } from '../controllers/receiptScan.js';
 import {
+  clearAllInventoryWithBackup,
   deleteInventoryItem,
   getHouseholdAppState,
   getInventoryForHousehold,
   insertInventoryItem,
+  restoreClearedInventory,
   syncHouseholdInventory,
   updateInventoryItem,
 } from '../db.js';
@@ -98,6 +100,30 @@ inventoryRouter.post(
       throw err;
     }
   }, 'POST /api/inventory/sync', 'Could not sync inventory'),
+);
+
+inventoryRouter.post(
+  '/clear-all',
+  asyncRoute(async (req, res) => {
+    const state = await clearAllInventoryWithBackup(req.user.household_id);
+    res.status(200).json(state);
+  }, 'POST /api/inventory/clear-all', 'Could not clear inventory'),
+);
+
+inventoryRouter.post(
+  '/restore-cleared',
+  asyncRoute(async (req, res) => {
+    try {
+      const state = await restoreClearedInventory(req.user.household_id);
+      res.status(200).json(state);
+    } catch (err) {
+      if (err?.status === 410) {
+        res.status(410).json({ error: err.message || 'Restore window expired.' });
+        return;
+      }
+      throw err;
+    }
+  }, 'POST /api/inventory/restore-cleared', 'Could not restore inventory'),
 );
 
 inventoryRouter.get(

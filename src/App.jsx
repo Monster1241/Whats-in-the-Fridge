@@ -196,6 +196,9 @@ export default function App() {
     enabledModules,
     updateEnabledModules,
     householdCode,
+    inventoryClearBackup,
+    clearAllItems,
+    restoreClearedItems,
     savedRecipes,
     onboarding,
   } = useAppData(appReady);
@@ -343,7 +346,9 @@ export default function App() {
           <SettingsView
             settings={settings}
             updateSettings={updateSettings}
-            updateItems={updateItems}
+            inventoryClearBackup={inventoryClearBackup}
+            onClearAllItems={clearAllItems}
+            onRestoreClearedItems={restoreClearedItems}
             onboarding={onboarding}
             householdCode={householdCode}
             enabledModules={enabledModules}
