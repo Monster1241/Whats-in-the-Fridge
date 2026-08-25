@@ -8,6 +8,8 @@ import {
   handleAdminLookupHousehold,
   handleAdminLookupUser,
   handleAdminMe,
+  handleAdminRecoveryConfirmCode,
+  handleAdminRecoverySendCode,
   handleAdminRejoinHousehold,
   handleAdminReplySupportChat,
   handleAdminUpdateFeedback,
@@ -108,6 +110,22 @@ adminRouter.get(
     handleAdminLookupHousehold,
     'GET /api/admin/recovery/households',
     'Could not look up household.',
+  ),
+);
+adminRouter.post(
+  '/recovery/send-code',
+  asyncRoute(
+    handleAdminRecoverySendCode,
+    'POST /api/admin/recovery/send-code',
+    'Could not send recovery code.',
+  ),
+);
+adminRouter.post(
+  '/recovery/confirm-code',
+  asyncRoute(
+    handleAdminRecoveryConfirmCode,
+    'POST /api/admin/recovery/confirm-code',
+    'Could not confirm recovery code.',
   ),
 );
 adminRouter.post(

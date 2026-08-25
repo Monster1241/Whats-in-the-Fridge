@@ -2,7 +2,9 @@ import { useState } from 'react';
 import {
   fetchAdminRecoveryHousehold,
   fetchAdminRecoveryUser,
+  postAdminRecoveryConfirmCode,
   postAdminRecoveryRejoin,
+  postAdminRecoverySendCode,
 } from '../../api.js';
 import { formatWhen } from '../adminFormat.js';
 import {
@@ -16,9 +18,22 @@ import {
 const fieldClass =
   'min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 dark:border-white/10 dark:bg-zinc-900';
 
-function HouseholdCard({ household, userId, onRejoin, rejoiningId }) {
+function HouseholdCard({
+  household,
+  userId,
+  userEmail,
+  onRejoin,
+  rejoiningId,
+  emailVerified,
+  onSendCode,
+  onConfirmCode,
+  codeBusyId,
+}) {
   if (!household) return null;
   const busy = rejoiningId === household.id;
+  const sending = codeBusyId === `send:${household.id}`;
+  const confirming = codeBusyId === `confirm:${household.id}`;
+  const [code, setCode] = useState('');
 
   return (
     <AdminSurface>
@@ -33,19 +48,10 @@ function HouseholdCard({ household, userId, onRejoin, rejoiningId }) {
             ) : (
               <AdminBadge tone="emerald">Active</AdminBadge>
             )}
+            {emailVerified ? <AdminBadge tone="teal">Email verified</AdminBadge> : null}
           </div>
           <p className="text-muted mt-1 font-mono text-xs break-all">{household.id}</p>
         </div>
-        {userId ? (
-          <AdminButton
-            size="sm"
-            variant="dark"
-            disabled={busy}
-            onClick={() => onRejoin(household)}
-          >
-            {busy ? 'Rejoining…' : household.softDeleted ? 'Restore & rejoin' : 'Rejoin user'}
-          </AdminButton>
-        ) : null}
       </div>
 
       <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
@@ -123,6 +129,71 @@ function HouseholdCard({ household, userId, onRejoin, rejoiningId }) {
           </ul>
         </div>
       ) : null}
+
+      {userId ? (
+        <div className="mt-4 space-y-3 border-t border-slate-100 pt-4 dark:border-white/[0.06]">
+          <p className="text-muted text-[10px] font-semibold uppercase tracking-wide">
+            Email verification before rejoin
+          </p>
+          <p className="text-muted text-xs leading-relaxed">
+            Send a code to <span className="font-semibold text-slate-800 dark:text-zinc-100">{userEmail}</span>.
+            Ask them to read it from their inbox (or Support chat) and tell you the digits.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <AdminButton
+              size="sm"
+              variant="secondary"
+              disabled={sending || confirming || busy}
+              onClick={() => onSendCode(household)}
+            >
+              {sending ? 'Sending…' : 'Send verification code'}
+            </AdminButton>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="6-digit code"
+              className={`${fieldClass} max-w-[10rem] font-mono tracking-[0.2em]`}
+              disabled={confirming || busy}
+            />
+            <AdminButton
+              size="sm"
+              variant="primary"
+              disabled={confirming || busy || code.length !== 6}
+              onClick={() => onConfirmCode(household, code)}
+            >
+              {confirming ? 'Checking…' : 'Confirm code'}
+            </AdminButton>
+          </div>
+          <AdminButton
+            size="sm"
+            variant="dark"
+            disabled={busy || !emailVerified}
+            title={
+              emailVerified
+                ? undefined
+                : 'Confirm the email verification code before rejoining'
+            }
+            onClick={() => onRejoin(household)}
+          >
+            {busy
+              ? 'Rejoining…'
+              : household.softDeleted
+                ? 'Restore & rejoin'
+                : 'Rejoin user'}
+          </AdminButton>
+          {!emailVerified ? (
+            <p className="text-muted text-[11px]">
+              Rejoin stays locked until the user&apos;s email code is confirmed.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </AdminSurface>
   );
 }
@@ -137,6 +208,9 @@ export function AdminRecoveryPage() {
   const [loadingUser, setLoadingUser] = useState(false);
   const [loadingHousehold, setLoadingHousehold] = useState(false);
   const [rejoiningId, setRejoiningId] = useState(null);
+  const [codeBusyId, setCodeBusyId] = useState(null);
+  /** @type {[Record<string, string>, Function]} */
+  const [verifiedUntilByHousehold, setVerifiedUntilByHousehold] = useState({});
 
   async function lookupUser(event) {
     event.preventDefault();
@@ -147,6 +221,7 @@ export function AdminRecoveryPage() {
       const data = await fetchAdminRecoveryUser(email.trim());
       setUserResult(data);
       setHouseholdResult(null);
+      setVerifiedUntilByHousehold({});
     } catch (err) {
       setUserResult(null);
       setError(err.message || 'Could not look up user.');
@@ -171,10 +246,72 @@ export function AdminRecoveryPage() {
     }
   }
 
+  async function sendCode(household) {
+    const userId = userResult?.user?.id;
+    if (!userId || !household?.id) {
+      setError('Look up a user by email first.');
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    setCodeBusyId(`send:${household.id}`);
+    try {
+      const data = await postAdminRecoverySendCode({
+        userId,
+        householdId: household.id,
+      });
+      setSuccess(
+        `Verification code emailed to ${data.userEmail}. Ask them for the 6 digits (expires ~10 min).`,
+      );
+    } catch (err) {
+      setError(err.message || 'Could not send verification code.');
+    } finally {
+      setCodeBusyId(null);
+    }
+  }
+
+  async function confirmCode(household, code) {
+    const userId = userResult?.user?.id;
+    if (!userId || !household?.id) {
+      setError('Look up a user by email first.');
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    setCodeBusyId(`confirm:${household.id}`);
+    try {
+      const data = await postAdminRecoveryConfirmCode({
+        userId,
+        householdId: household.id,
+        code,
+      });
+      setVerifiedUntilByHousehold((prev) => ({
+        ...prev,
+        [household.id]: data.rejoinExpiresAt,
+      }));
+      setSuccess('Email verified. You can rejoin this user to the household now.');
+    } catch (err) {
+      setError(err.message || 'Could not confirm code.');
+    } finally {
+      setCodeBusyId(null);
+    }
+  }
+
+  function isEmailVerified(householdId) {
+    const until = verifiedUntilByHousehold[householdId];
+    if (!until) return false;
+    return new Date(until).getTime() > Date.now();
+  }
+
   async function rejoin(household, { force = false } = {}) {
     const userId = userResult?.user?.id;
     if (!userId || !household?.id) {
       setError('Look up a user by email first, then rejoin them to a household.');
+      return;
+    }
+
+    if (!isEmailVerified(household.id)) {
+      setError('Confirm the email verification code before rejoining.');
       return;
     }
 
@@ -200,6 +337,11 @@ export function AdminRecoveryPage() {
           data.forced ? ' (forced)' : ''
         }.`,
       );
+      setVerifiedUntilByHousehold((prev) => {
+        const next = { ...prev };
+        delete next[household.id];
+        return next;
+      });
       const refreshed = await fetchAdminRecoveryUser(userResult.user.email);
       setUserResult(refreshed);
       setHouseholdResult(data.household);
@@ -218,6 +360,13 @@ export function AdminRecoveryPage() {
           return;
         }
       }
+      if (err.code === 'RECOVERY_EMAIL_UNVERIFIED' || err.body?.code === 'RECOVERY_EMAIL_UNVERIFIED') {
+        setVerifiedUntilByHousehold((prev) => {
+          const next = { ...prev };
+          delete next[household.id];
+          return next;
+        });
+      }
       setError(err.message || 'Could not rejoin.');
     } finally {
       setRejoiningId(null);
@@ -227,12 +376,24 @@ export function AdminRecoveryPage() {
   const related = userResult?.relatedHouseholds ?? [];
   const last = userResult?.lastHousehold;
   const current = userResult?.currentHousehold;
+  const userId = userResult?.user?.id;
+  const userEmail = userResult?.user?.email;
+
+  const cardProps = {
+    userId,
+    userEmail,
+    onRejoin: rejoin,
+    rejoiningId,
+    onSendCode: sendCode,
+    onConfirmCode: confirmCode,
+    codeBusyId,
+  };
 
   return (
     <div>
       <AdminPageHeader
         title="Household recovery"
-        description="Look up a user by email or a household by id / invite code. Soft-deleted households are kept for 30 days after the last member leaves."
+        description="Look up a user by email or a household by id / invite code. Soft-deleted households are kept for 30 days. Before rejoining, email a verification code and confirm it with the user."
       />
 
       <AdminAlert variant="error">{error}</AdminAlert>
@@ -243,7 +404,9 @@ export function AdminRecoveryPage() {
           <label className="text-heading block text-sm font-bold" htmlFor="recovery-email">
             User email
           </label>
-          <p className="text-muted mt-1 text-xs">Verify they own the account before rejoining.</p>
+          <p className="text-muted mt-1 text-xs">
+            Look up the account, then verify ownership with an emailed code before rejoining.
+          </p>
           <div className="mt-3 flex gap-2">
             <input
               id="recovery-email"
@@ -326,9 +489,8 @@ export function AdminRecoveryPage() {
             </h2>
             <HouseholdCard
               household={current}
-              userId={userResult?.user?.id}
-              onRejoin={rejoin}
-              rejoiningId={rejoiningId}
+              emailVerified={isEmailVerified(current.id)}
+              {...cardProps}
             />
           </div>
         ) : null}
@@ -339,9 +501,8 @@ export function AdminRecoveryPage() {
             </h2>
             <HouseholdCard
               household={last}
-              userId={userResult?.user?.id}
-              onRejoin={rejoin}
-              rejoiningId={rejoiningId}
+              emailVerified={isEmailVerified(last.id)}
+              {...cardProps}
             />
           </div>
         ) : null}
@@ -355,9 +516,8 @@ export function AdminRecoveryPage() {
                 <HouseholdCard
                   key={h.id}
                   household={h}
-                  userId={userResult?.user?.id}
-                  onRejoin={rejoin}
-                  rejoiningId={rejoiningId}
+                  emailVerified={isEmailVerified(h.id)}
+                  {...cardProps}
                 />
               ))}
             </div>
@@ -370,9 +530,8 @@ export function AdminRecoveryPage() {
             </h2>
             <HouseholdCard
               household={householdResult}
-              userId={userResult?.user?.id}
-              onRejoin={rejoin}
-              rejoiningId={rejoiningId}
+              emailVerified={isEmailVerified(householdResult.id)}
+              {...cardProps}
             />
           </div>
         ) : null}

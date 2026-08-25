@@ -897,6 +897,24 @@ export async function fetchAdminRecoveryHousehold(query) {
   return parseJson(res);
 }
 
+export async function postAdminRecoverySendCode({ userId, householdId }) {
+  const res = await fetch(apiUrl('/admin/recovery/send-code'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ userId, householdId }),
+  });
+  return parseJson(res);
+}
+
+export async function postAdminRecoveryConfirmCode({ userId, householdId, code }) {
+  const res = await fetch(apiUrl('/admin/recovery/confirm-code'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ userId, householdId, code }),
+  });
+  return parseJson(res);
+}
+
 export async function postAdminRecoveryRejoin({ userId, householdId, force = false }) {
   const res = await fetch(apiUrl('/admin/recovery/rejoin'), {
     method: 'POST',

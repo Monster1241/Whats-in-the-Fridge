@@ -5,6 +5,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Headphones,
   Home,
   Loader2,
   LogIn,
@@ -16,6 +17,7 @@ import {
 import { sendPasswordResetEmail } from '../api.js';
 import { AuthShell } from './AuthShell.jsx';
 import { LegalFooterLinks } from './LegalFooterLinks.jsx';
+import { SupportChatPanel } from './SupportChatPanel.jsx';
 
 export function AuthScreen({
   needsHousehold,
@@ -26,6 +28,7 @@ export function AuthScreen({
   onCreateHousehold,
   onJoinHousehold,
   onFinishHouseholdSetup,
+  onLogout,
 }) {
   const [mode, setMode] = useState('login');
   const [recoverStep, setRecoverStep] = useState(null);
@@ -38,6 +41,7 @@ export function AuthScreen({
   const [localMessage, setLocalMessage] = useState('');
   const [createdSession, setCreatedSession] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
 
   const run = async (fn) => {
     setBusy(true);
@@ -153,6 +157,10 @@ export function AuthScreen({
   }
 
   if (needsHousehold) {
+    if (showSupport) {
+      return <SupportChatPanel onBack={() => setShowSupport(false)} />;
+    }
+
     return (
       <AuthShell
         compact
@@ -198,6 +206,35 @@ export function AuthScreen({
                 <p className="text-muted text-xs">Enter your partner&apos;s 6-character code</p>
               </div>
             </button>
+
+            <div
+              className="animate-auth-rise rounded-2xl border border-teal-200/80 bg-teal-50/80 p-4 dark:border-teal-800/60 dark:bg-teal-950/30"
+              style={{ animationDelay: '220ms' }}
+            >
+              <p className="text-heading text-sm font-semibold">Lost your household?</p>
+              <p className="text-muted mt-1 text-xs leading-relaxed">
+                If you left by mistake or no longer have the invite code, message support. We can
+                verify your email and help reconnect you.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowSupport(true)}
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-teal-600 active:scale-[0.98]"
+              >
+                <Headphones className="h-4 w-4" aria-hidden />
+                Contact support
+              </button>
+            </div>
+
+            {onLogout ? (
+              <button
+                type="button"
+                onClick={() => onLogout()}
+                className="text-muted w-full pt-1 text-center text-xs font-semibold underline-offset-2 hover:underline"
+              >
+                Sign out
+              </button>
+            ) : null}
           </div>
         ) : householdMode === 'create' ? (
           <div className="auth-card auth-form-panel space-y-4">

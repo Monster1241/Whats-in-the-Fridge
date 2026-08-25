@@ -294,6 +294,7 @@ export default function App() {
         onCreateHousehold={auth.createHousehold}
         onJoinHousehold={auth.joinHousehold}
         onFinishHouseholdSetup={auth.finishHouseholdSetup}
+        onLogout={auth.logout}
       />
     );
   }

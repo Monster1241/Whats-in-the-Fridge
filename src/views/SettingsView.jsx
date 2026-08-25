@@ -210,7 +210,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'Everyone in the household sees the same inventory, shopping list, and saved recipes — edits sync live.',
         'Enable push notifications in Settings for expiry alerts, partner shopping pings, and support-chat replies.',
         'Scanning a receipt? Items already on the shopping list are moved to Fridge automatically when names match.',
-        'If the last person leaves by mistake, support can now help reconnect the household within the recovery window instead of losing it immediately.',
+        'If the last person leaves by mistake, open Contact support on the household setup screen (or Settings → Support). We can email a verification code and reconnect the household within the recovery window.',
         'On your phone, use Add to Home Screen to install the app for a fullscreen experience.',
       ],
     },

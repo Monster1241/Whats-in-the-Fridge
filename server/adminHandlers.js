@@ -42,6 +42,10 @@ import {
   adminRejoinUserToHousehold,
   writeAdminRecoveryAudit,
 } from './adminHouseholdRecovery.js';
+import {
+  confirmAdminRecoveryCode,
+  sendAdminRecoveryCode,
+} from './adminRecoveryChallenge.js';
 
 export async function handleAdminMe(req, res) {
   try {
@@ -499,6 +503,81 @@ export async function handleAdminRejoinHousehold(req, res) {
     res.status(200).json({ ok: true, ...result });
   } catch (err) {
     console.error('POST /api/admin/recovery/rejoin', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({
+      error: err.message || friendly.message,
+      code: err.code || undefined,
+    });
+  }
+}
+
+export async function handleAdminRecoverySendCode(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const userId = String(req.body?.userId ?? '').trim();
+    const householdId = String(req.body?.householdId ?? '').trim();
+    if (!userId || !householdId) {
+      res.status(400).json({ error: 'userId and householdId are required.' });
+      return;
+    }
+
+    const result = await sendAdminRecoveryCode({
+      userId,
+      householdId,
+      adminUserId: admin.user?.id ?? null,
+      adminEmail: admin.user?.email ?? null,
+    });
+
+    await writeAdminRecoveryAudit({
+      action: 'recovery_code_sent',
+      adminUserId: admin.user?.id ?? null,
+      adminEmail: admin.user?.email ?? null,
+      userId: result.userId,
+      userEmail: result.userEmail,
+      householdId: result.householdId,
+      challengeId: result.challengeId,
+    }).catch(() => {});
+
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error('POST /api/admin/recovery/send-code', err);
+    const friendly = toFriendlyError(err);
+    res.status(err.status || friendly.status || 500).json({
+      error: err.message || friendly.message,
+      code: err.code || undefined,
+    });
+  }
+}
+
+export async function handleAdminRecoveryConfirmCode(req, res) {
+  try {
+    const admin = await requireAdmin(req, res);
+    if (!admin) return;
+
+    const userId = String(req.body?.userId ?? '').trim();
+    const householdId = String(req.body?.householdId ?? '').trim();
+    const code = String(req.body?.code ?? '').trim();
+    if (!userId || !householdId || !code) {
+      res.status(400).json({ error: 'userId, householdId, and code are required.' });
+      return;
+    }
+
+    const result = await confirmAdminRecoveryCode({ userId, householdId, code });
+
+    await writeAdminRecoveryAudit({
+      action: 'recovery_code_confirmed',
+      adminUserId: admin.user?.id ?? null,
+      adminEmail: admin.user?.email ?? null,
+      userId: result.userId,
+      householdId: result.householdId,
+      challengeId: result.challengeId,
+    }).catch(() => {});
+
+    res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    console.error('POST /api/admin/recovery/confirm-code', err);
     const friendly = toFriendlyError(err);
     res.status(err.status || friendly.status || 500).json({
       error: err.message || friendly.message,
