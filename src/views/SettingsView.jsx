@@ -186,7 +186,9 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
             title: 'Recipes — Scout, AI & catalogue',
             steps: [
               'Fridge Scout tab — chat with Scout for meal ideas, tweaks, and kitchen help.',
+              'Scout replies now render with cleaner sections, lists, and recipe formatting so suggestions are easier to follow.',
               'Recommendations — enter a craving (e.g. Thai, pasta) and tap Generate for catalogue matches plus AI recipes from your pantry.',
+              'Dietary preferences also shape AI suggestions, including No beef, Vegetarian, and Vegan modes.',
               'Use View more to load extra results without scrolling through everything at once.',
               'Search finds built-in recipes and imports free meals from TheMealDB.',
               'Bookmark favourites on any recipe card.',
@@ -201,8 +203,9 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       steps: [
         'Copy or share your invite code in Settings so someone can join the same fridge.',
         'Everyone in the household sees the same inventory, shopping list, and saved recipes — edits sync live.',
-        'Enable push notifications in Settings for expiry alerts (expiring soon and expired) and partner shopping pings (no item names in the alert).',
+        'Enable push notifications in Settings for expiry alerts, partner shopping pings, and support-chat replies.',
         'Scanning a receipt? Items already on the shopping list are moved to Fridge automatically when names match.',
+        'If the last person leaves by mistake, support can now help reconnect the household within the recovery window instead of losing it immediately.',
         'On your phone, use Add to Home Screen to install the app for a fullscreen experience.',
       ],
     },
@@ -216,6 +219,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'Reset your password from Your account — Firebase emails the same reset link as Forgot password. Open it, set a new password, then sign in with it.',
         'Use Show tips & color guide again under Data tools to bring welcome banners and the color guide back on Home.',
         'Clear all items only if you want to wipe inventory for everyone in the household. You can restore cleared items from Settings within 7 days.',
+        'Support chat in Settings lets you message the team directly, and replies can arrive as push notifications on enabled devices.',
       ],
     },
   ];
@@ -235,7 +239,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
           </h2>
           {!open && (
             <p className="text-muted mt-1 text-xs leading-relaxed">
-              Search, pantry totals, predicted low, receipts, recipes, and sharing
+              Search, pantry totals, receipts, Scout recipes, support chat, and household sharing
             </p>
           )}
         </div>
@@ -251,7 +255,8 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
           <p className="text-muted text-sm leading-relaxed">
             What&apos;s in the Fridge keeps a shared household inventory for Australian homes. Search
             what you have, scan receipts, learn how long staples last, shop together, and cook from
-            Recipes. Invite your partner with the code in Settings so you stay in sync.
+            Recipes. Invite your partner with the code in Settings so you stay in sync, and use
+            Support chat in Settings if you need account or household help.
           </p>
 
           {sections.map((section) => {
@@ -458,6 +463,9 @@ export function SettingsView({
       const hash = String(window.location.hash || '').replace(/^#/, '');
       if (hash === 'support' || hash === 'support-chat') {
         setInfoScreen('support');
+      }
+      if (hash === 'feedback') {
+        setInfoScreen('feedback');
       }
     };
     openFromHash();

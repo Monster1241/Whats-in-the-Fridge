@@ -4,6 +4,7 @@ import {
   buildExpiryAlertMessage,
   buildShoppingPingNotification,
   buildSupportReplyNotification,
+  buildFeedbackNudgeNotification,
 } from './pushCopy.js';
 
 describe('buildExpiryAlertMessage', () => {
@@ -49,5 +50,14 @@ describe('buildSupportReplyNotification', () => {
   it('falls back when body is empty', () => {
     const msg = buildSupportReplyNotification('');
     expect(msg.body).toMatch(/Support chat/i);
+  });
+});
+
+describe('buildFeedbackNudgeNotification', () => {
+  it('asks for feedback without sounding like a reminder loop', () => {
+    const msg = buildFeedbackNudgeNotification();
+    expect(msg.title).toMatch(/fridge/i);
+    expect(msg.body).toMatch(/week/i);
+    expect(msg.body).toMatch(/feedback|note/i);
   });
 });

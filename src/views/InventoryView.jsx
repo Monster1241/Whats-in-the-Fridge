@@ -1606,7 +1606,8 @@ export function InventoryView({
           Search the top bar to find anything in stock or on the list. Type a name, scan a barcode,
           or use Scan receipt to add a whole shop. Pantry items show total grams or ml, not can
           counts. The app learns how long staples last and flags predicted-low items. Share your
-          invite code in Settings so your partner stays in sync.
+          invite code in Settings so your partner stays in sync. If you clear everything by mistake,
+          Settings can restore cleared items for 7 days. Need help? Open Support chat in Settings.
         </TipBanner>
       )}
 
@@ -1640,7 +1641,8 @@ export function InventoryView({
               buy something, tap <strong className="font-semibold">Add to pantry</strong> — it moves
               to Fridge with a suggested use-by date. Use Frequently restocked for usual staples,
               tap a store badge to remember where you buy it, then Ping partner for a reminder
-              (no item names in the notification).
+              (no item names in the notification). Recipe suggestions and deals can also add missing
+              items here automatically.
             </TipBanner>
           )}
 

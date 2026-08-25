@@ -50,3 +50,10 @@ export function buildSupportReplyNotification(messageBody = '') {
       : 'You have a new message from Fridge support. Open Settings → Support chat to reply.',
   };
 }
+
+export function buildFeedbackNudgeNotification() {
+  return {
+    title: 'How’s the fridge going?',
+    body: 'You’ve been using What’s in the Fridge for a week. Tap to send a quick note — it really helps.',
+  };
+}

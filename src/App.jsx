@@ -233,7 +233,7 @@ export default function App() {
   useEffect(() => {
     const openSupportFromHash = () => {
       const hash = String(window.location.hash || '').replace(/^#/, '');
-      if (hash === 'support' || hash === 'support-chat') {
+      if (hash === 'support' || hash === 'support-chat' || hash === 'feedback') {
         setActiveTab('settings');
       }
     };
