@@ -188,7 +188,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
               'Fridge Scout tab — chat with Scout for meal ideas, tweaks, and kitchen help.',
               'Scout replies now render with cleaner sections, lists, and recipe formatting so suggestions are easier to follow.',
               'Recommendations — enter a craving (e.g. Thai, pasta) and tap Generate for catalogue matches plus AI recipes from your pantry.',
-              'Dietary preferences also shape AI suggestions, including No beef, Vegetarian, and Vegan modes.',
+              'Dietary preferences also shape AI suggestions, including Gluten free, Dairy free, Nut free, Pescatarian, No beef, Vegetarian, and Vegan modes.',
               'Use View more to load extra results without scrolling through everything at once.',
               'Search finds built-in recipes and imports free meals from TheMealDB.',
               'Bookmark favourites on any recipe card.',

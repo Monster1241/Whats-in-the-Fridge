@@ -41,6 +41,12 @@ describe('sanitizeSettings', () => {
   it('sanitizes dietary preference', () => {
     expect(sanitizeSettings({ dietaryPreference: 'vegan' }).dietaryPreference).toBe('vegan');
     expect(sanitizeSettings({ dietaryPreference: 'no_beef' }).dietaryPreference).toBe('no_beef');
+    expect(sanitizeSettings({ dietaryPreference: 'gluten_free' }).dietaryPreference).toBe(
+      'gluten_free',
+    );
+    expect(sanitizeSettings({ dietaryPreference: 'pescatarian' }).dietaryPreference).toBe(
+      'pescatarian',
+    );
     expect(sanitizeSettings({ dietaryPreference: 'invalid' }).dietaryPreference).toBe('none');
   });
 });

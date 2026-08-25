@@ -11,7 +11,7 @@ const MAX_EMAIL_LEN = 254;
 
 /**
  * @param {unknown} raw
- * @returns {{ theme: 'light'|'dark', user: { name: string, email: string }, dietaryPreference: 'none'|'no_beef'|'vegetarian'|'vegan' }}
+ * @returns {{ theme: 'light'|'dark', user: { name: string, email: string }, dietaryPreference: string }}
  */
 export function sanitizeSettings(raw) {
   const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
