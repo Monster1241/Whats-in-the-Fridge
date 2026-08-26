@@ -7,10 +7,6 @@ import {
   normalizeInviteCode,
   setUserHousehold,
 } from './db.js';
-import {
-  assertConfirmedRecoveryChallenge,
-  consumeConfirmedRecoveryChallenge,
-} from './adminRecoveryChallenge.js';
 import { ADMIN_AUDIT_COLLECTION } from './supportInbox.js';
 
 export const HOUSEHOLD_SOFT_DELETE_DAYS = 30;
@@ -293,7 +289,8 @@ export async function adminRejoinUserToHousehold(input) {
   const householdId = assertScopedHouseholdId(input.householdId);
   const force = Boolean(input.force);
 
-  const challenge = await assertConfirmedRecoveryChallenge({ userId, householdId });
+  // Email OTP gate is disabled until a verified Resend domain is configured.
+  // Re-enable via adminRecoveryChallenge assert/consume when ready.
 
   const user = await findUserById(userId);
   if (!user) {
@@ -380,13 +377,7 @@ export async function adminRejoinUserToHousehold(input) {
     householdId,
     force,
     verifiedAsFormer,
-    recoveryChallengeId: challenge.challengeId,
-  });
-
-  await consumeConfirmedRecoveryChallenge({
-    userId,
-    householdId,
-    challengeId: challenge.challengeId,
+    emailVerificationSkipped: true,
   });
 
   const household = await mapAdminHousehold(
