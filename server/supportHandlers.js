@@ -2,6 +2,7 @@ import { ensureDb } from './ensureDb.js';
 import { findUserById } from './db.js';
 import { getBearerUser } from './auth.js';
 import { toFriendlyError } from './errors.js';
+import { notifyAdminsBestEffort } from './adminNotifyEmail.js';
 import { createUserFeedback, createUserReport } from './supportInbox.js';
 import {
   appendSupportMessage,
@@ -52,6 +53,19 @@ export async function handleSubmitReport(req, res) {
       postcode: req.body?.postcode,
     });
 
+    notifyAdminsBestEffort({
+      kind: 'report',
+      title: String(report.type || 'report').replace(/_/g, ' '),
+      preview: report.message,
+      userEmail: report.userEmail,
+      metaLines: [
+        report.dealName ? `Deal: ${report.dealName}` : '',
+        report.store ? `Store: ${report.store}` : '',
+        report.reportedPrice != null ? `Reported price: $${report.reportedPrice}` : '',
+      ],
+      adminPath: '/admin/reports',
+    });
+
     res.status(201).json({ ok: true, report: { id: report.id, status: report.status } });
   } catch (err) {
     console.error('POST /api/support/report', err);
@@ -71,6 +85,15 @@ export async function handleSubmitFeedback(req, res) {
       category: req.body?.category,
       message: req.body?.message,
       appVersion: req.body?.appVersion ?? null,
+    });
+
+    notifyAdminsBestEffort({
+      kind: 'feedback',
+      title: String(feedback.category || 'feedback').replace(/_/g, ' '),
+      preview: feedback.message,
+      userEmail: feedback.userEmail,
+      metaLines: [feedback.appVersion ? `App version: ${feedback.appVersion}` : ''],
+      adminPath: '/admin/feedback',
     });
 
     res.status(201).json({ ok: true, feedback: { id: feedback.id, status: feedback.status } });
@@ -154,6 +177,18 @@ export async function handlePostSupportChatMessage(req, res) {
       body,
       status: 'waiting_admin',
       bumpUnreadFor: 'admin',
+    });
+
+    notifyAdminsBestEffort({
+      kind: 'support_chat',
+      title: 'New message waiting for reply',
+      preview: body,
+      userEmail: auth.user.email,
+      metaLines: [
+        next?.id ? `Thread: ${next.id}` : '',
+        auth.user.household_id ? `Household: ${auth.user.household_id}` : 'No household',
+      ],
+      adminPath: '/admin/support',
     });
 
     res.status(201).json({ ok: true, thread: next });

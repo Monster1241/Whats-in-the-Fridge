@@ -101,6 +101,9 @@ Without `RESEND_API_KEY`, the 6-digit code is printed in the server console only
    - **`FIREBASE_SERVICE_ACCOUNT_JSON`** — minified service account JSON (required for `/api/auth/session`)
    - **`RESEND_API_KEY`** — optional legacy verification emails
    - **`RESEND_FROM_EMAIL`** — sender address (optional; defaults to `onboarding@resend.dev`)
+   - **`ADMIN_EMAILS`** — comma-separated admin logins; also receive ops email alerts (support, reports, feedback)
+   - **`ADMIN_NOTIFY_EMAILS`** — optional override recipients for those alerts (defaults to `ADMIN_EMAILS`)
+   - **`APP_ORIGIN`** — public site URL used in admin alert “Open in admin” links (e.g. `https://your-app.vercel.app`)
    - Optional: **`CORS_ORIGIN`** — your production URL if needed
    - Do **not** set `VITE_API_URL` to `localhost` on Vercel.
 3. In **MongoDB Atlas** → **Network Access** → add `0.0.0.0/0` so serverless functions can connect.
