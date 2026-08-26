@@ -26,32 +26,79 @@ export function apiUrl(endpoint) {
   return `${API_BASE}${path}`;
 }
 
-const TOKEN_KEY = 'fridge.authToken';
+export const AUTH_SCOPE_APP = 'app';
+export const AUTH_SCOPE_ADMIN = 'admin';
 
-export function getAuthToken() {
+const TOKEN_KEYS = {
+  [AUTH_SCOPE_APP]: 'fridge.authToken',
+  [AUTH_SCOPE_ADMIN]: 'fridge.adminAuthToken',
+};
+
+/** @returns {'app' | 'admin'} */
+export function getAuthScope() {
   try {
-    return localStorage.getItem(TOKEN_KEY) || '';
+    const path = String(window.location.pathname || '/').replace(/\/$/, '') || '/';
+    if (path === '/admin' || path.startsWith('/admin/')) return AUTH_SCOPE_ADMIN;
+  } catch {
+    // ignore
+  }
+  return AUTH_SCOPE_APP;
+}
+
+function tokenKeyForScope(scope = getAuthScope()) {
+  return TOKEN_KEYS[scope] || TOKEN_KEYS[AUTH_SCOPE_APP];
+}
+
+/**
+ * @param {'app' | 'admin'} [scope]
+ */
+export function getAuthToken(scope = getAuthScope()) {
+  try {
+    return localStorage.getItem(tokenKeyForScope(scope)) || '';
   } catch {
     return '';
   }
 }
 
-export function setAuthToken(token) {
+/**
+ * @param {string} token
+ * @param {'app' | 'admin'} [scope]
+ */
+export function setAuthToken(token, scope = getAuthScope()) {
   try {
+    const key = tokenKeyForScope(scope);
     if (token) {
-      localStorage.setItem(TOKEN_KEY, token);
-      const payload = decodeAuthTokenPayload(token);
-      if (payload?.householdId) setActiveHouseholdId(payload.householdId);
+      localStorage.setItem(key, token);
+      // Household cache is only for the consumer app session.
+      if (scope === AUTH_SCOPE_APP) {
+        const payload = decodeAuthTokenPayload(token);
+        if (payload?.householdId) setActiveHouseholdId(payload.householdId);
+      }
     } else {
-      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(key);
     }
   } catch {
     // ignore
   }
 }
 
-function authHeaders(extra = {}) {
-  const token = getAuthToken();
+/**
+ * One-time: seed admin JWT from the shared app token so existing admin tabs keep working.
+ * @param {'app' | 'admin'} scope
+ */
+function ensureAdminTokenSeeded(scope) {
+  if (scope !== AUTH_SCOPE_ADMIN) return;
+  if (getAuthToken(AUTH_SCOPE_ADMIN)) return;
+  const appToken = getAuthToken(AUTH_SCOPE_APP);
+  if (appToken) setAuthToken(appToken, AUTH_SCOPE_ADMIN);
+}
+
+/**
+ * @param {Record<string, string>} [extra]
+ * @param {'app' | 'admin'} [scope]
+ */
+function authHeaders(extra = {}, scope = getAuthScope()) {
+  const token = getAuthToken(scope);
   const headers = { ...extra };
   if (token) headers.Authorization = `Bearer ${token}`;
   return headers;
@@ -81,8 +128,9 @@ async function parseJson(res) {
 /**
  * Exchange a Firebase ID token for our household API session (JWT).
  * @param {string} idToken
+ * @param {'app' | 'admin'} [scope]
  */
-export async function syncFirebaseSession(idToken) {
+export async function syncFirebaseSession(idToken, scope = getAuthScope()) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
   try {
@@ -93,7 +141,7 @@ export async function syncFirebaseSession(idToken) {
       signal: controller.signal,
     });
     const data = await parseJson(res);
-    if (data.token) setAuthToken(data.token);
+    if (data.token) setAuthToken(data.token, scope);
     return data;
   } catch (err) {
     if (err?.name === 'AbortError') {
@@ -105,24 +153,24 @@ export async function syncFirebaseSession(idToken) {
   }
 }
 
-export async function signup(email, password) {
+export async function signup(email, password, scope = getAuthScope()) {
   const { firebaseSignUp, firebaseGetIdToken } = await import('./auth/firebaseAuth.js');
   await firebaseSignUp(email, password);
   const idToken = await firebaseGetIdToken(true);
   if (!idToken) {
     throw new Error('Could not complete sign up. Please try again.');
   }
-  return syncFirebaseSession(idToken);
+  return syncFirebaseSession(idToken, scope);
 }
 
-export async function login(email, password) {
+export async function login(email, password, scope = getAuthScope()) {
   const { firebaseSignIn, firebaseGetIdToken } = await import('./auth/firebaseAuth.js');
   await firebaseSignIn(email, password);
   const idToken = await firebaseGetIdToken(true);
   if (!idToken) {
     throw new Error('Could not complete sign in. Please try again.');
   }
-  return syncFirebaseSession(idToken);
+  return syncFirebaseSession(idToken, scope);
 }
 
 export async function sendPasswordResetEmail(email) {
@@ -143,8 +191,9 @@ export async function saveFcmToken(token) {
   return parseJson(res);
 }
 
-export async function fetchSession() {
-  const existingToken = getAuthToken();
+export async function fetchSession(scope = getAuthScope()) {
+  ensureAdminTokenSeeded(scope);
+  const existingToken = getAuthToken(scope);
   let expiredJwt = false;
 
   if (existingToken) {
@@ -152,18 +201,18 @@ export async function fetchSession() {
     const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
     try {
       const res = await fetch(apiUrl(`/auth/me`), {
-        headers: authHeaders(),
+        headers: authHeaders({}, scope),
         signal: controller.signal,
       });
       if (res.ok) {
         const data = await parseJson(res);
-        if (data.token) setAuthToken(data.token);
+        if (data.token) setAuthToken(data.token, scope);
         return data;
       }
       if (res.status !== 401) {
         throw new Error(`Request failed (${res.status})`);
       }
-      setAuthToken('');
+      setAuthToken('', scope);
       expiredJwt = true;
     } catch (err) {
       if (err?.name === 'AbortError') {
@@ -174,6 +223,10 @@ export async function fetchSession() {
       window.clearTimeout(timeoutId);
     }
   }
+
+  // Admin sessions must not be rebuilt from whatever Firebase user the app last used.
+  // That would replace the admin JWT when a non-admin signs into the consumer app.
+  if (scope === AUTH_SCOPE_ADMIN) return null;
 
   // No session cookie/JWT: stay logged out without loading Firebase.
   if (!expiredJwt) return null;
@@ -187,13 +240,13 @@ export async function fetchSession() {
   const idToken = await firebaseGetIdToken();
   if (!idToken) return null;
   try {
-    return await syncFirebaseSession(idToken);
+    return await syncFirebaseSession(idToken, scope);
   } catch {
     return null;
   }
 }
 
-export async function refreshEmailVerificationSession() {
+export async function refreshEmailVerificationSession(scope = getAuthScope()) {
   const {
     firebaseReloadUser,
     firebaseGetIdToken,
@@ -206,7 +259,7 @@ export async function refreshEmailVerificationSession() {
   if (!idToken) {
     throw new Error('Could not refresh session. Please sign in again.');
   }
-  return syncFirebaseSession(idToken);
+  return syncFirebaseSession(idToken, scope);
 }
 
 export async function resendVerificationEmail() {
@@ -215,23 +268,25 @@ export async function resendVerificationEmail() {
 }
 
 export async function createHousehold() {
+  const scope = getAuthScope();
   const res = await fetch(apiUrl(`/household/create`), {
     method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    headers: authHeaders({ 'Content-Type': 'application/json' }, scope),
   });
   const data = await parseJson(res);
-  if (data.token) setAuthToken(data.token);
+  if (data.token) setAuthToken(data.token, scope);
   return data;
 }
 
 export async function joinHousehold(inviteCode) {
+  const scope = getAuthScope();
   const res = await fetch(apiUrl(`/household/join`), {
     method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    headers: authHeaders({ 'Content-Type': 'application/json' }, scope),
     body: JSON.stringify({ inviteCode }),
   });
   const data = await parseJson(res);
-  if (data.token) setAuthToken(data.token);
+  if (data.token) setAuthToken(data.token, scope);
   return data;
 }
 
@@ -251,12 +306,13 @@ export async function fetchHouseholdMembers() {
 }
 
 export async function leaveHousehold() {
+  const scope = getAuthScope();
   const res = await fetch(apiUrl(`/household/leave`), {
     method: 'POST',
-    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    headers: authHeaders({ 'Content-Type': 'application/json' }, scope),
   });
   const data = await parseJson(res);
-  if (data.token) setAuthToken(data.token);
+  if (data.token) setAuthToken(data.token, scope);
   return data;
 }
 
@@ -269,20 +325,32 @@ export async function removeHouseholdMember(userId) {
   return parseJson(res);
 }
 
-export async function logout() {
-  const { firebaseSignOut } = await import('./auth/firebaseAuth.js');
-  try {
-    await firebaseSignOut();
-  } catch {
-    // ignore
+/**
+ * Log out of one surface only (app or admin). The other JWT is left intact.
+ * @param {{ scope?: 'app' | 'admin' }} [options]
+ */
+export async function logout(options = {}) {
+  const scope = options.scope || getAuthScope();
+  setAuthToken('', scope);
+
+  // Only sign out of Firebase when the other surface has no session,
+  // so admin can stay logged in while the app switches users.
+  const otherScope = scope === AUTH_SCOPE_ADMIN ? AUTH_SCOPE_APP : AUTH_SCOPE_ADMIN;
+  if (!getAuthToken(otherScope)) {
+    const { firebaseSignOut } = await import('./auth/firebaseAuth.js');
+    try {
+      await firebaseSignOut();
+    } catch {
+      // ignore
+    }
   }
-  setAuthToken('');
 }
 
 export async function deleteAccount() {
+  const scope = getAuthScope();
   const res = await fetch(apiUrl(`/auth/account`), {
     method: 'DELETE',
-    headers: authHeaders(),
+    headers: authHeaders({}, scope),
   });
   await parseJson(res);
   const { firebaseDeleteCurrentUser } = await import('./auth/firebaseAuth.js');
@@ -291,7 +359,8 @@ export async function deleteAccount() {
   } catch {
     // MongoDB account removed; Firebase user may need re-auth to delete
   }
-  setAuthToken('');
+  setAuthToken('', AUTH_SCOPE_APP);
+  setAuthToken('', AUTH_SCOPE_ADMIN);
 }
 
 export async function fetchAppState() {

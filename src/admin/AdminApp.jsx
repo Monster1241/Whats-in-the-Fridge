@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AuthScreen } from '../components/AuthScreen.jsx';
 import { VerifyEmailScreen } from '../components/VerifyEmailScreen.jsx';
 import { useAuth } from '../hooks/useAuth.js';
-import { fetchAdminMe } from '../api.js';
+import { AUTH_SCOPE_ADMIN, fetchAdminMe } from '../api.js';
 import { AdminLayout } from './AdminLayout.jsx';
 import { AdminDashboardPage } from './pages/AdminDashboardPage.jsx';
 import { AdminDealsPage } from './pages/AdminDealsPage.jsx';
@@ -87,7 +87,7 @@ function renderAdminPage(page, navigateAdmin) {
 }
 
 export function AdminApp() {
-  const auth = useAuth();
+  const auth = useAuth({ scope: AUTH_SCOPE_ADMIN });
   const [page, setPage] = useState(() => getAdminPageFromPath());
   const [adminCheck, setAdminCheck] = useState(getInitialAdminCheck);
 
@@ -105,7 +105,9 @@ export function AdminApp() {
   }, []);
 
   useEffect(() => {
-    if (auth.booting || !auth.canUseApp) return;
+    // Admins may have no household (e.g. after leaving for recovery testing).
+    // Only require a signed-in, verified account — not canUseApp.
+    if (auth.booting || !auth.isAuthenticated || auth.needsVerification) return;
 
     const email = auth.user?.email ?? null;
     const cached = readCachedAdminAccess(email);
@@ -158,7 +160,7 @@ export function AdminApp() {
     return () => {
       cancelled = true;
     };
-  }, [auth.booting, auth.canUseApp, auth.user?.email]);
+  }, [auth.booting, auth.isAuthenticated, auth.needsVerification, auth.user?.email]);
 
   if (auth.booting) {
     return (
@@ -196,34 +198,6 @@ export function AdminApp() {
         onResend={auth.resendVerificationEmail}
         onLogout={auth.logout}
       />
-    );
-  }
-
-  if (auth.needsHousehold) {
-    return (
-      <div className="admin-shell flex min-h-full items-center justify-center px-6 py-12">
-        <div className="admin-surface w-full max-w-md p-6 sm:p-8">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-400">
-            Fridge Admin
-          </p>
-          <h1 className="text-heading mt-2 text-xl font-extrabold tracking-tight">
-            Household required
-          </h1>
-          <p className="text-muted mt-2 text-sm leading-relaxed">
-            Finish household setup in the main app first, then return to{' '}
-            <a href="/admin" className="font-semibold text-teal-700 underline dark:text-teal-300">
-              /admin
-            </a>
-            .
-          </p>
-          <a
-            href="/"
-            className="mt-6 inline-flex w-full justify-center rounded-xl bg-slate-800 py-3 text-sm font-bold text-white transition hover:bg-slate-700 dark:bg-zinc-100 dark:text-zinc-900"
-          >
-            Open main app
-          </a>
-        </div>
-      </div>
     );
   }
 

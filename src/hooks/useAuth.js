@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  AUTH_SCOPE_ADMIN,
   createHousehold,
   fetchSession,
+  getAuthScope,
   joinHousehold,
   leaveHousehold as leaveHouseholdApi,
   login,
@@ -37,7 +39,11 @@ function withTimeout(promise, ms, message = NETWORK_TIMEOUT_MSG) {
   ]);
 }
 
-export function useAuth() {
+/**
+ * @param {{ scope?: 'app' | 'admin' }} [options]
+ */
+export function useAuth(options = {}) {
+  const scope = options.scope || getAuthScope();
   const [booting, setBooting] = useState(true);
   const [user, setUser] = useState(null);
   const [needsVerification, setNeedsVerification] = useState(false);
@@ -54,23 +60,23 @@ export function useAuth() {
     setUser(data.user);
     setNeedsVerification(Boolean(data.needsVerification));
     setNeedsHousehold(Boolean(data.needsHousehold));
-    if (data.user?.householdId) {
+    if (scope === AUTH_SCOPE_APP && data.user?.householdId) {
       setActiveHouseholdId(data.user.householdId);
     }
-  }, []);
+  }, [scope]);
 
   const refreshSession = useCallback(async () => {
-    const data = await withTimeout(fetchSession(), BOOT_TIMEOUT_MS);
+    const data = await withTimeout(fetchSession(scope), BOOT_TIMEOUT_MS);
     applySession(data);
     return data;
-  }, [applySession]);
+  }, [applySession, scope]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setError(null);
-        const data = await withTimeout(fetchSession(), BOOT_TIMEOUT_MS);
+        const data = await withTimeout(fetchSession(scope), BOOT_TIMEOUT_MS);
         if (!cancelled) applySession(data);
       } catch (err) {
         if (!cancelled) {
@@ -86,13 +92,13 @@ export function useAuth() {
     return () => {
       cancelled = true;
     };
-  }, [applySession]);
+  }, [applySession, scope]);
 
   const handleSignup = useCallback(
     async (email, password) => {
       setError(null);
       try {
-        const data = await withTimeout(signup(email, password), AUTH_FLOW_TIMEOUT_MS);
+        const data = await withTimeout(signup(email, password, scope), AUTH_FLOW_TIMEOUT_MS);
         applySession(data);
         return data;
       } catch (err) {
@@ -100,27 +106,27 @@ export function useAuth() {
         throw err;
       }
     },
-    [applySession],
+    [applySession, scope],
   );
 
   const handleLogin = useCallback(async (email, password) => {
     setError(null);
     try {
-      const data = await withTimeout(login(email, password), AUTH_FLOW_TIMEOUT_MS);
+      const data = await withTimeout(login(email, password, scope), AUTH_FLOW_TIMEOUT_MS);
       applySession(data);
       return data;
     } catch (err) {
       setError(err.message || NETWORK_TIMEOUT_MSG);
       throw err;
     }
-  }, [applySession]);
+  }, [applySession, scope]);
 
   const handleCheckVerification = useCallback(async () => {
     setError(null);
-    const data = await refreshEmailVerificationSession();
+    const data = await refreshEmailVerificationSession(scope);
     applySession(data);
     return data;
-  }, [applySession]);
+  }, [applySession, scope]);
 
   const handleResendVerification = useCallback(async () => {
     setError(null);
@@ -147,12 +153,12 @@ export function useAuth() {
   }, [applySession]);
 
   const handleLogout = useCallback(async () => {
-    await clearSession();
+    await clearSession({ scope });
     setUser(null);
     setNeedsVerification(false);
     setNeedsHousehold(false);
     setError(null);
-  }, []);
+  }, [scope]);
 
   const handleDeleteAccount = useCallback(async () => {
     setError(null);
@@ -171,7 +177,11 @@ export function useAuth() {
 
   const isAuthenticated = Boolean(user);
   const isVerified = Boolean(user?.isVerified);
-  const canUseApp = isAuthenticated && isVerified && Boolean(user?.householdId);
+  // Admin console does not require a household; consumer app does.
+  const canUseApp =
+    scope === AUTH_SCOPE_ADMIN
+      ? isAuthenticated && isVerified
+      : isAuthenticated && isVerified && Boolean(user?.householdId);
 
   return {
     booting,
@@ -181,6 +191,7 @@ export function useAuth() {
     isAuthenticated,
     isVerified,
     canUseApp,
+    scope,
     error,
     setError,
     refreshSession,
