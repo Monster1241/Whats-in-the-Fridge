@@ -627,7 +627,10 @@ export async function handlePingShoppingList(req, res) {
     if (tokens.length === 0) {
       const names = others
         .filter((member) => recipientIds.includes(member.id))
-        .map((member) => member.displayName || member.email || 'housemate');
+        .map((member) => {
+          const named = String(member.displayName || '').trim();
+          return named || member.email || 'housemate';
+        });
       const who =
         names.length === 1
           ? names[0]
@@ -662,12 +665,15 @@ export async function handlePingShoppingList(req, res) {
     }
 
     const sent = successCount;
+    const recipientNames = recipientIds.map((id) => {
+      const member = others.find((m) => m.id === id);
+      const named = String(member?.displayName || '').trim();
+      return named || member?.email || 'housemate';
+    });
     const recipientLabel =
-      recipientIds.length === 1
-        ? others.find((m) => m.id === recipientIds[0])?.displayName ||
-          others.find((m) => m.id === recipientIds[0])?.email ||
-          'your housemate'
-        : `${recipientIds.length} housemates`;
+      recipientNames.length === 1
+        ? recipientNames[0]
+        : `${recipientNames.length} housemates`;
     res.status(200).json({
       ok: true,
       sent,

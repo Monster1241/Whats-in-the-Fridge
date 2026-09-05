@@ -1050,17 +1050,21 @@ export function SettingsView({
             </div>
           ) : (
             <ul className="space-y-2">
-              {members.map((member) => (
+              {members.map((member) => {
+                const displayName = String(member.displayName || '').trim();
+                const email = String(member.email || '').trim();
+                const label = displayName || email || 'Housemate';
+                return (
                 <li
                   key={member.id}
                   className="flex items-center justify-between gap-3 rounded-xl border border-black/[0.08] bg-lm-inset px-3 py-2.5 dark:border-slate-600 dark:bg-dm-inset"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-heading truncate text-sm font-semibold">
-                      {member.displayName || member.email}
+                      {label}
                     </p>
-                    {member.displayName ? (
-                      <p className="text-muted truncate text-xs">{member.email}</p>
+                    {displayName && email ? (
+                      <p className="text-muted truncate text-xs">{email}</p>
                     ) : null}
                     <div className="mt-0.5 flex flex-wrap gap-1.5">
                       {member.isCurrentUser && (
@@ -1088,7 +1092,8 @@ export function SettingsView({
                     </button>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
 

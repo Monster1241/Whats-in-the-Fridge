@@ -32,17 +32,24 @@ describe('buildCombinedExpiryAlertMessage', () => {
 });
 
 describe('buildShoppingPingNotification', () => {
-  it('uses a count instead of item names', () => {
-    const msg = buildShoppingPingNotification('partner@example.com', 2);
-    expect(msg.body).toContain('Partner');
+  it('uses display name when provided', () => {
+    const msg = buildShoppingPingNotification('partner@example.com', 2, 'Sam');
+    expect(msg.body).toContain('Sam');
     expect(msg.body).toContain('2 items');
     expect(msg.body).not.toMatch(/milk|eggs/i);
+    expect(msg.body).not.toContain('partner@example.com');
   });
 
-  it('prefers display name over email local-part', () => {
+  it('falls back to full email when display name is missing', () => {
+    const msg = buildShoppingPingNotification('partner@example.com', 1);
+    expect(msg.body).toContain('partner@example.com');
+    expect(msg.body).not.toMatch(/^Partner asked/i);
+  });
+
+  it('prefers display name over email', () => {
     const msg = buildShoppingPingNotification('partner@example.com', 1, 'Sam');
     expect(msg.body).toContain('Sam');
-    expect(msg.body).not.toContain('Partner');
+    expect(msg.body).not.toContain('partner@example.com');
   });
 
   it('uses shop-reminder wording for an empty list', () => {

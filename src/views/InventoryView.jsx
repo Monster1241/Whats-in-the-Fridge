@@ -1896,7 +1896,9 @@ export function InventoryView({
                   <ul className="mb-4 space-y-2">
                     {shopPickerMembers.map((member) => {
                       const checked = shopPickerSelected.has(member.id);
-                      const label = member.displayName || member.email || 'Housemate';
+                      const displayName = String(member.displayName || '').trim();
+                      const email = String(member.email || '').trim();
+                      const label = displayName || email || 'Housemate';
                       return (
                         <li key={member.id}>
                           <label
@@ -1916,9 +1918,9 @@ export function InventoryView({
                               <span className="text-heading block truncate text-sm font-bold">
                                 {label}
                               </span>
-                              {member.displayName && member.email ? (
+                              {displayName && email ? (
                                 <span className="text-muted block truncate text-[11px]">
-                                  {member.email}
+                                  {email}
                                 </span>
                               ) : null}
                             </span>

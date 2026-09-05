@@ -11,9 +11,9 @@ export const buildExpiryAlertMessage = buildExpiringSoonAlertMessage;
 function formatSenderLabel(email, displayName) {
   const named = String(displayName || '').trim();
   if (named) return named;
-  const local = String(email || '').split('@')[0]?.trim();
-  if (!local) return 'A housemate';
-  return local.charAt(0).toUpperCase() + local.slice(1);
+  const address = String(email || '').trim();
+  if (address) return address;
+  return 'A housemate';
 }
 
 /**
