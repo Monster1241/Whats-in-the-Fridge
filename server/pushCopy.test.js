@@ -44,6 +44,12 @@ describe('buildShoppingPingNotification', () => {
     expect(msg.body).toContain('Sam');
     expect(msg.body).not.toContain('Partner');
   });
+
+  it('uses shop-reminder wording for an empty list', () => {
+    const msg = buildShoppingPingNotification('alex@example.com', 0, 'Alex');
+    expect(msg.body).toMatch(/shop reminder/i);
+    expect(msg.body).not.toMatch(/pinged/i);
+  });
 });
 
 describe('buildSupportReplyNotification', () => {

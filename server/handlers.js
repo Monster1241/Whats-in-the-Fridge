@@ -579,22 +579,65 @@ export async function handlePingShoppingList(req, res) {
     const state = await getHouseholdAppState(householdId, auth.user.id);
     const shoppingCount = (state.items ?? []).filter((item) => item?.status === 'out').length;
 
-    const tokens = dedupeFcmTokens(await getHouseholdFcmTokens(householdId, auth.user.id));
-    const memberCount = (await getHouseholdMembers(householdId)).length;
+    const members = await getHouseholdMembers(householdId);
+    const others = members.filter((member) => member.id !== auth.user.id);
 
-    if (memberCount < 2) {
+    if (others.length < 1) {
       res.status(400).json({
-        error: 'Invite a partner to your household first so they can receive shopping pings.',
+        error: 'Invite a housemate to your household first so they can get a shop reminder.',
       });
       return;
     }
 
+    const requestedIds = Array.isArray(req.body?.recipientUserIds)
+      ? [
+          ...new Set(
+            req.body.recipientUserIds
+              .map((id) => String(id ?? '').trim())
+              .filter(Boolean),
+          ),
+        ]
+      : [];
+
+    const otherIds = new Set(others.map((member) => member.id));
+    let recipientIds;
+    if (others.length === 1) {
+      // Two-person household: always notify the other member — no picker needed.
+      recipientIds = [others[0].id];
+    } else if (requestedIds.length === 0) {
+      res.status(400).json({
+        error: 'Choose at least one housemate to send the shop reminder to.',
+      });
+      return;
+    } else {
+      const invalid = requestedIds.filter((id) => !otherIds.has(id));
+      if (invalid.length > 0) {
+        res.status(400).json({
+          error: 'One or more selected people are not in your household.',
+        });
+        return;
+      }
+      recipientIds = requestedIds;
+    }
+
+    const tokens = dedupeFcmTokens(
+      await getHouseholdFcmTokens(householdId, auth.user.id, recipientIds),
+    );
+
     if (tokens.length === 0) {
+      const names = others
+        .filter((member) => recipientIds.includes(member.id))
+        .map((member) => member.displayName || member.email || 'housemate');
+      const who =
+        names.length === 1
+          ? names[0]
+          : names.length > 1
+            ? 'those housemates'
+            : 'your housemates';
       res.status(200).json({
         ok: true,
         sent: 0,
-        message:
-          'No push tokens yet. Ask your partner to open Settings → Enable notifications in the app.',
+        message: `No push tokens yet. Ask ${who} to open Settings → Enable notifications in the app.`,
       });
       return;
     }
@@ -619,13 +662,19 @@ export async function handlePingShoppingList(req, res) {
     }
 
     const sent = successCount;
+    const recipientLabel =
+      recipientIds.length === 1
+        ? others.find((m) => m.id === recipientIds[0])?.displayName ||
+          others.find((m) => m.id === recipientIds[0])?.email ||
+          'your housemate'
+        : `${recipientIds.length} housemates`;
     res.status(200).json({
       ok: true,
       sent,
       message:
         sent > 0
-          ? `Sent a shopping reminder to ${sent} device${sent === 1 ? '' : 's'}.`
-          : 'Could not deliver notifications. Ask your partner to re-enable notifications in Settings.',
+          ? `Sent a shop reminder to ${recipientLabel}.`
+          : 'Could not deliver notifications. Ask them to re-enable notifications in Settings.',
     });
   } catch (err) {
     console.error('POST /api/household/ping-shopping', err);
@@ -633,7 +682,7 @@ export async function handlePingShoppingList(req, res) {
     const message =
       friendly.message?.includes('Firebase Admin')
         ? 'Push notifications are not configured on the server.'
-        : friendly.message || 'Could not send shopping ping.';
+        : friendly.message || 'Could not send shop reminder.';
     res.status(friendly.status || 500).json({ error: message });
   }
 }

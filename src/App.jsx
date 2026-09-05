@@ -24,6 +24,7 @@ import {
   Refrigerator,
   Settings,
   ShoppingCart,
+  Wallet,
 } from 'lucide-react';
 
 const WeeklyDealsFeed = lazy(() =>
@@ -32,8 +33,11 @@ const WeeklyDealsFeed = lazy(() =>
 const RecipesView = lazy(() =>
   import('./components/RecipesView.jsx').then((m) => ({ default: m.RecipesView })),
 );
+const ExpensesView = lazy(() =>
+  import('./views/ExpensesView.jsx').then((m) => ({ default: m.ExpensesView })),
+);
 
-const MAIN_TAB_ORDER = ['fridge', 'shopping', 'deals', 'recipes', 'settings'];
+const MAIN_TAB_ORDER = ['fridge', 'shopping', 'deals', 'recipes', 'expenses', 'settings'];
 
 function DealsView({ items, updateItems }) {
   const shoppingListNames = useMemo(
@@ -220,6 +224,7 @@ export default function App() {
     if (isModuleEnabled(enabledModules, MODULE_KEYS.FOOD)) {
       tabs.push({ id: 'recipes', label: 'Recipes', icon: ChefHat, accent: 'emerald' });
     }
+    tabs.push({ id: 'expenses', label: 'Expenses', icon: Wallet, accent: 'amber' });
     tabs.push({ id: 'settings', label: 'Settings', icon: Settings, accent: 'emerald' });
     return tabs;
   }, [enabledModules, items]);
@@ -357,6 +362,11 @@ export default function App() {
             />
           </Suspense>
         )}
+        {activeTab === 'expenses' && (
+          <Suspense fallback={<TabPanelLoader />}>
+            <ExpensesView />
+          </Suspense>
+        )}
         {activeTab === 'settings' && (
           <SettingsView
             settings={settings}
@@ -394,11 +404,17 @@ export default function App() {
                       pill: 'bg-sky-100 dark:bg-sky-950/60',
                       bar: 'bg-sky-500',
                     }
-                  : {
-                      text: 'text-emerald-600 dark:text-emerald-400',
-                      pill: 'bg-emerald-100 dark:bg-emerald-950/60',
-                      bar: 'bg-emerald-500',
-                    };
+                  : accent === 'amber'
+                    ? {
+                        text: 'text-amber-700 dark:text-amber-400',
+                        pill: 'bg-amber-100 dark:bg-amber-950/60',
+                        bar: 'bg-amber-500',
+                      }
+                    : {
+                        text: 'text-emerald-600 dark:text-emerald-400',
+                        pill: 'bg-emerald-100 dark:bg-emerald-950/60',
+                        bar: 'bg-emerald-500',
+                      };
             return (
               <button
                 key={id}

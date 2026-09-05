@@ -7,6 +7,7 @@ import {
   indexedDBLocalPersistence,
   initializeAuth,
 } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import { firebaseConfig } from './firebase/config.js';
 
 /** @type {import('firebase/app').FirebaseApp | null} */
@@ -15,6 +16,8 @@ let appInstance = null;
 let authInstance = null;
 /** @type {import('firebase/analytics').Analytics | null} */
 let analyticsInstance = null;
+/** @type {import('firebase/storage').FirebaseStorage | null} */
+let storageInstance = null;
 /** @type {Promise<void> | null} */
 let analyticsInitPromise = null;
 
@@ -66,4 +69,11 @@ function ensureAnalytics() {
 export function getFirebaseAnalytics() {
   ensureAnalytics();
   return analyticsInstance;
+}
+
+export function getFirebaseStorage() {
+  if (!storageInstance) {
+    storageInstance = getStorage(getFirebaseApp());
+  }
+  return storageInstance;
 }

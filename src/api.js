@@ -290,10 +290,15 @@ export async function joinHousehold(inviteCode) {
   return data;
 }
 
-export async function pingShoppingList() {
+export async function pingShoppingList(recipientUserIds) {
+  const body =
+    Array.isArray(recipientUserIds) && recipientUserIds.length > 0
+      ? { recipientUserIds }
+      : {};
   const res = await fetch(apiUrl(`/household/ping-shopping`), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
   });
   return parseJson(res);
 }
@@ -989,6 +994,46 @@ export async function postAdminRecoveryRejoin({ userId, householdId, force = fal
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ userId, householdId, force }),
+  });
+  return parseJson(res);
+}
+
+/** @param {'weekly'|'fortnightly'|'monthly'} [timeframe] */
+export async function fetchExpenses(timeframe = 'weekly') {
+  const params = new URLSearchParams({ timeframe });
+  const res = await fetch(apiUrl(`/expenses?${params}`), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+/** @param {'weekly'|'fortnightly'|'monthly'} [timeframe] */
+export async function fetchExpenseSplit(timeframe = 'weekly') {
+  const params = new URLSearchParams({ timeframe });
+  const res = await fetch(apiUrl(`/expenses/split?${params}`), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+/**
+ * @param {{
+ *   totalAmount: number,
+ *   storeName: string,
+ *   purchaseDate?: string,
+ *   receiptImageUrl?: string|null,
+ *   savedToVault?: boolean,
+ * }} payload
+ */
+export async function createExpense(payload) {
+  const res = await fetch(apiUrl('/expenses'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+export async function deleteExpense(id) {
+  const res = await fetch(apiUrl(`/expenses/${encodeURIComponent(id)}`), {
+    method: 'DELETE',
+    headers: authHeaders(),
   });
   return parseJson(res);
 }

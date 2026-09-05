@@ -12,7 +12,7 @@ function formatSenderLabel(email, displayName) {
   const named = String(displayName || '').trim();
   if (named) return named;
   const local = String(email || '').split('@')[0]?.trim();
-  if (!local) return 'Your household partner';
+  if (!local) return 'A housemate';
   return local.charAt(0).toUpperCase() + local.slice(1);
 }
 
@@ -28,7 +28,7 @@ export function buildShoppingPingNotification(senderEmail, itemCount, displayNam
   if (n <= 0) {
     return {
       title: 'Shopping list',
-      body: `${sender} pinged you — the list is empty right now.`,
+      body: `${sender} sent a shop reminder — the list is empty right now.`,
     };
   }
   return {

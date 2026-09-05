@@ -265,20 +265,38 @@ export function dedupeFcmTokens(tokens) {
 
 /**
  * FCM tokens for household members other than excludeUserId (unique, trimmed).
+ * When recipientUserIds is provided, only those household members are included
+ * (still excluding the sender).
  * @param {string} householdId
  * @param {string} excludeUserId
+ * @param {string[]} [recipientUserIds]
  * @returns {Promise<string[]>}
  */
-export async function getHouseholdFcmTokens(householdId, excludeUserId) {
+export async function getHouseholdFcmTokens(householdId, excludeUserId, recipientUserIds) {
   const users = getDb().collection('users');
-  const docs = await users
-    .find({
-      household_id: new ObjectId(householdId),
-      _id: { $ne: new ObjectId(excludeUserId) },
-      fcmTokens: { $exists: true, $not: { $size: 0 } },
-    })
-    .project({ fcmTokens: 1 })
-    .toArray();
+  const excludeOid = new ObjectId(excludeUserId);
+
+  /** @type {import('mongodb').Filter<import('mongodb').Document>} */
+  const filter = {
+    household_id: new ObjectId(householdId),
+    fcmTokens: { $exists: true, $not: { $size: 0 } },
+  };
+
+  if (Array.isArray(recipientUserIds) && recipientUserIds.length > 0) {
+    const allowed = [
+      ...new Set(
+        recipientUserIds
+          .map((id) => String(id ?? '').trim())
+          .filter((id) => ObjectId.isValid(id) && id !== excludeUserId),
+      ),
+    ].map((id) => new ObjectId(id));
+    if (allowed.length === 0) return [];
+    filter._id = { $in: allowed };
+  } else {
+    filter._id = { $ne: excludeOid };
+  }
+
+  const docs = await users.find(filter).project({ fcmTokens: 1 }).toArray();
 
   const collected = [];
   for (const doc of docs) {

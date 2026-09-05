@@ -1,0 +1,80 @@
+import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+import { asyncRoute } from '../routeUtils.js';
+import { findUserById } from '../db.js';
+import {
+  createExpense,
+  deleteExpense,
+  ensureExpensesIndexes,
+  getExpenseSplit,
+  listExpenses,
+} from '../expenses.js';
+
+export const expensesRouter = Router();
+
+expensesRouter.use(requireAuth);
+
+let indexesReady = false;
+async function readyIndexes() {
+  if (indexesReady) return;
+  await ensureExpensesIndexes();
+  indexesReady = true;
+}
+
+function normalizeTimeframe(value) {
+  const raw = String(value ?? 'weekly').trim().toLowerCase();
+  if (raw === 'fortnightly' || raw === 'monthly') return raw;
+  return 'weekly';
+}
+
+expensesRouter.post(
+  '/',
+  asyncRoute(async (req, res) => {
+    await readyIndexes().catch(() => {});
+    const user = await findUserById(req.user.id);
+    const expense = await createExpense({
+      householdId: req.user.household_id,
+      userId: req.user.id,
+      displayName: user?.displayName || req.user.email || '',
+      storeName: req.body?.storeName,
+      totalAmount: req.body?.totalAmount,
+      purchaseDate: req.body?.purchaseDate,
+      receiptImageUrl: req.body?.receiptImageUrl,
+      savedToVault: req.body?.savedToVault,
+    });
+    res.status(201).json({ ok: true, expense });
+  }, 'POST /api/expenses', 'Could not add expense'),
+);
+
+expensesRouter.get(
+  '/',
+  asyncRoute(async (req, res) => {
+    await readyIndexes().catch(() => {});
+    const timeframe = normalizeTimeframe(req.query?.timeframe);
+    const expenses = await listExpenses(req.user.household_id, timeframe);
+    const total =
+      Math.round(
+        expenses.reduce((sum, entry) => sum + (Number(entry.totalAmount) || 0), 0) * 100,
+      ) / 100;
+    res.status(200).json({ ok: true, timeframe, total, expenses });
+  }, 'GET /api/expenses', 'Could not load expenses'),
+);
+
+expensesRouter.get(
+  '/split',
+  asyncRoute(async (req, res) => {
+    await readyIndexes().catch(() => {});
+    const timeframe = normalizeTimeframe(req.query?.timeframe);
+    const split = await getExpenseSplit(req.user.household_id, timeframe);
+    res.status(200).json({ ok: true, ...split });
+  }, 'GET /api/expenses/split', 'Could not calculate split'),
+);
+
+expensesRouter.delete(
+  '/:id',
+  asyncRoute(async (req, res) => {
+    await readyIndexes().catch(() => {});
+    const result = await deleteExpense(req.user.household_id, req.params.id, req.user.id);
+    res.status(200).json(result);
+  }, 'DELETE /api/expenses/:id', 'Could not delete expense'),
+);

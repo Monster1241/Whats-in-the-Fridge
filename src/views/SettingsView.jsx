@@ -172,7 +172,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'After you purchase something, tap Add to pantry on that row. It leaves the list and appears in Fridge with a suggested use-by date.',
         'Ingredients added from Recipes, and deals you tap Add to shopping list, land here with the same merge.',
         'Use Frequently restocked to quickly add staples you buy often.',
-        'Ping partner to shop sends a reminder to other household members (item names are not in the notification).',
+        'Ask to shop sends a reminder to chosen housemates (item names are not in the notification).',
       ],
     },
     {
@@ -208,7 +208,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       steps: [
         'Copy or share your invite code in Settings so someone can join the same fridge.',
         'Everyone in the household sees the same inventory, shopping list, and saved recipes — edits sync live.',
-        'Enable push notifications in Settings for expiry alerts, partner shopping pings, and support-chat replies.',
+        'Enable push notifications in Settings for expiry alerts, Ask to shop reminders, and support-chat replies.',
         'Scanning a receipt? Items already on the shopping list are moved to Fridge automatically when names match.',
         'If the last person leaves by mistake, open Contact support on the household setup screen (or Settings → Support). We can reconnect the household within the recovery window.',
         'On your phone, use Add to Home Screen to install the app for a fullscreen experience.',
@@ -220,7 +220,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       steps: [
         'Turn modules on or off: Food & Kitchen, Home Essentials, and Baby Care.',
         'Switch light or dark mode, and manage household members (owners can remove people).',
-        'Your account display name and profile email are yours only — they do not overwrite your partner. Display name is used for shopping pings.',
+        'Your account display name and profile email are yours only — they do not overwrite other housemates. Display name is used for Ask to shop reminders.',
         'Reset your password from Your account — Firebase emails the same reset link as Forgot password. Open it, set a new password, then sign in with it.',
         'Use Show tips & color guide again under Data tools to bring welcome banners and the color guide back on Home.',
         'Clear all items only if you want to wipe inventory for everyone in the household. You can restore cleared items from Settings within 7 days.',
@@ -932,7 +932,7 @@ export function SettingsView({
               className="input-field"
             />
             <p className="text-muted mt-1 text-[11px] leading-relaxed">
-              Shown to your household for shopping pings. This name is yours — it does not change your partner&apos;s account.
+              Shown to your household for Ask to shop reminders. This name is yours — it does not change other housemates&apos; accounts.
             </p>
           </div>
           <div>

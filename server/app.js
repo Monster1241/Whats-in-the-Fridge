@@ -12,6 +12,7 @@ import { supportRouter } from './routes/support.js';
 import { recipesRouter } from './routes/recipes.js';
 import { inventoryRouter } from './routes/inventory.js';
 import { shoppingListRouter } from './routes/shoppingList.js';
+import { expensesRouter } from './routes/expenses.js';
 
 export function createApp() {
   const app = express();
@@ -36,6 +37,7 @@ export function createApp() {
   app.use('/api/recipes', recipesRouter);
   app.use('/api/inventory', inventoryRouter);
   app.use('/api/shopping-list', shoppingListRouter);
+  app.use('/api/expenses', expensesRouter);
 
   app.use('/api/auth', authRouter);
   app.use('/api/household', householdRouter);

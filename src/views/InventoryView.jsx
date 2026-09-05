@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   addShoppingListItem as addShoppingListItemApi,
   classifyInventoryItem,
+  fetchHouseholdMembers,
   markShoppingItemPurchased,
   pingShoppingList,
 } from '../api.js';
@@ -87,9 +88,10 @@ import {
   Loader2,
   Plus,
   Refrigerator,
-  Rocket,
+  ShoppingBag,
   ShoppingCart,
   Trash2,
+  Users,
   X,
 } from 'lucide-react';
 
@@ -945,6 +947,10 @@ export function InventoryView({
   const [pingBusy, setPingBusy] = useState(false);
   const [pingFeedback, setPingFeedback] = useState(null);
   const pingInFlightRef = useRef(false);
+  const [shopPickerOpen, setShopPickerOpen] = useState(false);
+  const [shopPickerMembers, setShopPickerMembers] = useState([]);
+  const [shopPickerSelected, setShopPickerSelected] = useState(() => new Set());
+  const [shopPickerLoading, setShopPickerLoading] = useState(false);
   const [showAddAdvanced, setShowAddAdvanced] = useState(false);
   const [showShoppingAdvanced, setShowShoppingAdvanced] = useState(false);
   const [shopFeedback, setShopFeedback] = useState(null);
@@ -1471,17 +1477,18 @@ export function InventoryView({
     );
   };
 
-  const pingPartner = async () => {
+  const sendShopReminder = async (recipientUserIds) => {
     if (pingInFlightRef.current) return;
     pingInFlightRef.current = true;
     setPingBusy(true);
     setPingFeedback(null);
     try {
-      const result = await pingShoppingList();
+      const result = await pingShoppingList(recipientUserIds);
       setPingFeedback({
         type: result.sent > 0 ? 'success' : 'info',
         text: result.message || 'Notification sent to your household.',
       });
+      setShopPickerOpen(false);
     } catch (err) {
       setPingFeedback({
         type: 'error',
@@ -1491,6 +1498,58 @@ export function InventoryView({
       pingInFlightRef.current = false;
       setPingBusy(false);
     }
+  };
+
+  const openShopButton = async () => {
+    if (pingInFlightRef.current || pingBusy) return;
+    setPingFeedback(null);
+    setShopPickerLoading(true);
+    try {
+      const data = await fetchHouseholdMembers();
+      const others = (data.members ?? []).filter((member) => !member.isCurrentUser);
+      if (others.length === 0) {
+        setPingFeedback({
+          type: 'error',
+          text: 'Invite a housemate first so they can get a shop reminder.',
+        });
+        return;
+      }
+      if (others.length === 1) {
+        await sendShopReminder([others[0].id]);
+        return;
+      }
+      setShopPickerMembers(others);
+      setShopPickerSelected(new Set(others.map((member) => member.id)));
+      setShopPickerOpen(true);
+    } catch (err) {
+      setPingFeedback({
+        type: 'error',
+        text: err.message || 'Could not load household members.',
+      });
+    } finally {
+      setShopPickerLoading(false);
+    }
+  };
+
+  const toggleShopPickerMember = (userId) => {
+    setShopPickerSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  const confirmShopPicker = () => {
+    const ids = [...shopPickerSelected];
+    if (ids.length === 0) {
+      setPingFeedback({
+        type: 'error',
+        text: 'Choose at least one housemate to notify.',
+      });
+      return;
+    }
+    void sendShopReminder(ids);
   };
 
   const handleSearchMoveToShopping = useCallback(
@@ -1653,7 +1712,7 @@ export function InventoryView({
               Add items with + (matching names merge, including from deals and recipes). After you
               buy something, tap <strong className="font-semibold">Add to pantry</strong> — it moves
               to Fridge with a suggested use-by date. Use Frequently restocked for usual staples,
-              tap a store badge to remember where you buy it, then Ping partner for a reminder
+              tap a store badge to remember where you buy it, then use <strong className="font-semibold">Ask to shop</strong> for a reminder
               (no item names in the notification). Recipe suggestions and deals can also add missing
               items here automatically.
             </TipBanner>
@@ -1764,16 +1823,16 @@ export function InventoryView({
 
           <button
             type="button"
-            onClick={pingPartner}
-            disabled={pingBusy}
+            onClick={() => void openShopButton()}
+            disabled={pingBusy || shopPickerLoading}
             className={`mt-2 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-sm font-bold text-white shadow-lg active:scale-[0.98] disabled:opacity-60 ${SHOPPING_ACCENT.btn}`}
           >
-            {pingBusy ? (
+            {pingBusy || shopPickerLoading ? (
               <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
             ) : (
-              <Rocket className="h-5 w-5" aria-hidden />
+              <ShoppingBag className="h-5 w-5" aria-hidden />
             )}
-            {pingBusy ? 'Pinging…' : 'Ping partner to shop'}
+            {pingBusy || shopPickerLoading ? 'Sending…' : 'Ask to shop'}
           </button>
           {pingFeedback && (
             <p
@@ -1789,6 +1848,118 @@ export function InventoryView({
               {pingFeedback.text}
             </p>
           )}
+
+          {shopPickerOpen &&
+            typeof document !== 'undefined' &&
+            createPortal(
+              <div
+                className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4"
+                style={{
+                  paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
+                  paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+                }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="shop-picker-title"
+                onClick={() => {
+                  if (!pingBusy) setShopPickerOpen(false);
+                }}
+              >
+                <div
+                  className="surface-card w-full max-w-md p-5 shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                      <h2
+                        id="shop-picker-title"
+                        className="text-heading flex items-center gap-2 text-lg font-extrabold"
+                      >
+                        <Users className="h-5 w-5 text-sky-600" aria-hidden />
+                        Who should shop?
+                      </h2>
+                      <p className="text-muted mt-1 text-xs">
+                        Choose which housemates get the reminder. Item names stay private.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShopPickerOpen(false)}
+                      disabled={pingBusy}
+                      className="text-muted rounded-lg p-1.5 hover:bg-black/[0.05] dark:hover:bg-white/10"
+                      aria-label="Close"
+                    >
+                      <X className="h-5 w-5" aria-hidden />
+                    </button>
+                  </div>
+
+                  <ul className="mb-4 space-y-2">
+                    {shopPickerMembers.map((member) => {
+                      const checked = shopPickerSelected.has(member.id);
+                      const label = member.displayName || member.email || 'Housemate';
+                      return (
+                        <li key={member.id}>
+                          <label
+                            className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition ${
+                              checked
+                                ? 'border-sky-400 bg-sky-50 dark:border-sky-600 dark:bg-sky-950/40'
+                                : 'border-black/[0.08] dark:border-white/10'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleShopPickerMember(member.id)}
+                              className="h-4 w-4 accent-sky-600"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="text-heading block truncate text-sm font-bold">
+                                {label}
+                              </span>
+                              {member.displayName && member.email ? (
+                                <span className="text-muted block truncate text-[11px]">
+                                  {member.email}
+                                </span>
+                              ) : null}
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShopPickerOpen(false)}
+                      disabled={pingBusy}
+                      className="flex-1 rounded-xl border border-black/[0.08] py-3 text-sm font-semibold dark:border-white/10"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmShopPicker}
+                      disabled={pingBusy || shopPickerSelected.size === 0}
+                      className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white disabled:opacity-50 ${SHOPPING_ACCENT.btn}`}
+                    >
+                      {pingBusy ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                          Sending…
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingBag className="h-4 w-4" aria-hidden />
+                          Ask to shop
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>,
+              document.body,
+            )}
         </>
       ) : (
         categoryGrouped && (
