@@ -13,6 +13,7 @@ describe('sanitizeSettings', () => {
       theme: 'dark',
       user: { name: 'Ada', email: 'ada@example.com' },
       dietaryPreference: 'none',
+      currency: 'AUD',
     });
     expect(sanitizeSettings({ theme: 'system' }).theme).toBe('system');
     expect(sanitizeSettings({ theme: 'auto' }).theme).toBe('system');
@@ -23,11 +24,13 @@ describe('sanitizeSettings', () => {
       theme: 'system',
       user: { name: '', email: '' },
       dietaryPreference: 'none',
+      currency: 'AUD',
     });
     expect(sanitizeSettings({ theme: 'neon', user: 'nope' })).toEqual({
       theme: 'system',
       user: { name: '', email: '' },
       dietaryPreference: 'none',
+      currency: 'AUD',
     });
   });
 
@@ -51,6 +54,12 @@ describe('sanitizeSettings', () => {
     );
     expect(sanitizeSettings({ dietaryPreference: 'invalid' }).dietaryPreference).toBe('none');
   });
+
+  it('sanitizes currency', () => {
+    expect(sanitizeSettings({ currency: 'usd' }).currency).toBe('USD');
+    expect(sanitizeSettings({ currency: 'GBP' }).currency).toBe('GBP');
+    expect(sanitizeSettings({ currency: 'xyz' }).currency).toBe('AUD');
+  });
 });
 
 describe('settingsForViewer', () => {
@@ -58,6 +67,7 @@ describe('settingsForViewer', () => {
     const household = {
       theme: 'dark',
       dietaryPreference: 'vegan',
+      currency: 'NZD',
       user: { name: 'Partner', email: 'partner@example.com' },
     };
     expect(
@@ -69,6 +79,7 @@ describe('settingsForViewer', () => {
     ).toEqual({
       theme: 'dark',
       dietaryPreference: 'vegan',
+      currency: 'NZD',
       user: { name: 'Alex', email: 'alex@home.test' },
     });
   });
@@ -87,6 +98,7 @@ describe('settingsForViewer', () => {
     ).toEqual({
       theme: 'light',
       dietaryPreference: 'none',
+      currency: 'AUD',
       user: { name: '', email: 'me@example.com' },
     });
   });

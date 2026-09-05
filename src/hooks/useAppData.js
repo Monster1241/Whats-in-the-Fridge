@@ -29,6 +29,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'system',
   user: { name: '', email: '' },
   dietaryPreference: 'none',
+  currency: 'AUD',
 };
 
 function mergeSettingsWithDeviceTheme(settings) {

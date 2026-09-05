@@ -25,6 +25,7 @@ import {
   pickReceiptFromGallery,
 } from '../utils/receiptCapture.js';
 import { uploadReceiptPhoto } from '../utils/receiptStorage.js';
+import { currencyShortLabel, formatMoney, normalizeCurrency } from '../utils/currency.js';
 
 const TIMEFRAMES = [
   { id: 'weekly', label: 'Weekly' },
@@ -34,20 +35,11 @@ const TIMEFRAMES = [
 
 const STORE_SUGGESTIONS = ['Woolworths', 'Coles', 'ALDI', 'Local Market'];
 
-function formatAud(amount) {
-  const value = Number(amount);
-  if (!Number.isFinite(value)) return '$0.00';
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-  }).format(value);
-}
-
 function formatDateLabel(iso) {
   if (!iso) return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-AU', {
+  return date.toLocaleDateString(undefined, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -123,7 +115,10 @@ function ImageViewerModal({ url, onClose }) {
   );
 }
 
-export function ExpensesView() {
+export function ExpensesView({ currency: currencyProp }) {
+  const currency = normalizeCurrency(currencyProp);
+  const money = (amount) => formatMoney(amount, currency);
+  const currencyCode = currencyShortLabel(currency);
   const addTitleId = useId();
   const splitTitleId = useId();
   const isNative = isNativeReceiptCapture();
@@ -273,7 +268,7 @@ export function ExpensesView() {
     event.preventDefault();
     const parsedAmount = Number(amount);
     if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
-      setFormError('Enter a valid total amount in AUD.');
+      setFormError(`Enter a valid total amount in ${currencyCode}.`);
       return;
     }
     if (!String(storeName).trim()) {
@@ -405,9 +400,9 @@ export function ExpensesView() {
             Total household spend
           </p>
           <p className="text-heading mt-2 text-3xl font-extrabold tracking-tight">
-            {loading ? '…' : formatAud(total)}
+            {loading ? '…' : money(total)}
           </p>
-          <p className="text-muted mt-1 text-xs">AUD · {TIMEFRAMES.find((t) => t.id === timeframe)?.label}</p>
+          <p className="text-muted mt-1 text-xs">{currencyCode} · {TIMEFRAMES.find((t) => t.id === timeframe)?.label}</p>
         </article>
 
         <article className="surface-card p-4">
@@ -428,7 +423,7 @@ export function ExpensesView() {
                 >
                   <span className="text-heading font-semibold">{entry.name}</span>
                   <span className="tabular-nums font-bold text-emerald-700 dark:text-emerald-400">
-                    {formatAud(entry.total)}
+                    {money(entry.total)}
                   </span>
                 </li>
               ))}
@@ -538,7 +533,7 @@ export function ExpensesView() {
                 <div className="space-y-1 p-3">
                   <p className="text-heading truncate text-sm font-bold">{expense.storeName}</p>
                   <p className="text-sm font-extrabold tabular-nums text-amber-700 dark:text-amber-400">
-                    {formatAud(expense.totalAmount)}
+                    {money(expense.totalAmount)}
                   </p>
                   <p className="text-muted truncate text-[11px]">
                     {formatDateLabel(expense.purchaseDate)}
@@ -585,7 +580,7 @@ export function ExpensesView() {
 
           <form className="space-y-4" onSubmit={handleSubmitExpense}>
             <label className="block space-y-1.5">
-              <span className="text-heading text-xs font-bold">Total amount (AUD)</span>
+              <span className="text-heading text-xs font-bold">Total amount ({currencyCode})</span>
               <input
                 type="number"
                 inputMode="decimal"
@@ -775,7 +770,7 @@ export function ExpensesView() {
             <div className="space-y-4">
               <div className="rounded-xl bg-amber-50 px-3 py-2 text-sm dark:bg-amber-950/40">
                 <p className="font-bold text-amber-900 dark:text-amber-200">
-                  Total {formatAud(splitData?.total)} · fair share {formatAud(splitData?.fairShare)}
+                  Total {money(splitData?.total)} · fair share {money(splitData?.fairShare)}
                 </p>
               </div>
 
@@ -791,7 +786,7 @@ export function ExpensesView() {
                       <span className="text-heading font-semibold">{row.toName}</span>
                       {' '}
                       <span className="font-extrabold text-amber-700 dark:text-amber-400">
-                        {formatAud(row.amount)}
+                        {money(row.amount)}
                       </span>
                     </li>
                   ))}

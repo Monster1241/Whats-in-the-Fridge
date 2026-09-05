@@ -25,6 +25,7 @@ import { normalizeName } from '../inventory/itemUtils.js';
 import {
   isValidAustralianPostcode,
   POSTCODE_CHANGE_EVENT,
+  postcodeForCatalogue,
   readStoredPostcode,
   writeStoredPostcode,
 } from '../inventory/postcodeStorage.js';
@@ -722,12 +723,15 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchWeeklyDeals({ postcode }, { force });
+      const cataloguePostcode = postcodeForCatalogue(postcode);
+      const data = await fetchWeeklyDeals({ postcode: cataloguePostcode }, { force });
       setDeals(data.deals ?? []);
       setDealCycle(data.cycle ?? null);
       setPricingPolicy(data.pricingPolicy ?? null);
       if (data.regionLabel) setRegionLabel(data.regionLabel);
-      if (data.postcode) setPostcode(data.postcode);
+      if (data.postcode && isValidAustralianPostcode(postcode)) {
+        setPostcode(data.postcode);
+      }
     } catch (err) {
       setDeals([]);
       setDealCycle(null);
@@ -779,10 +783,14 @@ export function WeeklyDealsFeed({ onAddDeal, addedNames = new Set() }) {
   const loadCatalogues = useCallback(async (currentPostcode) => {
     setCataloguesLoading(true);
     try {
-      const data = await fetchStoreCatalogues({ postcode: currentPostcode });
+      const data = await fetchStoreCatalogues({
+        postcode: postcodeForCatalogue(currentPostcode),
+      });
       setCatalogues(data.catalogues ?? []);
       setRegionLabel(data.regionLabel ?? '');
-      if (data.postcode) setPostcode(data.postcode);
+      if (data.postcode && isValidAustralianPostcode(currentPostcode)) {
+        setPostcode(data.postcode);
+      }
     } catch {
       setCatalogues([]);
     } finally {

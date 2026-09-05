@@ -9,7 +9,11 @@ import { useAuth } from './hooks/useAuth.js';
 import { PushNotificationProvider } from './context/PushNotificationContext.jsx';
 import { ExpiryNotificationSync } from './components/ExpiryNotificationSync.jsx';
 import { checkApiHealth } from './api.js';
-import { readStoredPostcode } from './inventory/postcodeStorage.js';
+import {
+  POSTCODE_CHANGE_EVENT,
+  readStoredPostcode,
+} from './inventory/postcodeStorage.js';
+import { normalizeCurrency } from './utils/currency.js';
 import { isOnShoppingList, STATUS } from './inventory/constants.js';
 import { isModuleEnabled, MODULE_KEYS } from './inventory/modules.js';
 import { dealStoreToPreferred, mapDealToInventory } from './inventory/mapDealToInventory.js';
@@ -208,6 +212,19 @@ export default function App() {
     onboarding,
   } = useAppData(appReady);
 
+  useEffect(() => {
+    const onPostcodeChanged = (event) => {
+      const nextCurrency = normalizeCurrency(event?.detail?.currency);
+      if (!event?.detail?.currency) return;
+      updateSettings((prev) => {
+        if (normalizeCurrency(prev?.currency) === nextCurrency) return prev;
+        return { ...prev, currency: nextCurrency };
+      });
+    };
+    window.addEventListener(POSTCODE_CHANGE_EVENT, onPostcodeChanged);
+    return () => window.removeEventListener(POSTCODE_CHANGE_EVENT, onPostcodeChanged);
+  }, [updateSettings]);
+
   const navTabs = useMemo(() => {
     const shoppingCount = items.filter((item) => isOnShoppingList(item)).length;
     const tabs = [
@@ -364,7 +381,7 @@ export default function App() {
         )}
         {activeTab === 'expenses' && (
           <Suspense fallback={<TabPanelLoader />}>
-            <ExpensesView />
+            <ExpensesView currency={settings.currency} />
           </Suspense>
         )}
         {activeTab === 'settings' && (

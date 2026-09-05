@@ -1,10 +1,12 @@
 import { normalizeDietaryPreference } from '../src/recipes/dietaryPreferences.js';
 import { normalizeThemePreference } from '../src/theme/themePreference.js';
+import { DEFAULT_CURRENCY, normalizeCurrency } from '../src/utils/currency.js';
 
 export const DEFAULT_SETTINGS = {
   theme: 'system',
   user: { name: '', email: '' },
   dietaryPreference: 'none',
+  currency: DEFAULT_CURRENCY,
 };
 
 const MAX_NAME_LEN = 80;
@@ -24,23 +26,24 @@ export function sanitizeUserProfile(raw) {
 }
 
 /**
- * Household-shared settings only (theme / diet). Display name and profile email
+ * Household-shared settings only (theme / diet / currency). Display name and profile email
  * belong on the user record so partners cannot overwrite each other.
  * Theme may be light, dark, or system (follow the device).
  * @param {unknown} raw
- * @returns {{ theme: 'light'|'dark'|'system', dietaryPreference: string }}
+ * @returns {{ theme: 'light'|'dark'|'system', dietaryPreference: string, currency: string }}
  */
 export function sanitizeHouseholdSettings(raw) {
   const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   return {
     theme: normalizeThemePreference(source.theme),
     dietaryPreference: normalizeDietaryPreference(source.dietaryPreference),
+    currency: normalizeCurrency(source.currency),
   };
 }
 
 /**
  * @param {unknown} raw
- * @returns {{ theme: 'light'|'dark'|'system', user: { name: string, email: string }, dietaryPreference: string }}
+ * @returns {{ theme: 'light'|'dark'|'system', user: { name: string, email: string }, dietaryPreference: string, currency: string }}
  */
 export function sanitizeSettings(raw) {
   const household = sanitizeHouseholdSettings(raw);
@@ -83,6 +86,7 @@ export function settingsForViewer(householdSettings, user) {
   return {
     theme: household.theme,
     dietaryPreference: household.dietaryPreference,
+    currency: household.currency,
     user: { name, email },
   };
 }

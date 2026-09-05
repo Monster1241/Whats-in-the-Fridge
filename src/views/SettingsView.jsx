@@ -25,14 +25,22 @@ import {
 } from '../theme/themePreference.js';
 import {
   isValidAustralianPostcode,
+  normalizePostalCode,
   POSTCODE_CHANGE_EVENT,
   readStoredPostcode,
   writeStoredPostcode,
 } from '../inventory/postcodeStorage.js';
 import {
+  CURRENCY_OPTIONS,
+  currencyLabel,
+  inferCurrencyFromPostalCode,
+  normalizeCurrency,
+} from '../utils/currency.js';
+import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  Banknote,
   Bell,
   BookOpen,
   Check,
@@ -427,6 +435,7 @@ export function SettingsView({
   const [email, setEmail] = useState(settings?.user?.email || accountEmail || '');
   const [postcode, setPostcode] = useState(() => readStoredPostcode());
   const [postcodeError, setPostcodeError] = useState('');
+  const [currencyHint, setCurrencyHint] = useState('');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -519,26 +528,47 @@ export function SettingsView({
   }, []);
 
   const saveProfile = () => {
-    const digits = String(postcode ?? '').replace(/\D/g, '').slice(0, 4);
-    if (digits.length > 0 && !isValidAustralianPostcode(digits)) {
-      setPostcodeError('Enter a valid 4-digit Australian postcode.');
+    const normalized = normalizePostalCode(postcode);
+    if (String(postcode ?? '').trim() && !normalized) {
+      setPostcodeError('Enter a valid postal / ZIP code.');
       return;
     }
-    if (digits.length === 4) {
-      writeStoredPostcode(digits);
-      setPostcode(digits);
+
+    let inferredCurrency = null;
+    if (normalized) {
+      const savedCode = writeStoredPostcode(normalized);
+      if (!savedCode) {
+        setPostcodeError('Could not save postal code. Try again.');
+        return;
+      }
+      setPostcode(savedCode);
+      const locale =
+        typeof navigator !== 'undefined' ? navigator.language || navigator.languages?.[0] : '';
+      inferredCurrency = inferCurrencyFromPostalCode(savedCode, locale);
     }
+
     setPostcodeError('');
     updateSettings((prev) => ({
       ...prev,
       user: { name: name.trim(), email: email.trim() },
+      ...(inferredCurrency ? { currency: inferredCurrency } : {}),
     }));
+    if (inferredCurrency) {
+      setCurrencyHint(`Currency set to ${currencyLabel(inferredCurrency)} from your postal code.`);
+    } else {
+      setCurrencyHint('');
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
   const setTheme = (theme) => {
     updateSettings((prev) => ({ ...prev, theme }));
+  };
+
+  const setCurrency = (currency) => {
+    updateSettings((prev) => ({ ...prev, currency: normalizeCurrency(currency) }));
+    setCurrencyHint('');
   };
 
   const setDietaryPreference = (dietaryPreference) => {
@@ -549,6 +579,7 @@ export function SettingsView({
   };
 
   const activeDietaryPreference = normalizeDietaryPreference(settings?.dietaryPreference);
+  const activeCurrency = normalizeCurrency(settings?.currency);
 
   const handleModuleToggle = async (moduleKey, checked) => {
     setModulesError('');
@@ -953,36 +984,75 @@ export function SettingsView({
           </div>
           <div>
             <label htmlFor="settings-postcode" className="text-muted mb-1 block text-xs font-semibold uppercase">
-              Postcode
+              Postal / ZIP code
             </label>
             <input
               id="settings-postcode"
               type="text"
-              inputMode="numeric"
+              inputMode="text"
               autoComplete="postal-code"
-              maxLength={4}
+              maxLength={12}
               value={postcode}
               onChange={(e) => {
-                setPostcode(e.target.value.replace(/\D/g, '').slice(0, 4));
+                setPostcode(e.target.value.toUpperCase().slice(0, 12));
                 setPostcodeError('');
+                setCurrencyHint('');
               }}
               onBlur={() => {
-                const digits = String(postcode ?? '').replace(/\D/g, '').slice(0, 4);
-                if (digits.length === 4 && isValidAustralianPostcode(digits)) {
-                  writeStoredPostcode(digits);
-                  setPostcode(digits);
-                  setPostcodeError('');
+                const normalized = normalizePostalCode(postcode);
+                if (!normalized) return;
+                writeStoredPostcode(normalized);
+                setPostcode(normalized);
+                setPostcodeError('');
+                const locale =
+                  typeof navigator !== 'undefined'
+                    ? navigator.language || navigator.languages?.[0]
+                    : '';
+                const inferred = inferCurrencyFromPostalCode(normalized, locale);
+                if (inferred) {
+                  updateSettings((prev) => ({ ...prev, currency: inferred }));
+                  setCurrencyHint(
+                    `Currency set to ${currencyLabel(inferred)} from your postal code.`,
+                  );
                 }
               }}
-              placeholder="e.g. 2000"
+              placeholder="e.g. 2000, SW1A 1AA, 90210"
               className="input-field"
             />
             <p className="text-muted mt-1 text-[11px] leading-relaxed">
-              Used for local supermarket catalogues on Deals. Synced with the Deals tab.
+              Used to guess your currency
+              {isValidAustralianPostcode(postcode)
+                ? ' and local Australian supermarket catalogues on Deals.'
+                : '. Australian 4-digit postcodes also unlock local catalogues on Deals.'}
             </p>
             {postcodeError && (
               <p className="mt-1 text-xs font-semibold text-rose-600 dark:text-rose-400" role="alert">
                 {postcodeError}
+              </p>
+            )}
+          </div>
+          <div>
+            <label htmlFor="settings-currency" className="text-muted mb-1 block text-xs font-semibold uppercase">
+              Currency
+            </label>
+            <select
+              id="settings-currency"
+              value={activeCurrency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="input-field"
+            >
+              {CURRENCY_OPTIONS.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.code} — {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-muted mt-1 text-[11px] leading-relaxed">
+              Shared with your household for Expenses. Change anytime, or let your postal code suggest one.
+            </p>
+            {currencyHint && (
+              <p className="mt-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400" role="status">
+                {currencyHint}
               </p>
             )}
           </div>
@@ -1269,7 +1339,14 @@ export function SettingsView({
           icon={User}
           iconClassName="bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300"
           title="Your account"
-          subtitle={name.trim() || accountEmail || 'Name, email, postcode'}
+          subtitle={name.trim() || accountEmail || 'Name, email, postal code'}
+          onClick={() => setInfoScreen('account')}
+        />
+        <SettingsNavRow
+          icon={Banknote}
+          iconClassName="bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+          title="Currency"
+          subtitle={currencyLabel(activeCurrency)}
           onClick={() => setInfoScreen('account')}
         />
         <PushNotificationsSettings />
