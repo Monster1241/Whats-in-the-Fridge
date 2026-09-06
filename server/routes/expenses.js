@@ -7,7 +7,9 @@ import {
   deleteExpense,
   ensureExpensesIndexes,
   getExpenseSplit,
+  listDeletedExpenses,
   listExpenses,
+  restoreExpense,
 } from '../expenses.js';
 
 export const expensesRouter = Router();
@@ -51,13 +53,22 @@ expensesRouter.get(
   asyncRoute(async (req, res) => {
     await readyIndexes().catch(() => {});
     const timeframe = normalizeTimeframe(req.query?.timeframe);
-    const expenses = await listExpenses(req.user.household_id, timeframe);
+    const expenses = await listExpenses(req.user.household_id, timeframe, req.user.id);
     const total =
       Math.round(
         expenses.reduce((sum, entry) => sum + (Number(entry.totalAmount) || 0), 0) * 100,
       ) / 100;
     res.status(200).json({ ok: true, timeframe, total, expenses });
   }, 'GET /api/expenses', 'Could not load expenses'),
+);
+
+expensesRouter.get(
+  '/deleted',
+  asyncRoute(async (req, res) => {
+    await readyIndexes().catch(() => {});
+    const expenses = await listDeletedExpenses(req.user.household_id, req.user.id);
+    res.status(200).json({ ok: true, expenses });
+  }, 'GET /api/expenses/deleted', 'Could not load deleted receipts'),
 );
 
 expensesRouter.get(
@@ -68,6 +79,15 @@ expensesRouter.get(
     const split = await getExpenseSplit(req.user.household_id, timeframe);
     res.status(200).json({ ok: true, ...split });
   }, 'GET /api/expenses/split', 'Could not calculate split'),
+);
+
+expensesRouter.post(
+  '/:id/restore',
+  asyncRoute(async (req, res) => {
+    await readyIndexes().catch(() => {});
+    const result = await restoreExpense(req.user.household_id, req.params.id, req.user.id);
+    res.status(200).json(result);
+  }, 'POST /api/expenses/:id/restore', 'Could not restore receipt'),
 );
 
 expensesRouter.delete(

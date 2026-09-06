@@ -70,6 +70,7 @@ import {
   User,
   UserPlus,
   Users,
+  Wallet,
   X,
 } from 'lucide-react';
 import {
@@ -210,6 +211,16 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
           },
         ]
       : []),
+    {
+      icon: Wallet,
+      title: 'Expenses — spend, split, and receipts',
+      steps: [
+        'Tap Weekly, Fortnightly, or Monthly to see spend for the last 7, 14, or 30 days — including today.',
+        'Log a shop total and optionally save the receipt photo to the household vault.',
+        'Only the person who added a receipt, or the household owner, can delete it.',
+        'Deleted receipts stay in Recently deleted for 30 days. After that they cannot be restored.',
+      ],
+    },
     {
       icon: Users,
       title: 'Household — share with your partner',

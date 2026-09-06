@@ -1037,3 +1037,16 @@ export async function deleteExpense(id) {
   });
   return parseJson(res);
 }
+
+export async function fetchDeletedExpenses() {
+  const res = await fetch(apiUrl('/expenses/deleted'), { headers: authHeaders() });
+  return parseJson(res);
+}
+
+export async function restoreExpense(id) {
+  const res = await fetch(apiUrl(`/expenses/${encodeURIComponent(id)}/restore`), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+  });
+  return parseJson(res);
+}
