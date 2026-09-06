@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  ArrowLeft,
+  ArrowRight,
   CalendarDays,
   Camera,
   Image as ImageIcon,
@@ -125,6 +127,145 @@ function ImageViewerModal({ url, onClose }) {
   );
 }
 
+function RecentlyDeletedScreen({
+  expenses,
+  loading,
+  restoringId,
+  error,
+  money,
+  onBack,
+  onRetry,
+  onRestore,
+  onView,
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onBack();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
+  return (
+    <div className="pb-8">
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-muted mb-5 inline-flex items-center gap-2 rounded-lg py-1.5 pr-2 text-sm font-semibold transition hover:text-amber-800 active:scale-[0.98] dark:hover:text-amber-300"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Back
+      </button>
+
+      <header className="mb-5">
+        <h1 className="text-heading flex items-center gap-2 text-xl font-extrabold tracking-tight">
+          <RotateCcw className="h-5 w-5 text-amber-600 dark:text-amber-400" aria-hidden />
+          Recently deleted
+        </h1>
+        <p className="text-muted mt-1 text-sm leading-relaxed">
+          The person who added a receipt, or the household owner, can restore it for 30 days.
+          After that it is removed for good.
+        </p>
+      </header>
+
+      {error ? (
+        <div className="mb-4 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300">
+          {error}
+          {onRetry ? (
+            <button type="button" onClick={onRetry} className="ml-2 font-semibold underline">
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {loading ? (
+        <div className="surface-card flex items-center justify-center gap-2 p-8 text-sm text-muted">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          Loading deleted receipts…
+        </div>
+      ) : expenses.length === 0 ? (
+        <div className="surface-card p-6 text-center">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-300">
+            <RotateCcw className="h-6 w-6" aria-hidden />
+          </div>
+          <p className="text-heading text-sm font-semibold">Nothing to restore</p>
+          <p className="text-muted mt-1 text-xs leading-relaxed">
+            Deleted receipts appear here for 30 days, then they are removed for good.
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {expenses.map((expense) => {
+            const daysLeft = daysLeftToRestore(expense.restoreUntil);
+            return (
+              <li key={expense.id} className="surface-card flex items-center gap-3 p-3">
+                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-black/[0.04] dark:bg-white/[0.06]">
+                  {expense.receiptImageUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => onView(expense.receiptImageUrl)}
+                      className="h-full w-full"
+                      aria-label={`View ${expense.storeName} receipt`}
+                    >
+                      <img
+                        src={expense.receiptImageUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </button>
+                  ) : (
+                    <div className="text-muted flex h-full items-center justify-center">
+                      <ImageIcon className="h-4 w-4 opacity-50" aria-hidden />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-heading truncate text-sm font-bold">{expense.storeName}</p>
+                  <p className="text-muted truncate text-xs">
+                    {money(expense.totalAmount)} · {formatDateLabel(expense.purchaseDate)}
+                    {expense.addedBy?.displayName ? ` · ${expense.addedBy.displayName}` : ''}
+                  </p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                    {daysLeft === 1 ? '1 day left to restore' : `${daysLeft} days left to restore`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-stretch gap-1.5">
+                  {expense.receiptImageUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => onView(expense.receiptImageUrl)}
+                      className="inline-flex min-h-9 items-center justify-center rounded-full border border-black/[0.08] px-3 text-xs font-bold dark:border-white/15"
+                    >
+                      View
+                    </button>
+                  ) : null}
+                  {expense.canRestore ? (
+                    <button
+                      type="button"
+                      onClick={() => void onRestore(expense.id)}
+                      disabled={restoringId === expense.id}
+                      className="inline-flex min-h-9 items-center justify-center gap-1 rounded-full border border-black/[0.08] px-3 text-xs font-bold dark:border-white/15"
+                    >
+                      {restoringId === expense.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                      ) : (
+                        <RotateCcw className="h-3 w-3" aria-hidden />
+                      )}
+                      Restore
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function ExpensesView({ currency: currencyProp }) {
   const currency = normalizeCurrency(currencyProp);
   const money = (amount) => formatMoney(amount, currency);
@@ -160,6 +301,7 @@ export function ExpensesView({ currency: currencyProp }) {
   const [deletingId, setDeletingId] = useState(null);
   const [deletedExpenses, setDeletedExpenses] = useState([]);
   const [restoringId, setRestoringId] = useState(null);
+  const [deletedOpen, setDeletedOpen] = useState(false);
 
   const period = useMemo(() => describeTimeframe(timeframe), [timeframe]);
   const periodDays = timeframeDayCount(timeframe);
@@ -195,9 +337,12 @@ export function ExpensesView({ currency: currencyProp }) {
     };
   }, [expenses, periodDays, total]);
 
-  const loadExpenses = useCallback(async (selectedTimeframe = timeframe) => {
-    setLoading(true);
-    setError(null);
+  const loadExpenses = useCallback(async (selectedTimeframe = timeframe, options = {}) => {
+    const silent = Boolean(options.silent);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const [data, deletedData] = await Promise.all([
         fetchExpenses(selectedTimeframe),
@@ -206,12 +351,15 @@ export function ExpensesView({ currency: currencyProp }) {
       setExpenses(Array.isArray(data.expenses) ? data.expenses : []);
       setTotal(Number(data.total) || 0);
       setDeletedExpenses(Array.isArray(deletedData?.expenses) ? deletedData.expenses : []);
+      if (silent) setError(null);
     } catch (err) {
       setError(err?.message || 'Could not load expenses.');
-      setExpenses([]);
-      setTotal(0);
+      if (!silent) {
+        setExpenses([]);
+        setTotal(0);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [timeframe]);
 
@@ -371,7 +519,7 @@ export function ExpensesView({ currency: currencyProp }) {
     setDeletingId(expenseId);
     try {
       await deleteExpense(expenseId);
-      await loadExpenses(timeframe);
+      await loadExpenses(timeframe, { silent: true });
     } catch (err) {
       setError(err?.message || 'Could not delete receipt.');
     } finally {
@@ -384,13 +532,36 @@ export function ExpensesView({ currency: currencyProp }) {
     setRestoringId(expenseId);
     try {
       await restoreExpense(expenseId);
-      await loadExpenses(timeframe);
+      await loadExpenses(timeframe, { silent: true });
     } catch (err) {
       setError(err?.message || 'Could not restore receipt.');
     } finally {
       setRestoringId(null);
     }
   };
+
+  const closeDeletedScreen = useCallback(() => {
+    setDeletedOpen(false);
+  }, []);
+
+  if (deletedOpen) {
+    return (
+      <>
+        <RecentlyDeletedScreen
+          expenses={deletedExpenses}
+          loading={loading}
+          restoringId={restoringId}
+          error={error}
+          money={money}
+          onBack={closeDeletedScreen}
+          onRetry={() => void loadExpenses(timeframe)}
+          onRestore={handleRestore}
+          onView={setViewerUrl}
+        />
+        {viewerUrl ? <ImageViewerModal url={viewerUrl} onClose={() => setViewerUrl(null)} /> : null}
+      </>
+    );
+  }
 
   return (
     <div className="pb-8">
@@ -547,6 +718,29 @@ export function ExpensesView({ currency: currencyProp }) {
         </button>
       </div>
 
+      <button
+        type="button"
+        onClick={() => setDeletedOpen(true)}
+        className="surface-card mb-6 flex w-full items-center gap-3 p-3.5 text-left transition hover:bg-slate-50 active:scale-[0.99] dark:hover:bg-zinc-900/60"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-300">
+          <RotateCcw className="h-5 w-5" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="text-heading block text-sm font-bold">Recently deleted</span>
+          <span className="text-muted mt-0.5 block text-xs leading-relaxed">
+            {loading
+              ? 'Checking restore bin…'
+              : deletedExpenses.length === 0
+                ? 'Restore receipts here for 30 days'
+                : deletedExpenses.length === 1
+                  ? '1 receipt can be restored for 30 days'
+                  : `${deletedExpenses.length} receipts can be restored for 30 days`}
+          </span>
+        </span>
+        <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+      </button>
+
       <section>
         <div className="mb-3 flex items-start justify-between gap-2">
           <div>
@@ -670,88 +864,6 @@ export function ExpensesView({ currency: currencyProp }) {
             ))}
           </ul>
         )}
-
-        {!loading && deletedExpenses.length > 0 ? (
-          <div className="mt-6">
-            <div className="mb-2 flex items-center gap-2">
-              <RotateCcw className="h-4 w-4 text-slate-500" aria-hidden />
-              <h3 className="text-heading text-sm font-bold">Recently deleted</h3>
-            </div>
-            <p className="text-muted mb-3 text-xs">
-              The person who added a receipt, or the household owner, can restore it for 30 days.
-              After that it is removed for good.
-            </p>
-            <ul className="space-y-2">
-              {deletedExpenses.map((expense) => {
-                const daysLeft = daysLeftToRestore(expense.restoreUntil);
-                return (
-                  <li
-                    key={expense.id}
-                    className="surface-card flex items-center gap-3 p-3"
-                  >
-                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-black/[0.04] dark:bg-white/[0.06]">
-                      {expense.receiptImageUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => setViewerUrl(expense.receiptImageUrl)}
-                          className="h-full w-full"
-                          aria-label={`View ${expense.storeName} receipt`}
-                        >
-                          <img
-                            src={expense.receiptImageUrl}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
-                        </button>
-                      ) : (
-                        <div className="text-muted flex h-full items-center justify-center">
-                          <ImageIcon className="h-4 w-4 opacity-50" aria-hidden />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-heading truncate text-sm font-bold">{expense.storeName}</p>
-                      <p className="text-muted truncate text-[11px]">
-                        {money(expense.totalAmount)} · {formatDateLabel(expense.purchaseDate)}
-                        {expense.addedBy?.displayName ? ` · ${expense.addedBy.displayName}` : ''}
-                      </p>
-                      <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
-                        {daysLeft === 1 ? '1 day left to restore' : `${daysLeft} days left to restore`}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-stretch gap-1.5">
-                      {expense.receiptImageUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => setViewerUrl(expense.receiptImageUrl)}
-                          className="inline-flex min-h-9 items-center justify-center rounded-full border border-black/[0.08] px-3 text-xs font-bold dark:border-white/15"
-                        >
-                          View
-                        </button>
-                      ) : null}
-                      {expense.canRestore ? (
-                        <button
-                          type="button"
-                          onClick={() => void handleRestore(expense.id)}
-                          disabled={restoringId === expense.id}
-                          className="inline-flex min-h-9 items-center justify-center gap-1 rounded-full border border-black/[0.08] px-3 text-xs font-bold dark:border-white/15"
-                        >
-                          {restoringId === expense.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-                          ) : (
-                            <RotateCcw className="h-3 w-3" aria-hidden />
-                          )}
-                          Restore
-                        </button>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ) : null}
       </section>
 
       {addOpen && (

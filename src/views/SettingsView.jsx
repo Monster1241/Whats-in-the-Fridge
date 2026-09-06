@@ -218,7 +218,7 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
         'Tap Weekly, Fortnightly, or Monthly to see spend for the last 7, 14, or 30 days — including today.',
         'Log a shop total and optionally save the receipt photo to the household vault.',
         'Only the person who added a receipt, or the household owner, can delete it.',
-        'Deleted receipts stay in Recently deleted for 30 days. After that they cannot be restored.',
+        'Deleted receipts are in Recently deleted. Open that screen to restore them within 30 days.',
       ],
     },
     {
