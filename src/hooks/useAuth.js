@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   AUTH_SCOPE_ADMIN,
+  AUTH_SCOPE_APP,
   createHousehold,
   fetchSession,
   getAuthScope,
@@ -15,8 +16,7 @@ import {
 } from '../api.js';
 import { setActiveHouseholdId } from '../inventory/offlineCache.js';
 
-const BOOT_TIMEOUT_MS = 10_000;
-const AUTH_FLOW_TIMEOUT_MS = 10_000;
+const AUTH_FLOW_TIMEOUT_MS = 25_000;
 const NETWORK_TIMEOUT_MSG =
   'Network timeout. Please check your connection or try again.';
 
@@ -66,7 +66,7 @@ export function useAuth(options = {}) {
   }, [scope]);
 
   const refreshSession = useCallback(async () => {
-    const data = await withTimeout(fetchSession(scope), BOOT_TIMEOUT_MS);
+    const data = await fetchSession(scope);
     applySession(data);
     return data;
   }, [applySession, scope]);
@@ -76,14 +76,12 @@ export function useAuth(options = {}) {
     (async () => {
       try {
         setError(null);
-        const data = await withTimeout(fetchSession(scope), BOOT_TIMEOUT_MS);
+        const data = await fetchSession(scope);
         if (!cancelled) applySession(data);
       } catch (err) {
         if (!cancelled) {
           setError(err.message || NETWORK_TIMEOUT_MSG);
-          setUser(null);
-          setNeedsVerification(false);
-          setNeedsHousehold(false);
+          applySession(null);
         }
       } finally {
         if (!cancelled) setBooting(false);

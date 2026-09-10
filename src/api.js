@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import {
   cacheAppStateResponse,
   cacheInventoryResponse,
@@ -8,12 +9,20 @@ import {
   readCachedInventory,
   readCachedShoppingList,
   resolveHouseholdIdForCache,
+  sessionFromStoredToken,
   setActiveHouseholdId,
   withOfflineMeta,
 } from './inventory/offlineCache.js';
 
 /** Absolute API origin for Capacitor; relative `/api` only works in Vite/browser proxy. */
 const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+
+const NETWORK_TIMEOUT_MSG =
+  'Network timeout. Please check your connection or try again.';
+/** Don't stall app open on a cold API; fall back to the stored JWT after this. */
+const SESSION_BOOT_TIMEOUT_MS = 5_000;
+/** Login/signup still need enough time for a cold Vercel + Firebase round-trip. */
+const SESSION_SYNC_TIMEOUT_MS = 20_000;
 
 /**
  * Resolve an API path against VITE_API_URL (or `/api` in local Vite).
@@ -125,32 +134,76 @@ async function parseJson(res) {
   return body;
 }
 
+function isNativeApp() {
+  try {
+    return typeof Capacitor?.isNativePlatform === 'function' && Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
+function timeoutError() {
+  const err = new Error(NETWORK_TIMEOUT_MSG);
+  err.code = 'NETWORK_TIMEOUT';
+  return err;
+}
+
+/**
+ * @param {string} url
+ * @param {RequestInit} [init]
+ * @param {number} [timeoutMs]
+ */
+async function fetchWithTimeout(url, init = {}, timeoutMs = SESSION_BOOT_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err?.name === 'AbortError') throw timeoutError();
+    throw err;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 /**
  * Exchange a Firebase ID token for our household API session (JWT).
  * @param {string} idToken
  * @param {'app' | 'admin'} [scope]
  */
 export async function syncFirebaseSession(idToken, scope = getAuthScope()) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
-  try {
-    const res = await fetch(apiUrl(`/auth/session`), {
+  const res = await fetchWithTimeout(
+    apiUrl(`/auth/session`),
+    {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ idToken }),
-      signal: controller.signal,
-    });
-    const data = await parseJson(res);
-    if (data.token) setAuthToken(data.token, scope);
-    return data;
-  } catch (err) {
-    if (err?.name === 'AbortError') {
-      throw new Error('Network timeout. Please check your connection or try again.');
-    }
+    },
+    SESSION_SYNC_TIMEOUT_MS,
+  );
+  const data = await parseJson(res);
+  if (data.token) setAuthToken(data.token, scope);
+  return data;
+}
+
+async function fetchAuthMe(scope) {
+  const res = await fetchWithTimeout(apiUrl(`/auth/me`), {
+    headers: authHeaders({}, scope),
+  });
+  if (res.status === 401) {
+    const err = new Error('Not authenticated.');
+    err.status = 401;
     throw err;
-  } finally {
-    window.clearTimeout(timeoutId);
   }
+  return parseJson(res);
+}
+
+async function restoreSessionFromFirebase(scope) {
+  const { waitForFirebaseAuth, firebaseGetIdToken } = await import('./auth/firebaseAuth.js');
+  await waitForFirebaseAuth();
+  const idToken = await firebaseGetIdToken();
+  if (!idToken) return null;
+  return syncFirebaseSession(idToken, scope);
 }
 
 export async function signup(email, password, scope = getAuthScope()) {
@@ -194,56 +247,37 @@ export async function saveFcmToken(token) {
 export async function fetchSession(scope = getAuthScope()) {
   ensureAdminTokenSeeded(scope);
   const existingToken = getAuthToken(scope);
-  let expiredJwt = false;
+  const stored = existingToken ? sessionFromStoredToken(existingToken) : null;
 
-  if (existingToken) {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 10_000);
+  if (stored) {
     try {
-      const res = await fetch(apiUrl(`/auth/me`), {
-        headers: authHeaders({}, scope),
-        signal: controller.signal,
-      });
-      if (res.ok) {
-        const data = await parseJson(res);
-        if (data.token) setAuthToken(data.token, scope);
-        return data;
-      }
-      if (res.status !== 401) {
-        throw new Error(`Request failed (${res.status})`);
-      }
-      setAuthToken('', scope);
-      expiredJwt = true;
+      const data = await fetchAuthMe(scope);
+      if (data.token) setAuthToken(data.token, scope);
+      return data;
     } catch (err) {
-      if (err?.name === 'AbortError') {
-        throw new Error('Network timeout. Please check your connection or try again.');
-      }
-      throw err;
-    } finally {
-      window.clearTimeout(timeoutId);
+      // Timeout, offline, or 5xx: keep the existing session instead of forcing login.
+      if (err?.status !== 401) return stored;
     }
   }
 
   // Admin sessions must not be rebuilt from whatever Firebase user the app last used.
-  // That would replace the admin JWT when a non-admin signs into the consumer app.
-  if (scope === AUTH_SCOPE_ADMIN) return null;
+  if (scope === AUTH_SCOPE_ADMIN) return stored;
 
-  // No session cookie/JWT: stay logged out without loading Firebase.
-  if (!expiredJwt) return null;
+  // Web visitors with no JWT stay logged out without loading Firebase.
+  // Native apps still try Firebase persistence (JWT can be missing after a WebView cold start).
+  if (!existingToken && !isNativeApp()) return null;
 
-  const {
-    waitForFirebaseAuth,
-    firebaseGetIdToken,
-  } = await import('./auth/firebaseAuth.js');
-
-  await waitForFirebaseAuth();
-  const idToken = await firebaseGetIdToken();
-  if (!idToken) return null;
   try {
-    return await syncFirebaseSession(idToken, scope);
-  } catch {
-    return null;
+    const restored = await restoreSessionFromFirebase(scope);
+    if (restored) return restored;
+  } catch (err) {
+    if (stored) return stored;
+    if (isOfflineNetworkError(err)) return null;
+    throw err;
   }
+
+  if (existingToken && !stored) setAuthToken('', scope);
+  return null;
 }
 
 export async function refreshEmailVerificationSession(scope = getAuthScope()) {
@@ -633,7 +667,7 @@ function writeDealsCache(key, data) {
 
 export async function checkApiHealth() {
   try {
-    const res = await fetch(apiUrl(`/health`));
+    const res = await fetchWithTimeout(apiUrl(`/health`), {}, SESSION_BOOT_TIMEOUT_MS);
     return res.ok;
   } catch {
     return false;

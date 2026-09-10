@@ -7,7 +7,7 @@ const APP_STATE_PREFIX = 'cached_app_state_';
 
 /**
  * @param {string} token
- * @returns {{ householdId?: string|null, userId?: string } | null}
+ * @returns {{ householdId?: string|null, userId?: string, email?: string, isVerified?: boolean, exp?: number } | null}
  */
 export function decodeAuthTokenPayload(token) {
   if (!token) return null;
@@ -21,6 +21,34 @@ export function decodeAuthTokenPayload(token) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Rebuild a client session from the stored household JWT so a slow or
+ * offline /auth/me check does not dump the user back to the login screen.
+ * @param {string} token
+ * @param {number} [now]
+ */
+export function sessionFromStoredToken(token, now = Date.now()) {
+  const payload = decodeAuthTokenPayload(token);
+  const userId = String(payload?.userId ?? '').trim();
+  if (!userId) return null;
+  if (payload?.exp && now > Number(payload.exp)) return null;
+
+  const isVerified = Boolean(payload.isVerified);
+  const householdId = payload.householdId ? String(payload.householdId) : null;
+  return {
+    user: {
+      id: userId,
+      email: String(payload.email || ''),
+      householdId,
+      isVerified,
+      isHouseholdOwner: false,
+    },
+    needsVerification: !isVerified,
+    needsHousehold: isVerified && !householdId,
+    token,
+  };
 }
 
 export function setActiveHouseholdId(householdId) {
@@ -156,6 +184,8 @@ export function isOfflineNetworkError(err) {
   if (!err || typeof err !== 'object') return false;
   const status = /** @type {{ status?: number }} */ (err).status;
   if (typeof status === 'number' && status > 0) return false;
+  const name = String(/** @type {{ name?: string }} */ (err).name ?? '');
+  if (name === 'AbortError' || name === 'TimeoutError') return true;
   const message = String(/** @type {{ message?: string }} */ (err).message ?? '').toLowerCase();
   if (
     message.includes('failed to fetch') ||
@@ -167,7 +197,6 @@ export function isOfflineNetworkError(err) {
   ) {
     return true;
   }
-  const name = String(/** @type {{ name?: string }} */ (err).name ?? '');
   return name === 'TypeError' || name === 'NetworkError';
 }
 

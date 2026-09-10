@@ -10,6 +10,8 @@ import { getFirebaseAuthInstance } from '../firebase.js';
 
 /** Default cap so iOS WKWebView never spins forever on auth restore / ID token. */
 export const AUTH_TIMEOUT_MS = 10_000;
+/** ID token fetch can wait longer than IndexedDB restore — Vercel/Firebase cold starts. */
+export const ID_TOKEN_TIMEOUT_MS = 20_000;
 
 /**
  * @template T
@@ -116,7 +118,7 @@ export async function firebaseGetIdToken(forceRefresh = false) {
   if (!user) return null;
   return withAuthTimeout(
     user.getIdToken(forceRefresh),
-    AUTH_TIMEOUT_MS,
+    ID_TOKEN_TIMEOUT_MS,
     'Network timeout. Please check your connection or try again.',
   );
 }
