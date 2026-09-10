@@ -1013,6 +1013,38 @@ export async function fetchExpenseSplit(timeframe = 'weekly') {
 }
 
 /**
+ * Record that one household member repaid another for the current split.
+ * @param {{
+ *   timeframe?: 'weekly'|'fortnightly'|'monthly',
+ *   fromUserId?: string,
+ *   toUserId?: string,
+ *   amount?: number,
+ *   settleAll?: boolean,
+ * }} payload
+ */
+export async function settleExpenseSplit(payload) {
+  const res = await fetch(apiUrl('/expenses/settle'), {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  return parseJson(res);
+}
+
+/**
+ * @param {string} id
+ * @param {'weekly'|'fortnightly'|'monthly'} [timeframe]
+ */
+export async function undoExpenseSettlement(id, timeframe = 'weekly') {
+  const params = new URLSearchParams({ timeframe });
+  const res = await fetch(apiUrl(`/expenses/settlements/${encodeURIComponent(id)}?${params}`), {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  return parseJson(res);
+}
+
+/**
  * @param {{
  *   totalAmount: number,
  *   storeName: string,

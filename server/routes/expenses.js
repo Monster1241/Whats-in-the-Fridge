@@ -10,6 +10,9 @@ import {
   listDeletedExpenses,
   listExpenses,
   restoreExpense,
+  settleAllExpenseBalances,
+  settleExpenseBalance,
+  undoExpensePayment,
 } from '../expenses.js';
 
 export const expensesRouter = Router();
@@ -76,9 +79,50 @@ expensesRouter.get(
   asyncRoute(async (req, res) => {
     await readyIndexes().catch(() => {});
     const timeframe = normalizeTimeframe(req.query?.timeframe);
-    const split = await getExpenseSplit(req.user.household_id, timeframe);
+    const split = await getExpenseSplit(req.user.household_id, timeframe, req.user.id);
     res.status(200).json({ ok: true, ...split });
   }, 'GET /api/expenses/split', 'Could not calculate split'),
+);
+
+expensesRouter.post(
+  '/settle',
+  asyncRoute(async (req, res) => {
+    await readyIndexes().catch(() => {});
+    const timeframe = normalizeTimeframe(req.body?.timeframe ?? req.query?.timeframe);
+    if (req.body?.settleAll) {
+      const result = await settleAllExpenseBalances(
+        req.user.household_id,
+        timeframe,
+        req.user.id,
+      );
+      res.status(200).json(result);
+      return;
+    }
+    const result = await settleExpenseBalance({
+      householdId: req.user.household_id,
+      timeframe,
+      fromUserId: req.body?.fromUserId,
+      toUserId: req.body?.toUserId,
+      amount: req.body?.amount,
+      createdByUserId: req.user.id,
+    });
+    res.status(201).json(result);
+  }, 'POST /api/expenses/settle', 'Could not record settlement'),
+);
+
+expensesRouter.delete(
+  '/settlements/:id',
+  asyncRoute(async (req, res) => {
+    await readyIndexes().catch(() => {});
+    const timeframe = normalizeTimeframe(req.query?.timeframe);
+    const result = await undoExpensePayment(
+      req.user.household_id,
+      req.params.id,
+      req.user.id,
+      timeframe,
+    );
+    res.status(200).json(result);
+  }, 'DELETE /api/expenses/settlements/:id', 'Could not undo settlement'),
 );
 
 expensesRouter.post(

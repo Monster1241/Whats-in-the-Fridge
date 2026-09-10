@@ -217,6 +217,8 @@ function AppGuideSection({ enabledModules, onShowTipsAgain }) {
       steps: [
         'Tap Weekly, Fortnightly, or Monthly to see spend for the last 7, 14, or 30 days — including today.',
         'Log a shop total and optionally save the receipt photo to the household vault.',
+        'Open Split & settle to see who still owes whom, then tap Settle when someone pays their share.',
+        'Settlements are recorded for the household and can be undone if a payment was logged by mistake.',
         'Only the person who added a receipt, or the household owner, can delete it.',
         'Deleted receipts are in Recently deleted. Open that screen to restore them within 30 days.',
       ],

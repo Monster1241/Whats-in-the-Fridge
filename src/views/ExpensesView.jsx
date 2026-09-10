@@ -5,6 +5,8 @@ import {
   ArrowRight,
   CalendarDays,
   Camera,
+  CheckCircle2,
+  Handshake,
   Image as ImageIcon,
   Loader2,
   Plus,
@@ -12,6 +14,7 @@ import {
   RotateCcw,
   Scale,
   Trash2,
+  Undo2,
   Users,
   Wallet,
   X,
@@ -23,6 +26,8 @@ import {
   fetchExpenseSplit,
   fetchExpenses,
   restoreExpense,
+  settleExpenseSplit,
+  undoExpenseSettlement,
 } from '../api.js';
 import { getActiveHouseholdId } from '../inventory/offlineCache.js';
 import {
@@ -57,6 +62,15 @@ function todayInputValue() {
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+function memberLabel(name, userId, currentUserId, asSubject = true) {
+  if (currentUserId && userId === currentUserId) return asSubject ? 'You' : 'you';
+  return name || 'Member';
+}
+
+function settlementKey(row) {
+  return `${row.fromUserId}-${row.toUserId}`;
 }
 
 function daysLeftToRestore(restoreUntil, now = Date.now()) {
@@ -296,6 +310,9 @@ export function ExpensesView({ currency: currencyProp }) {
   const [splitLoading, setSplitLoading] = useState(false);
   const [splitError, setSplitError] = useState(null);
   const [splitData, setSplitData] = useState(null);
+  const [settlingKey, setSettlingKey] = useState(null);
+  const [confirmSettleKey, setConfirmSettleKey] = useState(null);
+  const [undoingId, setUndoingId] = useState(null);
 
   const [viewerUrl, setViewerUrl] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -500,6 +517,9 @@ export function ExpensesView({ currency: currencyProp }) {
     setSplitLoading(true);
     setSplitError(null);
     setSplitData(null);
+    setConfirmSettleKey(null);
+    setSettlingKey(null);
+    setUndoingId(null);
     try {
       const data = await fetchExpenseSplit(timeframe);
       setSplitData(data);
@@ -507,6 +527,48 @@ export function ExpensesView({ currency: currencyProp }) {
       setSplitError(err?.message || 'Could not calculate split.');
     } finally {
       setSplitLoading(false);
+    }
+  };
+
+  const applySplitResult = (data) => {
+    setSplitData(data);
+    setSplitError(null);
+    setConfirmSettleKey(null);
+  };
+
+  const handleSettle = async (row, options = {}) => {
+    const key = options.settleAll ? 'all' : settlementKey(row || {});
+    if (!key || settlingKey || undoingId) return;
+    setSettlingKey(key);
+    setSplitError(null);
+    try {
+      const data = options.settleAll
+        ? await settleExpenseSplit({ timeframe, settleAll: true })
+        : await settleExpenseSplit({
+            timeframe,
+            fromUserId: row.fromUserId,
+            toUserId: row.toUserId,
+            amount: row.amount,
+          });
+      applySplitResult(data);
+    } catch (err) {
+      setSplitError(err?.message || 'Could not record settlement.');
+    } finally {
+      setSettlingKey(null);
+    }
+  };
+
+  const handleUndoSettlement = async (paymentId) => {
+    if (!paymentId || settlingKey || undoingId) return;
+    setUndoingId(paymentId);
+    setSplitError(null);
+    try {
+      const data = await undoExpenseSettlement(paymentId, timeframe);
+      applySplitResult(data);
+    } catch (err) {
+      setSplitError(err?.message || 'Could not undo settlement.');
+    } finally {
+      setUndoingId(null);
     }
   };
 
@@ -571,7 +633,7 @@ export function ExpensesView({ currency: currencyProp }) {
           Expenses & Receipts
         </h1>
         <p className="text-muted mt-1 text-sm">
-          Track household spend, split fairly, and keep receipt photos in your vault.
+          Track household spend, split fairly, settle balances, and keep receipt photos in your vault.
         </p>
       </header>
 
@@ -714,7 +776,7 @@ export function ExpensesView({ currency: currencyProp }) {
           className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-black/[0.1] bg-white px-4 py-3 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 active:scale-[0.98] dark:border-white/15 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 sm:flex-none"
         >
           <Scale className="h-4 w-4" aria-hidden />
-          Calculate split
+          Split & settle
         </button>
       </div>
 
@@ -1043,22 +1105,23 @@ export function ExpensesView({ currency: currencyProp }) {
         <ModalShell
           titleId={splitTitleId}
           onClose={() => {
-            if (!splitLoading) setSplitOpen(false);
+            if (!splitLoading && !settlingKey && !undoingId) setSplitOpen(false);
           }}
         >
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>
               <h2 id={splitTitleId} className="text-heading text-lg font-extrabold">
-                Settlement split
+                Split & settle
               </h2>
               <p className="text-muted mt-0.5 text-xs leading-relaxed">
-                Equal share of household spend from {period.rangeLabel} ({period.days} days).
+                Equal share from {period.rangeLabel}. Record a repayment when someone pays their share.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setSplitOpen(false)}
-              className="text-muted rounded-lg p-1.5 hover:bg-black/[0.05] dark:hover:bg-white/10"
+              disabled={Boolean(settlingKey || undoingId)}
+              className="text-muted rounded-lg p-1.5 hover:bg-black/[0.05] disabled:opacity-50 dark:hover:bg-white/10"
               aria-label="Close"
             >
               <X className="h-5 w-5" aria-hidden />
@@ -1070,10 +1133,16 @@ export function ExpensesView({ currency: currencyProp }) {
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               Calculating…
             </div>
-          ) : splitError ? (
+          ) : !splitData && splitError ? (
             <p className="text-sm text-rose-700 dark:text-rose-400">{splitError}</p>
           ) : (
             <div className="space-y-4">
+              {splitError ? (
+                <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300">
+                  {splitError}
+                </div>
+              ) : null}
+
               <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm dark:bg-amber-950/40">
                 <p className="font-bold text-amber-900 dark:text-amber-200">
                   Total {money(splitData?.total)} · fair share {money(splitData?.fairShare)} each
@@ -1086,34 +1155,43 @@ export function ExpensesView({ currency: currencyProp }) {
               {Array.isArray(splitData?.contributions) && splitData.contributions.length > 0 ? (
                 <ul className="space-y-2">
                   {splitData.contributions.map((entry) => {
-                    const paid = Number(entry.total) || 0;
-                    const fair = Number(splitData.fairShare) || 0;
-                    const delta = Math.round((paid - fair) * 100) / 100;
-                    const settled = Math.abs(delta) < 0.01;
+                    const spent = Number(entry.total) || 0;
+                    const delta = Number(entry.balance);
+                    const remaining = Number.isFinite(delta)
+                      ? Math.round(delta * 100) / 100
+                      : Math.round((spent - (Number(splitData.fairShare) || 0)) * 100) / 100;
+                    const settled = Math.abs(remaining) < 0.01;
+                    const you = Boolean(
+                      splitData.currentUserId && entry.userId === splitData.currentUserId,
+                    );
                     return (
                       <li
                         key={entry.userId}
                         className="flex items-center justify-between gap-2 text-sm"
                       >
                         <span className="text-heading min-w-0 truncate font-semibold">
-                          {entry.displayName}
+                          {you ? 'You' : entry.displayName}
                         </span>
                         <span className="shrink-0 text-right text-xs">
-                          <span className="text-heading block font-bold tabular-nums">{money(paid)} paid</span>
+                          <span className="text-heading block font-bold tabular-nums">
+                            {money(spent)} spent
+                          </span>
                           <span
                             className={`font-semibold ${
                               settled
-                                ? 'text-muted'
-                                : delta > 0
+                                ? 'text-emerald-700 dark:text-emerald-400'
+                                : remaining > 0
                                   ? 'text-emerald-700 dark:text-emerald-400'
                                   : 'text-rose-700 dark:text-rose-400'
                             }`}
                           >
                             {settled
                               ? 'Settled'
-                              : delta > 0
-                                ? `${money(delta)} over`
-                                : `${money(-delta)} short`}
+                              : remaining > 0
+                                ? you
+                                  ? `${money(remaining)} owed to you`
+                                  : `${money(remaining)} owed to them`
+                                : `${money(-remaining)} still to pay`}
                           </span>
                         </span>
                       </li>
@@ -1123,27 +1201,192 @@ export function ExpensesView({ currency: currencyProp }) {
               ) : null}
 
               {Array.isArray(splitData?.settlements) && splitData.settlements.length > 0 ? (
-                <ul className="space-y-2">
-                  {splitData.settlements.map((row) => (
-                    <li
-                      key={`${row.fromUserId}-${row.toUserId}-${row.amount}`}
-                      className="surface-card border border-black/[0.06] px-3 py-2.5 text-sm dark:border-white/10"
-                    >
-                      <span className="text-heading font-semibold">{row.fromName}</span>
-                      {' owes '}
-                      <span className="text-heading font-semibold">{row.toName}</span>
-                      {' '}
-                      <span className="font-extrabold text-amber-700 dark:text-amber-400">
-                        {money(row.amount)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-2">
+                  <p className="text-heading flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide">
+                    <Handshake className="h-3.5 w-3.5 text-amber-600" aria-hidden />
+                    To settle
+                  </p>
+                  <ul className="space-y-2">
+                    {splitData.settlements.map((row) => {
+                      const key = settlementKey(row);
+                      const confirming = confirmSettleKey === key;
+                      const busy = settlingKey === key;
+                      const fromLabel = memberLabel(
+                        row.fromName,
+                        row.fromUserId,
+                        splitData.currentUserId,
+                      );
+                      const toLabel = memberLabel(
+                        row.toName,
+                        row.toUserId,
+                        splitData.currentUserId,
+                        false,
+                      );
+                      return (
+                        <li
+                          key={key}
+                          className="surface-card border border-black/[0.06] px-3 py-2.5 text-sm dark:border-white/10"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 leading-snug">
+                              <span className="text-heading font-semibold">{fromLabel}</span>
+                              {fromLabel === 'You' ? ' owe ' : ' owes '}
+                              <span className="text-heading font-semibold">{toLabel}</span>
+                              {' '}
+                              <span className="font-extrabold text-amber-700 dark:text-amber-400">
+                                {money(row.amount)}
+                              </span>
+                            </p>
+                            {!confirming ? (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmSettleKey(key)}
+                                disabled={Boolean(settlingKey || undoingId)}
+                                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                              >
+                                Settle
+                              </button>
+                            ) : null}
+                          </div>
+                          {confirming ? (
+                            <div className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 dark:bg-amber-950/40">
+                              <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-200">
+                                Record that {fromLabel === 'You' ? 'you paid' : `${fromLabel} paid`}{' '}
+                                {toLabel} {money(row.amount)}?
+                              </p>
+                              <div className="mt-2 flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmSettleKey(null)}
+                                  disabled={busy}
+                                  className="flex-1 rounded-lg border border-black/[0.08] py-1.5 text-xs font-semibold dark:border-white/10"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSettle(row)}
+                                  disabled={busy}
+                                  className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-amber-600 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+                                >
+                                  {busy ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                                  ) : (
+                                    <CheckCircle2 className="h-3 w-3" aria-hidden />
+                                  )}
+                                  Mark paid
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {splitData.settlements.length > 1 ? (
+                    confirmSettleKey === 'all' ? (
+                      <div className="rounded-xl border border-black/[0.06] px-3 py-2.5 dark:border-white/10">
+                        <p className="text-xs leading-relaxed text-slate-700 dark:text-zinc-200">
+                          Record every outstanding repayment for this period?
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmSettleKey(null)}
+                            disabled={settlingKey === 'all'}
+                            className="flex-1 rounded-lg border border-black/[0.08] py-1.5 text-xs font-semibold dark:border-white/10"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleSettle(null, { settleAll: true })}
+                            disabled={settlingKey === 'all'}
+                            className="inline-flex flex-1 items-center justify-center gap-1 rounded-lg bg-amber-600 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+                          >
+                            {settlingKey === 'all' ? (
+                              <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                            ) : (
+                              <Handshake className="h-3 w-3" aria-hidden />
+                            )}
+                            Settle all
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmSettleKey('all')}
+                        disabled={Boolean(settlingKey || undoingId)}
+                        className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-black/[0.1] px-3 py-2.5 text-xs font-bold dark:border-white/15"
+                      >
+                        <Handshake className="h-3.5 w-3.5" aria-hidden />
+                        Settle all balances
+                      </button>
+                    )
+                  ) : null}
+                </div>
               ) : (
-                <p className="text-muted text-sm">
+                <p className="text-muted flex items-center gap-1.5 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />
                   Everyone is settled for this period — no balances to pay.
                 </p>
               )}
+
+              {Array.isArray(splitData?.payments) && splitData.payments.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-heading text-xs font-bold uppercase tracking-wide">
+                    Recorded this period
+                  </p>
+                  <ul className="space-y-2">
+                    {splitData.payments.map((payment) => {
+                      const fromLabel = memberLabel(
+                        payment.fromName,
+                        payment.fromUserId,
+                        splitData.currentUserId,
+                      );
+                      const toLabel = memberLabel(
+                        payment.toName,
+                        payment.toUserId,
+                        splitData.currentUserId,
+                        false,
+                      );
+                      return (
+                        <li
+                          key={payment.id}
+                          className="flex items-center justify-between gap-2 rounded-xl bg-black/[0.03] px-3 py-2 text-xs dark:bg-white/[0.05]"
+                        >
+                          <span className="min-w-0 leading-snug">
+                            <span className="text-heading font-semibold">{fromLabel}</span>
+                            {' paid '}
+                            <span className="text-heading font-semibold">{toLabel}</span>
+                            {' '}
+                            <span className="font-extrabold tabular-nums">{money(payment.amount)}</span>
+                            <span className="text-muted mt-0.5 block">
+                              {formatDateLabel(payment.settledAt)}
+                            </span>
+                          </span>
+                          {payment.canUndo ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleUndoSettlement(payment.id)}
+                              disabled={Boolean(settlingKey || undoingId)}
+                              className="inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 font-bold text-slate-600 hover:bg-white disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                            >
+                              {undoingId === payment.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                              ) : (
+                                <Undo2 className="h-3 w-3" aria-hidden />
+                              )}
+                              Undo
+                            </button>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           )}
         </ModalShell>

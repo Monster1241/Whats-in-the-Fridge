@@ -14,8 +14,12 @@ vi.mock('./db.js', async (importOriginal) => {
 });
 
 import {
+  applyExpensePayments,
+  buildSettlementTransfers,
   canManageVaultReceipt,
   deleteExpense,
+  EXPENSE_PAYMENTS_COLLECTION,
+  getExpenseSplit,
   isWithinReceiptRestoreWindow,
   listDeletedExpenses,
   listExpenses,
@@ -23,6 +27,9 @@ import {
   receiptRestoreCutoff,
   receiptRestoreDeadline,
   restoreExpense,
+  settleAllExpenseBalances,
+  settleExpenseBalance,
+  undoExpensePayment,
 } from './expenses.js';
 
 const HOUSEHOLD_ID = new ObjectId().toString();
@@ -71,8 +78,8 @@ function matchesQuery(doc, query = {}) {
   return true;
 }
 
-function setupCollection(docs) {
-  const col = {
+function makeCollection(docs) {
+  return {
     async findOne(query) {
       return docs.find((doc) => matchesQuery(doc, query)) ?? null;
     },
@@ -87,6 +94,12 @@ function setupCollection(docs) {
           };
         },
       };
+    },
+    async insertOne(doc) {
+      const _id = doc._id instanceof ObjectId ? doc._id : new ObjectId();
+      const stored = { ...doc, _id };
+      docs.push(stored);
+      return { insertedId: _id };
     },
     async updateOne(query, update) {
       const doc = docs.find((entry) => matchesQuery(entry, query));
@@ -112,14 +125,24 @@ function setupCollection(docs) {
     },
     async createIndex() {},
   };
+}
+
+function setupCollections({ expenses = [], payments = [] } = {}) {
+  const expenseCol = makeCollection(expenses);
+  const paymentCol = makeCollection(payments);
   globalThis._mongo = {
     db: {
-      collection() {
-        return col;
+      collection(name) {
+        if (name === EXPENSE_PAYMENTS_COLLECTION) return paymentCol;
+        return expenseCol;
       },
     },
   };
-  return { docs, col };
+  return { docs: expenses, expenses, payments, expenseCol, paymentCol, col: expenseCol };
+}
+
+function setupCollection(docs) {
+  return setupCollections({ expenses: docs });
 }
 
 function makeExpense(overrides = {}) {
@@ -273,5 +296,179 @@ describe('deleteExpense and restoreExpense', () => {
     const deleted = await listDeletedExpenses(HOUSEHOLD_ID, ADDER_ID);
     expect(deleted.map((entry) => entry.id)).toEqual([removed._id.toString()]);
     expect(deleted[0].canRestore).toBe(true);
+  });
+});
+
+describe('expense split settlements', () => {
+  beforeEach(() => {
+    isHouseholdOwner.mockReset();
+    getHouseholdMembers.mockReset();
+    getHouseholdMembers.mockResolvedValue([
+      { id: ADDER_ID, displayName: 'Ada', email: 'ada@example.com' },
+      { id: OTHER_ID, displayName: 'Bob', email: 'bob@example.com' },
+    ]);
+    isHouseholdOwner.mockImplementation(async (_householdId, userId) => userId === OWNER_ID);
+  });
+
+  afterEach(() => {
+    delete globalThis._mongo;
+  });
+
+  it('applies a repayment so the debtor covers the creditor', () => {
+    const adjusted = applyExpensePayments(
+      [
+        { userId: ADDER_ID, displayName: 'Ada', total: 100 },
+        { userId: OTHER_ID, displayName: 'Bob', total: 0 },
+      ],
+      [{ fromUserId: OTHER_ID, toUserId: ADDER_ID, amount: 50 }],
+    );
+    expect(adjusted.find((row) => row.userId === ADDER_ID).total).toBe(50);
+    expect(adjusted.find((row) => row.userId === OTHER_ID).total).toBe(50);
+  });
+
+  it('builds a single transfer from the member who spent less', () => {
+    const transfers = buildSettlementTransfers([
+      { userId: ADDER_ID, displayName: 'Ada', total: 100, balance: 50 },
+      { userId: OTHER_ID, displayName: 'Bob', total: 0, balance: -50 },
+    ]);
+    expect(transfers).toEqual([
+      {
+        fromUserId: OTHER_ID,
+        fromName: 'Bob',
+        toUserId: ADDER_ID,
+        toName: 'Ada',
+        amount: 50,
+      },
+    ]);
+  });
+
+  it('records a settlement and clears the remaining balance', async () => {
+    const expense = makeExpense({ totalAmount: 80 });
+    const { payments } = setupCollections({ expenses: [expense] });
+
+    const before = await getExpenseSplit(HOUSEHOLD_ID, 'monthly', OTHER_ID);
+    expect(before.settlements).toEqual([
+      expect.objectContaining({
+        fromUserId: OTHER_ID,
+        toUserId: ADDER_ID,
+        amount: 40,
+      }),
+    ]);
+    expect(before.contributions.find((row) => row.userId === ADDER_ID).balance).toBe(40);
+
+    const settled = await settleExpenseBalance({
+      householdId: HOUSEHOLD_ID,
+      timeframe: 'monthly',
+      fromUserId: OTHER_ID,
+      toUserId: ADDER_ID,
+      createdByUserId: OTHER_ID,
+    });
+
+    expect(settled.settlements).toEqual([]);
+    expect(settled.payments).toHaveLength(1);
+    expect(settled.payments[0]).toMatchObject({
+      fromUserId: OTHER_ID,
+      toUserId: ADDER_ID,
+      amount: 40,
+      canUndo: true,
+    });
+    expect(settled.contributions.find((row) => row.userId === OTHER_ID).balance).toBe(0);
+    expect(payments).toHaveLength(1);
+  });
+
+  it('allows a partial settlement and keeps the remainder', async () => {
+    const expense = makeExpense({ totalAmount: 80 });
+    setupCollections({ expenses: [expense] });
+
+    const settled = await settleExpenseBalance({
+      householdId: HOUSEHOLD_ID,
+      timeframe: 'monthly',
+      fromUserId: OTHER_ID,
+      toUserId: ADDER_ID,
+      amount: 15,
+      createdByUserId: ADDER_ID,
+    });
+
+    expect(settled.settlements).toEqual([
+      expect.objectContaining({
+        fromUserId: OTHER_ID,
+        toUserId: ADDER_ID,
+        amount: 25,
+      }),
+    ]);
+  });
+
+  it('rejects settling more than the outstanding balance', async () => {
+    const expense = makeExpense({ totalAmount: 80 });
+    setupCollections({ expenses: [expense] });
+
+    await expect(
+      settleExpenseBalance({
+        householdId: HOUSEHOLD_ID,
+        timeframe: 'monthly',
+        fromUserId: OTHER_ID,
+        toUserId: ADDER_ID,
+        amount: 99,
+        createdByUserId: OTHER_ID,
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('settles every outstanding transfer at once', async () => {
+    getHouseholdMembers.mockResolvedValue([
+      { id: ADDER_ID, displayName: 'Ada' },
+      { id: OTHER_ID, displayName: 'Bob' },
+      { id: OWNER_ID, displayName: 'Cam' },
+    ]);
+    const expense = makeExpense({ totalAmount: 90 });
+    setupCollections({ expenses: [expense] });
+
+    const result = await settleAllExpenseBalances(HOUSEHOLD_ID, 'monthly', OWNER_ID);
+    expect(result.recordedCount).toBe(2);
+    expect(result.settlements).toEqual([]);
+    expect(result.payments).toHaveLength(2);
+  });
+
+  it('lets a party undo a recorded settlement', async () => {
+    const expense = makeExpense({ totalAmount: 80 });
+    setupCollections({ expenses: [expense] });
+
+    const settled = await settleExpenseBalance({
+      householdId: HOUSEHOLD_ID,
+      timeframe: 'monthly',
+      fromUserId: OTHER_ID,
+      toUserId: ADDER_ID,
+      createdByUserId: ADDER_ID,
+    });
+    expect(settled.settlements).toEqual([]);
+
+    const undone = await undoExpensePayment(
+      HOUSEHOLD_ID,
+      settled.payment.id,
+      OTHER_ID,
+      'monthly',
+    );
+    expect(undone.settlements).toEqual([
+      expect.objectContaining({ fromUserId: OTHER_ID, toUserId: ADDER_ID, amount: 40 }),
+    ]);
+  });
+
+  it('forbids an unrelated member from undoing a settlement', async () => {
+    const expense = makeExpense({ totalAmount: 80 });
+    setupCollections({ expenses: [expense] });
+    const outsiderId = new ObjectId().toString();
+
+    const settled = await settleExpenseBalance({
+      householdId: HOUSEHOLD_ID,
+      timeframe: 'monthly',
+      fromUserId: OTHER_ID,
+      toUserId: ADDER_ID,
+      createdByUserId: OTHER_ID,
+    });
+
+    isHouseholdOwner.mockResolvedValue(false);
+    await expect(
+      undoExpensePayment(HOUSEHOLD_ID, settled.payment.id, outsiderId, 'monthly'),
+    ).rejects.toMatchObject({ status: 403 });
   });
 });

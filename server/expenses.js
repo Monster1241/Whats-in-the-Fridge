@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import { assertScopedHouseholdId, getHouseholdMembers, isHouseholdOwner } from './db.js';
 
 export const EXPENSES_COLLECTION = 'expenses';
+export const EXPENSE_PAYMENTS_COLLECTION = 'expense_settlements';
 export const RECEIPT_SOFT_DELETE_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -13,6 +14,14 @@ function getDb() {
 
 export function getExpensesCollection() {
   return getDb().collection(EXPENSES_COLLECTION);
+}
+
+export function getExpensePaymentsCollection() {
+  return getDb().collection(EXPENSE_PAYMENTS_COLLECTION);
+}
+
+export function roundCents(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
 }
 
 /** @param {'weekly'|'fortnightly'|'monthly'|string} timeframe */
@@ -216,15 +225,151 @@ export async function listDeletedExpenses(householdId, requestingUserId) {
   return docs.map((doc) => mapExpense(doc, flags));
 }
 
+function mapPayment(doc, { requestingUserId = null, isOwner = false } = {}) {
+  if (!doc) return null;
+  const createdByUserId = String(doc.createdByUserId ?? '');
+  const fromUserId = String(doc.fromUserId ?? '');
+  const toUserId = String(doc.toUserId ?? '');
+  const canUndo =
+    Boolean(requestingUserId) &&
+    (isOwner ||
+      createdByUserId === requestingUserId ||
+      fromUserId === requestingUserId ||
+      toUserId === requestingUserId);
+  return {
+    id: doc._id.toString(),
+    householdId: String(doc.householdId),
+    fromUserId,
+    fromName: String(doc.fromName ?? '').trim(),
+    toUserId,
+    toName: String(doc.toName ?? '').trim(),
+    amount: roundCents(doc.amount),
+    timeframe: doc.timeframe ? String(doc.timeframe) : null,
+    settledAt: toIsoDate(doc.settledAt || doc.createdAt),
+    createdByUserId,
+    canUndo,
+  };
+}
+
 /**
- * Equal-split settlement for the household over a timeframe.
+ * Recorded repayments count as the debtor covering spend and the creditor
+ * being reimbursed, without changing household grocery totals.
+ * @param {{ userId: string, displayName: string, total: number }[]} contributions
+ * @param {{ fromUserId?: string, toUserId?: string, fromName?: string, toName?: string, amount?: number }[]} payments
+ */
+export function applyExpensePayments(contributions, payments) {
+  /** @type {Map<string, { userId: string, displayName: string, total: number }>} */
+  const byUser = new Map(
+    contributions.map((entry) => [
+      entry.userId,
+      { ...entry, total: roundCents(entry.total) },
+    ]),
+  );
+
+  for (const payment of payments) {
+    const amount = roundCents(payment.amount);
+    if (amount < 0.01) continue;
+    const fromUserId = String(payment.fromUserId ?? '').trim();
+    const toUserId = String(payment.toUserId ?? '').trim();
+    if (!fromUserId || !toUserId || fromUserId === toUserId) continue;
+
+    if (!byUser.has(fromUserId)) {
+      byUser.set(fromUserId, {
+        userId: fromUserId,
+        displayName: String(payment.fromName ?? '').trim() || 'Member',
+        total: 0,
+      });
+    }
+    if (!byUser.has(toUserId)) {
+      byUser.set(toUserId, {
+        userId: toUserId,
+        displayName: String(payment.toName ?? '').trim() || 'Member',
+        total: 0,
+      });
+    }
+
+    const from = byUser.get(fromUserId);
+    const to = byUser.get(toUserId);
+    from.total = roundCents(from.total + amount);
+    to.total = roundCents(to.total - amount);
+    if (payment.fromName) from.displayName = String(payment.fromName).trim();
+    if (payment.toName) to.displayName = String(payment.toName).trim();
+  }
+
+  return [...byUser.values()];
+}
+
+/**
+ * Greedy settle-up: members below fair share pay members who spent more.
+ * @param {{ userId: string, displayName: string, total: number, balance: number }[]} balances
+ */
+export function buildSettlementTransfers(balances) {
+  const debtors = balances
+    .filter((entry) => entry.balance < -0.009)
+    .map((entry) => ({ ...entry, remaining: -entry.balance }))
+    .sort((a, b) => b.remaining - a.remaining);
+  const creditors = balances
+    .filter((entry) => entry.balance > 0.009)
+    .map((entry) => ({ ...entry, remaining: entry.balance }))
+    .sort((a, b) => b.remaining - a.remaining);
+
+  /** @type {{ fromUserId: string, fromName: string, toUserId: string, toName: string, amount: number }[]} */
+  const settlements = [];
+  let i = 0;
+  let j = 0;
+  while (i < debtors.length && j < creditors.length) {
+    const amount = Math.min(debtors[i].remaining, creditors[j].remaining);
+    const rounded = roundCents(amount);
+    if (rounded >= 0.01) {
+      settlements.push({
+        fromUserId: debtors[i].userId,
+        fromName: debtors[i].displayName,
+        toUserId: creditors[j].userId,
+        toName: creditors[j].displayName,
+        amount: rounded,
+      });
+    }
+    debtors[i].remaining = roundCents(debtors[i].remaining - amount);
+    creditors[j].remaining = roundCents(creditors[j].remaining - amount);
+    if (debtors[i].remaining < 0.01) i += 1;
+    if (creditors[j].remaining < 0.01) j += 1;
+  }
+  return settlements;
+}
+
+/**
  * @param {string} householdId
  * @param {'weekly'|'fortnightly'|'monthly'|string} timeframe
+ * @param {string} [requestingUserId]
  */
-export async function getExpenseSplit(householdId, timeframe = 'weekly') {
+export async function listExpensePayments(householdId, timeframe = 'weekly', requestingUserId) {
   const scopedId = assertScopedHouseholdId(householdId);
-  const expenses = await listExpenses(scopedId, timeframe);
-  const members = await getHouseholdMembers(scopedId);
+  const start = timeframeStartDate(timeframe);
+  const docs = await getExpensePaymentsCollection()
+    .find({
+      householdId: scopedId,
+      settledAt: { $gte: start },
+    })
+    .sort({ settledAt: -1, createdAt: -1 })
+    .toArray();
+  const flags = await viewerFlags(scopedId, requestingUserId);
+  return docs.map((doc) => mapPayment(doc, flags));
+}
+
+/**
+ * Equal-split settlement for the household over a timeframe.
+ * Recorded payments reduce who still owes whom without changing grocery totals.
+ * @param {string} householdId
+ * @param {'weekly'|'fortnightly'|'monthly'|string} timeframe
+ * @param {string} [requestingUserId]
+ */
+export async function getExpenseSplit(householdId, timeframe = 'weekly', requestingUserId) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const [expenses, members, payments] = await Promise.all([
+    listExpenses(scopedId, timeframe, requestingUserId),
+    getHouseholdMembers(scopedId),
+    listExpensePayments(scopedId, timeframe, requestingUserId),
+  ]);
 
   /** @type {Map<string, { userId: string, displayName: string, total: number }>} */
   const byUser = new Map();
@@ -243,7 +388,7 @@ export async function getExpenseSplit(householdId, timeframe = 'weekly') {
     grandTotal += expense.totalAmount;
     const existing = byUser.get(userId);
     if (existing) {
-      existing.total = Math.round((existing.total + expense.totalAmount) * 100) / 100;
+      existing.total = roundCents(existing.total + expense.totalAmount);
       if (expense.addedBy.displayName) existing.displayName = expense.addedBy.displayName;
     } else {
       byUser.set(userId, {
@@ -256,51 +401,175 @@ export async function getExpenseSplit(householdId, timeframe = 'weekly') {
 
   const contributions = [...byUser.values()].sort((a, b) => b.total - a.total);
   const memberCount = Math.max(contributions.length, 1);
-  const fairShare = Math.round((grandTotal / memberCount) * 100) / 100;
-
-  const balances = contributions.map((entry) => ({
+  const fairShare = roundCents(grandTotal / memberCount);
+  const adjusted = applyExpensePayments(contributions, payments);
+  const balances = adjusted.map((entry) => ({
     ...entry,
-    balance: Math.round((entry.total - fairShare) * 100) / 100,
+    spent: roundCents(byUser.get(entry.userId)?.total ?? entry.total),
+    balance: roundCents(entry.total - fairShare),
   }));
-
-  const debtors = balances
-    .filter((entry) => entry.balance < -0.009)
-    .map((entry) => ({ ...entry, remaining: -entry.balance }))
-    .sort((a, b) => b.remaining - a.remaining);
-  const creditors = balances
-    .filter((entry) => entry.balance > 0.009)
-    .map((entry) => ({ ...entry, remaining: entry.balance }))
-    .sort((a, b) => b.remaining - a.remaining);
-
-  /** @type {{ fromUserId: string, fromName: string, toUserId: string, toName: string, amount: number }[]} */
-  const settlements = [];
-  let i = 0;
-  let j = 0;
-  while (i < debtors.length && j < creditors.length) {
-    const amount = Math.min(debtors[i].remaining, creditors[j].remaining);
-    const rounded = Math.round(amount * 100) / 100;
-    if (rounded >= 0.01) {
-      settlements.push({
-        fromUserId: debtors[i].userId,
-        fromName: debtors[i].displayName,
-        toUserId: creditors[j].userId,
-        toName: creditors[j].displayName,
-        amount: rounded,
-      });
-    }
-    debtors[i].remaining = Math.round((debtors[i].remaining - amount) * 100) / 100;
-    creditors[j].remaining = Math.round((creditors[j].remaining - amount) * 100) / 100;
-    if (debtors[i].remaining < 0.01) i += 1;
-    if (creditors[j].remaining < 0.01) j += 1;
-  }
+  const settlements = buildSettlementTransfers(balances);
 
   return {
     timeframe,
-    total: Math.round(grandTotal * 100) / 100,
+    total: roundCents(grandTotal),
     fairShare,
-    contributions,
+    contributions: contributions.map((entry) => {
+      const adjustedEntry = balances.find((row) => row.userId === entry.userId);
+      return {
+        ...entry,
+        balance: adjustedEntry ? adjustedEntry.balance : roundCents(entry.total - fairShare),
+      };
+    }),
     settlements,
+    payments,
+    currentUserId: requestingUserId ? String(requestingUserId) : null,
   };
+}
+
+function paymentNotFoundError() {
+  const err = new Error('Settlement not found.');
+  err.status = 404;
+  return err;
+}
+
+function invalidSettleError(message) {
+  const err = new Error(message);
+  err.status = 400;
+  throw err;
+}
+
+/**
+ * Record that one member repaid another for this period's split.
+ * @param {{
+ *   householdId: string,
+ *   timeframe?: string,
+ *   fromUserId: string,
+ *   toUserId: string,
+ *   amount?: number|string|null,
+ *   createdByUserId: string,
+ * }} input
+ */
+export async function settleExpenseBalance(input) {
+  const householdId = assertScopedHouseholdId(input.householdId);
+  const timeframe = String(input.timeframe ?? 'weekly');
+  const fromUserId = String(input.fromUserId ?? '').trim();
+  const toUserId = String(input.toUserId ?? '').trim();
+  const createdByUserId = String(input.createdByUserId ?? '').trim();
+
+  if (!createdByUserId) invalidSettleError('Sign in again to record a settlement.');
+  if (!fromUserId || !toUserId || fromUserId === toUserId) {
+    invalidSettleError('Choose two different household members to settle.');
+  }
+
+  const members = await getHouseholdMembers(householdId);
+  const memberIds = new Set(members.map((member) => member.id));
+  if (!memberIds.has(fromUserId) || !memberIds.has(toUserId)) {
+    invalidSettleError('Both people must be in this household.');
+  }
+
+  const split = await getExpenseSplit(householdId, timeframe, createdByUserId);
+  const row = split.settlements.find(
+    (entry) => entry.fromUserId === fromUserId && entry.toUserId === toUserId,
+  );
+  if (!row) {
+    invalidSettleError('There is nothing to settle between these members for this period.');
+  }
+
+  const requested =
+    input.amount == null || input.amount === '' ? row.amount : Number(input.amount);
+  if (!Number.isFinite(requested) || requested < 0.01) {
+    invalidSettleError('Enter a valid amount to settle.');
+  }
+  const amount = roundCents(requested);
+  if (amount > row.amount + 0.001) {
+    invalidSettleError(`You can settle at most ${row.amount.toFixed(2)} between these members.`);
+  }
+
+  const now = new Date();
+  const doc = {
+    householdId,
+    fromUserId,
+    fromName: row.fromName,
+    toUserId,
+    toName: row.toName,
+    amount,
+    timeframe,
+    settledAt: now,
+    createdAt: now,
+    createdByUserId,
+  };
+  const result = await getExpensePaymentsCollection().insertOne(doc);
+  const flags = await viewerFlags(householdId, createdByUserId);
+  const payment = mapPayment({ ...doc, _id: result.insertedId }, flags);
+  const nextSplit = await getExpenseSplit(householdId, timeframe, createdByUserId);
+  return { ok: true, payment, ...nextSplit };
+}
+
+/**
+ * Record every outstanding transfer for the selected period.
+ * @param {string} householdId
+ * @param {'weekly'|'fortnightly'|'monthly'|string} timeframe
+ * @param {string} createdByUserId
+ */
+export async function settleAllExpenseBalances(householdId, timeframe, createdByUserId) {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const actorId = String(createdByUserId ?? '').trim();
+  if (!actorId) invalidSettleError('Sign in again to record a settlement.');
+
+  const split = await getExpenseSplit(scopedId, timeframe, actorId);
+  if (!split.settlements.length) {
+    return { ok: true, recordedCount: 0, ...split };
+  }
+
+  const now = new Date();
+  const col = getExpensePaymentsCollection();
+  for (const row of split.settlements) {
+    await col.insertOne({
+      householdId: scopedId,
+      fromUserId: row.fromUserId,
+      fromName: row.fromName,
+      toUserId: row.toUserId,
+      toName: row.toName,
+      amount: row.amount,
+      timeframe,
+      settledAt: now,
+      createdAt: now,
+      createdByUserId: actorId,
+    });
+  }
+
+  const nextSplit = await getExpenseSplit(scopedId, timeframe, actorId);
+  return { ok: true, recordedCount: split.settlements.length, ...nextSplit };
+}
+
+/**
+ * Undo a recorded repayment. The person who logged it, either party, or the owner can undo.
+ * @param {string} householdId
+ * @param {string} paymentId
+ * @param {string} requestingUserId
+ * @param {string} [timeframe]
+ */
+export async function undoExpensePayment(householdId, paymentId, requestingUserId, timeframe = 'weekly') {
+  const scopedId = assertScopedHouseholdId(householdId);
+  const id = String(paymentId ?? '').trim();
+  if (!ObjectId.isValid(id)) throw paymentNotFoundError();
+
+  const col = getExpensePaymentsCollection();
+  const existing = await col.findOne({ _id: new ObjectId(id), householdId: scopedId });
+  if (!existing) throw paymentNotFoundError();
+
+  const flags = await viewerFlags(scopedId, requestingUserId);
+  const mapped = mapPayment(existing, flags);
+  if (!mapped.canUndo) {
+    const err = new Error('Only the people in this settlement or the household owner can undo it.');
+    err.status = 403;
+    throw err;
+  }
+
+  await col.deleteOne({ _id: existing._id });
+  const split = await getExpenseSplit(scopedId, timeframe, requestingUserId);
+  return { ok: true, id, ...split };
 }
 
 function expenseNotFoundError() {
@@ -423,4 +692,7 @@ export async function ensureExpensesIndexes() {
   await col.createIndex({ householdId: 1, purchaseDate: -1 });
   await col.createIndex({ householdId: 1, 'addedBy.userId': 1 });
   await col.createIndex({ householdId: 1, deletedAt: -1 });
+  const payments = getExpensePaymentsCollection();
+  await payments.createIndex({ householdId: 1, settledAt: -1 });
+  await payments.createIndex({ householdId: 1, fromUserId: 1, toUserId: 1 });
 }
